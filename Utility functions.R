@@ -4,6 +4,7 @@ library("tidymodels")
 library("openxlsx")
 library("mlogit")
 library("AMR")
+library("glue")
 
 #####FUNCTIONS#################################################################
 
@@ -1793,12 +1794,13 @@ ggplot(rank_coefs,aes(x=Property,y=mean,fill=Property)) +
   coord_flip() +
   theme(legend.position = "None") +
   geom_hline(aes(yintercept=0)) +
-  ylim(-50,50) +
+  ylim(min(rank_coefs$mean-(rank_coefs$sd/2)),-min(rank_coefs$mean-(rank_coefs$sd/2))) +
   ylab("Mean effect on drug preference (log odds)") +
   ggtitle("The effect of different antimicrobial drug properties\non clinician prescribing preference in UTI scenario")
 
 rank_coefs$standard_mean <- (rank_coefs$mean - mean(rank_coefs$mean)) / sd(rank_coefs$mean)
 
+min(rank_coefs$mean-(rank_coefs$sd/2))
 
 ##Attach base utilities to probability dataframe
 
@@ -1812,7 +1814,7 @@ ab_props <- ab_props %>% mutate(Antimicrobial = ab_name(Antimicrobial),
 for (i in 1:nrow(ab_props)) {
   
   ab_props[i,2:ncol(ab_props)] <- ab_props[i,2:ncol(ab_props)] *
-    rank_coefs$standard_mean
+    rank_coefs$mean
   
 }
 
@@ -1829,10 +1831,8 @@ ur_util <- read_csv("urines_assess.csv")
 micro <- read_csv("micro_clean2.csv")
 
 
-###CDI risk factors: from "Risk Factors for Primary Clostridium difficile 
-#Infection; Results From the Observational Study of Risk Factors for 
-#Clostridium difficile Infection in Hospitalized Patients With Infective 
-#Diarrhea (ORCHID)"
+###REF: Antibiotics and hospital-acquired Clostridium difficile infection: update of systematic review and meta-analysis
+#REF: Comparison of Different Antibiotics and the Risk for Community-Associated Clostridioides difficile Infection: A Case–Control Study
 
 #Previous C difficile
 micaborgs <- micro %>% filter(!is.na(org_name))
@@ -1853,6 +1853,14 @@ pats <- pats %>% mutate(age65 = case_when(
   anchor_age >=65 ~ TRUE, TRUE~FALSE
 ))
 patskey <- pats %>% select(subject_id,age65)
+ur_util <- ur_util %>% left_join(patskey,by="subject_id")
+
+#age > 80
+pats <- read_csv("patients.csv")
+pats <- pats %>% mutate(age80 = case_when(
+  anchor_age >=80 ~ TRUE, TRUE~FALSE
+))
+patskey <- pats %>% select(subject_id,age80)
 ur_util <- ur_util %>% left_join(patskey,by="subject_id")
 
 #Any abx in the last 7d
@@ -1918,6 +1926,55 @@ ur_util <- ur_util %>%
                          "(HEART|CARDI)",
                          1e4,1) %>% ungroup()
 
+#HEART FAILURE
+HFkey <- drgcodes %>% filter(grepl("HEART FAILURE",description)) %>% 
+  select(hadm_id,description)
+hadm <- read_csv("admissions.csv")
+hadm <- hadm %>% left_join(HFkey,by="hadm_id")
+ur_util <- ur_util %>% 
+  prev_event_type_assign(pHF,hadm,description,
+                         "HEART FAILURE",
+                         1e4,1) %>% ungroup()
+
+#CANCER IN LAST YEAR
+cancerkey <- drgcodes %>% filter(grepl("MALIG",description) & !grepl("EXCEPT MALI",description)) %>% 
+  select(hadm_id,description)
+hadm <- read_csv("admissions.csv")
+hadm <- hadm %>% left_join(cancerkey,by="hadm_id")
+ur_util <- ur_util %>% 
+  prev_event_type_assign(pCa,hadm,description,
+                         "MALIG",
+                         365,1) %>% ungroup()
+
+#CIRRHOSIS
+cirrkey <- drgcodes %>% filter(grepl("CIRRHO",description)) %>% 
+  select(hadm_id,description)
+hadm <- read_csv("admissions.csv")
+hadm <- hadm %>% left_join(cirrkey,by="hadm_id")
+ur_util <- ur_util %>% 
+  prev_event_type_assign(pCirr,hadm,description,
+                         "CIRRHO",
+                         1e4,1) %>% ungroup()
+
+#STROKE
+strokekey <- drgcodes %>% filter(grepl("STROKE",description)) %>% 
+  select(hadm_id,description)
+hadm <- read_csv("admissions.csv")
+hadm <- hadm %>% left_join(strokekey,by="hadm_id")
+ur_util <- ur_util %>% 
+  prev_event_type_assign(pStroke,hadm,description,
+                         "STROKE",
+                         1e4,1) %>% ungroup()
+
+
+#GFR < 45
+
+labevents <- read_csv("labevents.csv")
+
+GFRs <- labevents %>% filter(itemid==50920|itemid==51770|
+                               itemid==52026) %>% 
+  semi_join(ur_util,by="subject_id")
+
 
 
 #Incorporating weighting factors
@@ -1932,7 +1989,12 @@ weight_key <- ur_util %>%
          pCKD,
          pLD,
          pCVD,
-         pSurg)
+         pSurg,
+         provider_id,
+         pHF,
+         age80,
+         MALE
+         ) #provider_id true if not admitted to hospital
 
 util_probs_df <- util_probs_df %>%
   left_join(weight_key,by="micro_specimen_id")
@@ -1984,6 +2046,86 @@ util_probs_df <- util_probs_df %>%
       pCVD_tox*pSurg_tox
   )
 
-view(util_probs_df %>% filter(Antimicrobial=="Meropenem"))
+#IV option
+util_probs_df <- util_probs_df %>% 
+  mutate(
+    not_IP_IV = case_when(provider_id &
+                            grepl("(Piperacillin-tazobactam|Cefazolin|Cefepime|Meropenem|Gentamicin)",Antimicrobial)
+                          ~ 0, TRUE~1),
+    IV_util = IV_option*not_IP_IV
+  )
 
-     
+#Resistance utility
+
+util_probs_df <- util_probs_df %>% 
+  mutate(
+    R_utility = 
+      R + IV_option
+  )
+
+
+###Overall S utility score
+
+util_probs_df <- util_probs_df %>% mutate(
+  S_utility = 
+    S * (CDI_util+Tox_util+UTI_specific+
+           Oral_option+IV_util+High_cost+Access+Reserve)
+)
+
+#Overall AST utility
+util_probs_df <- util_probs_df %>% mutate(
+  AST_utility = 
+    S_utility + R_utility 
+)
+
+
+#Formulary recommendations
+
+util_probs_df %>% group_by(Antimicrobial) %>% 
+  summarise(Mean_util=mean(S_utility)) %>% 
+  arrange(desc(Mean_util))
+
+
+#Individualised recommendations (S)
+
+util_mk1 = function(df,spec_id,panel_size) {
+  df %>% filter(micro_specimen_id==spec_id) %>%
+    arrange(desc(S_utility)) %>% select(Antimicrobial,S_utility) %>% 
+    mutate(S_utility = round(S_utility,1)) %>% slice(1:panel_size) %>% 
+    rename(`Antimicrobial ranking` = "Antimicrobial",`Rx Utility` = "S_utility")
+  
+}
+
+
+test_recs <-  data.frame(matrix(nrow=12,ncol=0))
+
+access_abs <- c("AMP","SAM","CZO",
+                "GEN","SXT","NIT")
+
+for (i in 1:nrow(ur_util)) {
+  
+  rec <- util_probs_df %>% util_mk1(spec_id = ur_util$micro_specimen_id[i], panel_size = 12) %>% 
+    select(1)
+  
+  test_recs <- cbind(test_recs,rec)
+  
+  print(glue("{round((i/nrow(ur_util)) * 100,0)}%"))
+  
+}
+
+test_recs <- data.frame(t(test_recs))
+test_recs <- data.frame(cbind(ur_util$micro_specimen_id,test_recs))
+colnames(test_recs) <- c("micro_specimen_id","PDRx_1","PDRx_2","PDRx_3",
+                         "PDRx_4","PDRx_5","PDRx_6","PDRx_7","PDRx_8",
+                         "PDRx_9","PDRx_10","PDRx_11","PDRx_12")
+
+ur_util <- ur_util %>% left_join(test_recs,by="micro_specimen_id")
+
+ur_util <- ur_util %>% mutate(across(PDRx_1:PDRx_12,as.ab))
+
+ur_util %>% count(PDRx_1) %>% arrange(desc(n))
+
+
+
+
+
