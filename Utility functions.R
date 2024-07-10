@@ -6,6 +6,7 @@ library("mlogit")
 library("AMR")
 library("glue")
 
+
 #####FUNCTIONS#################################################################
 
 #Read-in and cleaning
@@ -1336,8 +1337,7 @@ prev_event_assign <- function(df,B_var,event_df,event_var,no_days,no_events) {
                                  default_na_date = '9999-12-31 00:00:00') %>% 
     mutate({{B_var}} := case_when(pr_event==TRUE ~ TRUE,
                                   TRUE ~ FALSE)) %>%
-    mutate(event = NULL, pr_event=NULL) %>% 
-    filter(grepl('URINE', spec_type_desc))
+    mutate(event = NULL, pr_event=NULL)
   
 }
 
@@ -1362,8 +1362,7 @@ prev_event_type_assign <- function(df,B_var,event_df,event_var,event_type,no_day
                                  default_na_date = '9999-12-31 00:00:00') %>% 
     mutate({{B_var}} := case_when(pr_event==TRUE ~ TRUE,
                                   TRUE ~ FALSE)) %>%
-    mutate(event = NULL, pr_event=NULL) %>% 
-    filter(grepl('URINE', spec_type_desc))
+    mutate(event = NULL, pr_event=NULL)
   
   
 }
@@ -1783,38 +1782,151 @@ rownames(rank_coefs) <- c("High CDI risk","High toxicity risk","UTI-specific",
 "Oral option","IV option","High cost", "Access category","Reserve category")
 rank_coefs$Property <- rownames(rank_coefs)
 
+rank_coefs$standardised_mean <- rank_coefs$mean / max(abs(rank_coefs$mean) + rank_coefs$sd/2)
+rank_coefs$standardised_sd <- rank_coefs$sd / max(abs(rank_coefs$mean) + rank_coefs$sd/2)
+
+
 rank_coefs$Property <- factor(rank_coefs$Property,
                                levels=rank_coefs %>%
                                  arrange(mean) %>% select(Property) %>%
                                            unlist())
 
-ggplot(rank_coefs,aes(x=Property,y=mean,fill=Property)) +
+rank_coefs <- rank_coefs %>% mutate(colour = case_when(
+  mean > 0 ~ "B", TRUE ~ "A"
+))
+
+
+
+ggplot(rank_coefs,aes(x=Property,y=standardised_mean,fill=colour)) +
   geom_col() +
-  geom_errorbar(aes(y=mean,ymin=mean-(sd/2),ymax=mean+(sd/2)),width=0.1) +
+  geom_errorbar(aes(y=standardised_mean,ymin=standardised_mean-(standardised_sd/2),ymax=standardised_mean+(standardised_sd/2)),width=0.1) +
   coord_flip() +
   theme(legend.position = "None") +
   geom_hline(aes(yintercept=0)) +
-  ylim(min(rank_coefs$mean-(rank_coefs$sd/2)),-min(rank_coefs$mean-(rank_coefs$sd/2))) +
-  ylab("Mean effect on drug preference (log odds)") +
+  ylim(min(rank_coefs$standardised_mean-(rank_coefs$standardised_sd/2)),-min(rank_coefs$standardised_mean-(rank_coefs$standardised_sd/2))) +
+  ylab("Effect on drug preference") +
   ggtitle("The effect of different antimicrobial drug properties\non clinician prescribing preference in UTI scenario")
 
-rank_coefs$standard_mean <- (rank_coefs$mean - mean(rank_coefs$mean)) / sd(rank_coefs$mean)
 
-min(rank_coefs$mean-(rank_coefs$sd/2))
+#Weighting base factors of respective drugs from data
 
-##Attach base utilities to probability dataframe
-
-util_probs_df <- read_csv("probs_df_overall.csv")
 ab_props <- read_csv("Ab_props.csv")
 ab_props <- ab_props %>% mutate(Antimicrobial = ab_name(Antimicrobial),
                                 Antimicrobial = str_replace(
                                   Antimicrobial,"/","-"
                                 ))
 
+ur_util <- read_csv("urines_assess.csv")
+micro <- read_csv("micro_clean2.csv")
+pos_urines <- read_csv("pos_urines.csv")
+mic_ref <- micro %>% anti_join(ur_util,by="subject_id")
+
+
+#C difficile base weight
+cdi_ref <- micro %>% filter(org_fullname=="Clostridioides difficile")
+cdi <- cdi_ref %>% group_by(subject_id) %>% arrange(chartdate) %>% summarise_all(last) 
+
+drugs <- read_csv("drugs_clean.csv")
+abx <- drugs %>% filter(grepl(
+  "(Ampicillin|Amoxicillin|Piperacillin/tazobactam|Cefazolin|Ceftriaxone|^Ceftazidime$|Cefepime|Meropenem|Ciprofloxacin|Gentamicin|Trimethoprim/sulfamethoxazole|Nitrofurantoin)",
+  abx_name
+)) %>% filter(!grepl("avibactam",abx_name)) %>% filter(!grepl("clavulan",abx_name)) %>% 
+  mutate(abx_name = case_when(
+    grepl("Amox",abx_name) ~ "Ampicillin",
+          TRUE ~ abx_name)
+  ) %>% 
+  mutate(abx_name = case_when(
+    grepl("^Ampicillin$",abx_name) ~ "Amp/Amoxicillin",
+    TRUE ~ abx_name
+  ))
+
+abx <- abx %>% mutate(charttime = stoptime)
+cdi_ref <- cdi_ref %>% mutate(admittime = charttime-(60*60*24*28))
+
+#Attach CDI in following 28d labels to abx df
+abx <- abx %>% 
+  prev_event_type_assign(CDI,cdi_ref,org_fullname,"Clostridioides difficile",
+                         28,1) %>% ungroup()  %>% 
+  filter(!is.na(abx_name))
+abx$CDI <- factor(abx$CDI)
+
+#previous hospital admission
+hadm <- read_csv("admissions.csv")
+abx <- abx %>% 
+  prev_event_assign(pHADM,hadm,hadm_id,28,1) %>% ungroup() %>% 
+  filter(!is.na(abx_name))
+
+#previous CDI
+cdi_ref <- micro %>% filter(org_fullname=="Clostridioides difficile")
+cdi_ref <- cdi_ref %>% mutate(admittime=charttime)
+abx <- abx %>% 
+  prev_event_assign(pCDI,cdi_ref,org_fullname,1e4,1) %>% ungroup() %>% 
+  filter(!is.na(abx_name))
+
+#age > 65
+pats <- read_csv("patients.csv")
+pats <- pats %>% mutate(age65 = case_when(
+  anchor_age >=65 ~ TRUE, TRUE~FALSE
+))
+patskey <- pats %>% select(subject_id,age65)
+abx <- abx %>% left_join(patskey,by="subject_id")
+
+#dummy variables for antimicrobials
+recipethis <- recipe(~abx_name,data=abx)
+dummies <- recipethis %>% step_dummy(abx_name) %>% prep(training = abx)
+dummy_data <- bake(dummies,new_data = NULL)
+abx <- abx %>% cbind(dummy_data) %>% tibble()
+abx <- abx %>% mutate(abx_name_Amp.Amoxicillin = 
+                            case_when(abx_name=="Amp/Amoxicillin" ~
+                            1, TRUE ~ 0))
+
+
+
+#CDI model
+log_reg_spec <- logistic_reg(penalty = 0.1, mixture = 1) %>%
+  set_engine("glm") %>%
+  set_mode("classification")
+
+log_reg_fit <- log_reg_spec %>%
+  fit(CDI ~ pCDI+pHADM+age65+abx_name_Amp.Amoxicillin+
+        abx_name_Ampicillin.sulbactam+abx_name_Cefazolin+
+        abx_name_Cefepime+abx_name_Ceftazidime+
+        abx_name_Ceftriaxone+abx_name_Ciprofloxacin+
+        abx_name_Gentamicin+abx_name_Meropenem+
+        abx_name_Nitrofurantoin+abx_name_Piperacillin.tazobactam+
+        abx_name_Trimethoprim.sulfamethoxazole,
+        data = abx)
+
+log_reg_fit
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##Attach base utilities to probability dataframe
+
+util_probs_df <- read_csv("probs_df_overall.csv")
+
+
 for (i in 1:nrow(ab_props)) {
   
   ab_props[i,2:ncol(ab_props)] <- ab_props[i,2:ncol(ab_props)] *
-    rank_coefs$mean
+    rank_coefs$standardised_mean
   
 }
 
@@ -1827,8 +1939,7 @@ util_probs_df <- util_probs_df %>% left_join(ab_props,by="Antimicrobial")
 
 ############Identifying weighting factors
 
-ur_util <- read_csv("urines_assess.csv")
-micro <- read_csv("micro_clean2.csv")
+
 
 
 ###REF: Antibiotics and hospital-acquired Clostridium difficile infection: update of systematic review and meta-analysis
@@ -1965,15 +2076,6 @@ ur_util <- ur_util %>%
   prev_event_type_assign(pStroke,hadm,description,
                          "STROKE",
                          1e4,1) %>% ungroup()
-
-
-#GFR < 45
-
-labevents <- read_csv("labevents.csv")
-
-GFRs <- labevents %>% filter(itemid==50920|itemid==51770|
-                               itemid==52026) %>% 
-  semi_join(ur_util,by="subject_id")
 
 
 
@@ -2124,6 +2226,7 @@ ur_util <- ur_util %>% left_join(test_recs,by="micro_specimen_id")
 ur_util <- ur_util %>% mutate(across(PDRx_1:PDRx_12,as.ab))
 
 ur_util %>% count(PDRx_1) %>% arrange(desc(n))
+
 
 
 
