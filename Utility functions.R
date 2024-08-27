@@ -5,6 +5,13 @@ library("openxlsx")
 library("mlogit")
 library("AMR")
 library("glue")
+library("reshape2")
+library("car")
+library("glmnet")
+library("boot")
+library("gtools")
+
+options(error=NULL)
 
 
 #####FUNCTIONS#################################################################
@@ -1751,117 +1758,141 @@ for (i in seq_rep) {
 }
 
 scores <- scores %>% mutate(choice = case_when(Rank==1~1,TRUE~0),
-                             id = seq_rep1)
-
-
-
-
-##Rank logit model
+                             id = seq_rep1) %>% 
+  mutate(across(Oral_option:High_cost,as.numeric))
 
 mlogit_data <- mlogit.data(scores, choice = "Rank", shape = "long", 
                            chid.var = "id", alt.var = "Antibiotic", 
                            ranked = TRUE)
 
 
-formula <- Rank ~ CDI_highrisk + Toxicity_highrisk + UTI_specific + 
-  Oral_option + IV_option + High_cost + Access + Reserve | 0
-
-ranked_logit_model <- mlogit(formula, data = mlogit_data, 
-                               rpar = c(CDI_highrisk = "n", Toxicity_highrisk = "n",
-                                        UTI_specific = "n", Oral_option1 = "n",
-                                        IV_option1 = "n", High_cost1 = "n",
-                                        Access = "n", Reserve = "n"))
-
-
-rank_coefs <- coef(ranked_logit_model) %>% data.frame()
-rank_sds <- rank_coefs[grepl("sd.",rownames(rank_coefs)),] %>% abs()
-rank_coefs$sd <- rank_sds
-rank_coefs <- rank_coefs %>% slice(1:8) %>% rename(mean = ".") %>%
-  mutate(mean=as.numeric(mean), sd=as.numeric(sd))
-rownames(rank_coefs) <- c("High CDI risk","High toxicity risk","UTI-specific",
-"Oral option","IV option","High cost", "Access category","Reserve category")
-rank_coefs$Property <- rownames(rank_coefs)
-
-rank_coefs$standardised_mean <- rank_coefs$mean / max(abs(rank_coefs$mean) + rank_coefs$sd/2)
-rank_coefs$standardised_sd <- rank_coefs$sd / max(abs(rank_coefs$mean) + rank_coefs$sd/2)
-
-
-rank_coefs$Property <- factor(rank_coefs$Property,
-                               levels=rank_coefs %>%
-                                 arrange(mean) %>% select(Property) %>%
-                                           unlist())
-
-rank_coefs <- rank_coefs %>% mutate(colour = case_when(
-  mean > 0 ~ "B", TRUE ~ "A"
-))
 
 
 
-ggplot(rank_coefs,aes(x=Property,y=standardised_mean,fill=colour)) +
+
+###ridge regression method
+
+formula_no_int <- Rank ~ CDI_highrisk + Toxicity_highrisk +  
+  Oral_option + UTI_specific + IV_option + High_cost + Access + Reserve
+
+X <- model.matrix(formula_no_int, data = mlogit_data)
+y <- mlogit_data$Rank
+fit <- cv.glmnet(X, y, family = "multinomial", alpha = 0)
+
+
+lambda_min <- fit$lambda.min
+lambda_1se <- fit$lambda.1se
+cat("Lambda.min:", lambda_min, "\n")
+cat("Lambda.1se:", lambda_1se, "\n")
+
+tmp_coeffs <- coef(fit, s = "lambda.min")
+scores <- tmp_coeffs$`TRUE` %>% as.matrix() %>% data.frame()
+colnames(scores) <- "Value"
+scores <- scores %>% mutate(Coefficient = rownames(scores),
+                              OR = exp(Value),
+                              OR_dif = OR-1)
+scores <- scores %>% mutate(colour = case_when(
+  Value > 0 ~ "B", Value < 0 ~ "A"
+)) %>% slice(-1) %>% slice(-1)
+
+scores <- scores %>% mutate(stan_OR = (OR-1)/max(abs(OR-1)))
+scores$Coefficient <- c("High CDI risk","High toxicity risk","Oral option",
+                         "UTI-specific","IV option","High cost","Access category",
+                         "Reserve category")
+
+scores$Coefficient <- factor(scores$Coefficient, levels= scores %>% arrange(Value) %>% select(Coefficient) %>% unlist())
+
+ggplot(scores,aes(x=OR_dif,y=Coefficient,fill=colour)) +
   geom_col() +
-  geom_errorbar(aes(y=standardised_mean,ymin=standardised_mean-(standardised_sd/2),ymax=standardised_mean+(standardised_sd/2)),width=0.1) +
-  coord_flip() +
   theme(legend.position = "None") +
   geom_hline(aes(yintercept=0)) +
-  ylim(min(rank_coefs$standardised_mean-(rank_coefs$standardised_sd/2)),-min(rank_coefs$standardised_mean-(rank_coefs$standardised_sd/2))) +
-  ylab("Effect on drug preference") +
-  ggtitle("The effect of different antimicrobial drug properties\non clinician prescribing preference in UTI scenario")
+  ylab("Drug property") +
+  xlab("Odds ratio for drug selection") +
+  ggtitle("The effect of different antimicrobial drug properties\non clinician prescribing preference in UTI scenario")+
+  scale_x_continuous(labels = function(x) x+1)+
+  geom_vline(xintercept = 0)
 
 
-#Weighting base factors of respective drugs from data
-
-ab_props <- read_csv("Ab_props.csv")
-ab_props <- ab_props %>% mutate(Antimicrobial = ab_name(Antimicrobial),
-                                Antimicrobial = str_replace(
-                                  Antimicrobial,"/","-"
-                                ))
+#WEIGHTING FACTORS
 
 ur_util <- read_csv("urines_assess.csv")
 micro <- read_csv("micro_clean2.csv")
 pos_urines <- read_csv("pos_urines.csv")
+util_probs_df <- read_csv("probs_df_overall.csv")
 mic_ref <- micro %>% anti_join(ur_util,by="subject_id")
 
-
-#C difficile base weight
-cdi_ref <- micro %>% filter(org_fullname=="Clostridioides difficile")
-cdi <- cdi_ref %>% group_by(subject_id) %>% arrange(chartdate) %>% summarise_all(last) 
-
+##Drugs data frames for training and testing weighting models
 drugs <- read_csv("drugs_clean.csv")
 abx <- drugs %>% filter(grepl(
-  "(Ampicillin|Amoxicillin|Piperacillin/tazobactam|Cefazolin|Ceftriaxone|^Ceftazidime$|Cefepime|Meropenem|Ciprofloxacin|Gentamicin|Trimethoprim/sulfamethoxazole|Nitrofurantoin)",
+  "(Ampicillin|Piperacillin/tazobactam|Cefazolin|Ceftriaxone|^Ceftazidime$|Cefepime|Meropenem|Ciprofloxacin|Gentamicin|Trimethoprim/sulfamethoxazole|Nitrofurantoin)",
   abx_name
-)) %>% filter(!grepl("avibactam",abx_name)) %>% filter(!grepl("clavulan",abx_name)) %>% 
-  mutate(abx_name = case_when(
-    grepl("Amox",abx_name) ~ "Ampicillin",
-          TRUE ~ abx_name)
-  ) %>% 
-  mutate(abx_name = case_when(
-    grepl("^Ampicillin$",abx_name) ~ "Amp/Amoxicillin",
-    TRUE ~ abx_name
-  ))
+)) %>% filter(!grepl("avibactam",abx_name)) %>% anti_join(ur_util,by="subject_id") %>% 
+  filter(grepl("(PO|NG|IV)",route))
+abx <- abx %>% mutate(charttime = starttime,
+                      ab_name = abx_name)
+abx <- abx %>% filter(!is.na(starttime) & !is.na(stoptime))
 
-abx <- abx %>% mutate(charttime = stoptime)
+
+
+
+
+
+###########C DIFFICILE COST
+cdi_ref <- micro %>% filter(org_fullname=="Clostridioides difficile")
+cdi <- cdi_ref %>% group_by(subject_id) %>% arrange(chartdate) %>% summarise_all(last)
 cdi_ref <- cdi_ref %>% mutate(admittime = charttime-(60*60*24*28))
 
-#Attach CDI in following 28d labels to abx df
-abx <- abx %>% 
+#Attach CDI in following 28d labels to abx dfs
+
+CDI_label <- function(df,filter_term) {
+
+filter_term <- enquo(filter_term)
+  
+df <- df %>% 
   prev_event_type_assign(CDI,cdi_ref,org_fullname,"Clostridioides difficile",
                          28,1) %>% ungroup()  %>% 
-  filter(!is.na(abx_name))
-abx$CDI <- factor(abx$CDI)
+  filter(!is.na(!!filter_term))
+df$CDI <- factor(df$CDI)
+
+df
+
+}
+
+abx <- abx %>% CDI_label(abx_name)
+ur_util <- ur_util %>% CDI_label(AMP)
 
 #previous hospital admission
 hadm <- read_csv("admissions.csv")
-abx <- abx %>% 
-  prev_event_assign(pHADM,hadm,hadm_id,28,1) %>% ungroup() %>% 
-  filter(!is.na(abx_name))
+
+hadm_label <- function(df,filter_term) {
+  
+  filter_term <- enquo(filter_term)
+  
+  df %>% 
+    prev_event_assign(pHADM,hadm,hadm_id,28,1) %>% ungroup() %>% 
+    filter(!is.na(!!filter_term))
+  
+}
+
+abx <- abx %>% hadm_label(abx_name)
+ur_util <- ur_util %>% hadm_label(AMP)
 
 #previous CDI
 cdi_ref <- micro %>% filter(org_fullname=="Clostridioides difficile")
 cdi_ref <- cdi_ref %>% mutate(admittime=charttime)
-abx <- abx %>% 
-  prev_event_assign(pCDI,cdi_ref,org_fullname,1e4,1) %>% ungroup() %>% 
-  filter(!is.na(abx_name))
+
+pCDI_label <- function(df,filter_term) {
+  
+  filter_term <- enquo(filter_term)
+  
+  df %>% 
+    prev_event_assign(pCDI,cdi_ref,org_fullname,1e4,1) %>% ungroup() %>% 
+    filter(!is.na(!!filter_term))
+  
+}
+
+abx <- abx %>% pCDI_label(abx_name)
+ur_util <- ur_util %>% pCDI_label(AMP)
 
 #age > 65
 pats <- read_csv("patients.csv")
@@ -1870,316 +1901,694 @@ pats <- pats %>% mutate(age65 = case_when(
 ))
 patskey <- pats %>% select(subject_id,age65)
 abx <- abx %>% left_join(patskey,by="subject_id")
+ur_util <- ur_util %>% left_join(patskey,by="subject_id")
+
+
+
+########NEPHROTOXICITY COST
+diagnoses <- read_csv("diagnoses_icd.csv")
+drgcodes <- read_csv("drgcodes.csv")
+d_icd_diagnoses <- read_csv("d_icd_diagnoses.csv")
+
+labevents <- read_csv("labevents.csv")
+d_labitems <- read_csv("d_labitems.csv")
+
+#AKI
+print(d_labitems %>% filter(grepl("creat",label,ignore.case=T)),n=25)
+creats <- labevents %>% filter(itemid==50912) %>% group_by(subject_id) %>% 
+  distinct(charttime,.keep_all = T) %>% ungroup()
+
+creats <- creats %>% group_by(subject_id) %>% mutate(
+  baseline = min(valuenum),
+  match_48h = case_when(
+    charttime - lag(charttime) <= 2 ~ TRUE,
+    TRUE~ FALSE),
+  AKI1 = case_when(
+    match_48h &
+      valuenum >= (lag(valuenum)+0.3) ~ TRUE,
+    TRUE ~ FALSE),
+  AKI2 = case_when(
+      valuenum >= (1.5*baseline) ~ TRUE,
+    TRUE ~ FALSE),
+  AKI3 = case_when(AKI1|AKI2 ~ TRUE, TRUE~FALSE)) %>% 
+  ungroup()
+
+write_csv(creats,"creatinines.csv")
+
+creats <- creats %>% mutate(admittime = #adjust to search after rather than before
+                              charttime - (60*60*24*7))
+
+#check between 48h and 7d after prescription
+
+AKI_label <- function(df,filter_term) {
+  
+  filter_term <- enquo(filter_term)
+  
+  df %>% 
+    prev_event_type_assign(AKI,creats,AKI3,TRUE,
+                           5,1) %>% ungroup() %>% 
+    mutate(AKI = factor(AKI)) %>% 
+    filter(!is.na(!!filter_term))
+  
+}
+
+abx <- abx %>% AKI_label(abx_name)
+ur_util <- ur_util %>% AKI_label(AMP)
+
+#Check for other nephrotoxins & contrast
+nephrotoxins <- c("aceclofenac",	"aciclovir",	"adefovir",
+"aspirin","captopril",	"carboplatin",	"cefaclor",
+"cefadroxil",	"cefalexin","cefixime",	
+"cefoxitin",	"cefradine",	"ceftaroline",
+"ceftobiprole",	"ceftolozane","cefuroxime",	"celecoxib",
+"ciclosporin",	"cidofovir",	"cisplatin",
+"colistimethate",	"deferasirox",	"dexketoprofen",
+"diclofenac",	"enalapril",	"etodolac",
+"etoricoxib",	"flurbiprofen",	"foscarnet",
+"fosinopril",	"ganciclovir","ibuprofen",	"ifosfamide",	"imidapril",
+"indometacin",	"inotersen",	"ketoprofen",
+"ketorolac",	"lisinopril",	"lithium",
+"mefenamic acid",	"meloxicam",	"mesalazine",
+"methotrexate",	"nabumetone",	"naproxen",
+"neomycin",	"netilmicin",	"oxaliplatin",
+"pamidronate",	"parecoxib",	"pemetrexed",
+"pentamidine",	"perindopril",	"phenazone",
+"piroxicam",	"quinapril",	"ramipril",
+"rifampicin",	"streptomycin",	"streptozocin",
+"sulfasalazine",	"sulindac",	"tacrolimus",
+"tenofovir disoproxil",	"tenoxicam",	"tiaprofenic acid",
+"tobramycin",	"tolfenamic acid",	"trandolapril",
+"trimethoprim",	"valaciclovir",	"valganciclovir",
+"voclosporin",	"zoledronate")
+
+nephrotoxins <- str_to_title(str_to_lower(nephrotoxins))
+
+nephrotoxics_key <- drugs %>%
+  filter(drug %in% nephrotoxins) %>% distinct(hadm_id) %>% 
+  mutate(Nephrotoxic_agent = TRUE)
+nephrotoxics_key <- drugs %>%
+  filter(drug %in% nephrotoxins) %>% distinct(hadm_id) %>% 
+  mutate(Nephrotoxic_agent = TRUE)
+nephrotoxic_join <- function(df) {
+  df %>% left_join(nephrotoxics_key) %>% mutate(
+    Nephrotoxic_agent = case_when(is.na(Nephrotoxic_agent) ~ FALSE, TRUE ~ Nephrotoxic_agent)
+  )
+}
+
+abx <- abx %>% nephrotoxic_join()
+ur_util <- ur_util %>% nephrotoxic_join()
+
+d_icd_procedures <- read_csv("d_icd_procedures.csv")
+procedures <- read_csv("procedures_icd.csv")
+contrast_key <- d_icd_procedures %>% filter(grepl("contrast",long_title))
+contrast <- procedures %>% semi_join(contrast_key) %>% left_join(hadm_key) %>% 
+  distinct(hadm_id) %>% mutate(Contrast = TRUE)
+
+contrast_join <- function(df) {
+  df %>% left_join(contrast) %>% mutate(
+    Contrast = case_when(is.na(Contrast) ~ FALSE, TRUE ~ Contrast)
+  )
+}
+
+abx <- abx %>% contrast_join()
+ur_util <- ur_util %>% contrast_join()
+
+AKI_adjusted_check <- function(df) {
+  
+  df %>% mutate(AKI = case_when(
+    AKI==TRUE & Nephrotoxic_agent==FALSE & Contrast==FALSE ~ TRUE,
+    TRUE ~ FALSE
+  ))
+  
+}
+
+abx <- abx %>% AKI_adjusted_check()
+ur_util <- ur_util %>% AKI_adjusted_check()
+
+#Previous AKI
+creats <- creats %>% mutate(admittime=charttime)
+
+prAKI_label <- function(df,filter_term) {
+  
+  filter_term <- enquo(filter_term)
+  
+  df %>% 
+    prev_event_assign(prAKI,creats,AKI,1e4,1) %>% ungroup() %>% 
+    filter(!is.na(!!filter_term))
+  
+}
+creats <- creats %>% mutate(AKI = AKI3)
+abx <- abx %>% prAKI_label(abx_name)
+ur_util <- ur_util %>% prAKI_label(AMP)
+
+#CKD
+drgcodes <- read_csv("drgcodes.csv")
+ckdkey <- drgcodes %>% filter(grepl(
+  "(CHRONIC KIDNEY|DIAB|LIVER|CARD|HEART|MALIG|STROKE|SEPSIS)",
+  description)) %>% 
+  select(hadm_id,description)
+hadm <- read_csv("admissions.csv")
+hadm <- hadm %>% left_join(ckdkey,by="hadm_id")
+diag_label <- function(df,filter_term,label,timeframe,newvar) {
+  
+  filter_term <- enquo(filter_term)
+  newvar <- enquo(newvar)
+  
+  df <- df %>% 
+    prev_event_type_assign(!!newvar,hadm,description,
+                           label,
+                           timeframe,1) %>% ungroup() %>% 
+    filter(!is.na(!!filter_term))
+  
+}
+
+abx <- abx %>% diag_label(abx_name,"CHRONIC KIDNEY",1e4,pCKD)
+ur_util <- ur_util %>% diag_label(AMP,"CHRONIC KIDNEY",1e4,pCKD)
+
+#diabetes
+abx <- abx %>% diag_label(abx_name,"DIAB",1e4,pDIAB)
+ur_util <- ur_util %>% diag_label(AMP,"DIAB",1e4,pDIAB)
+
+#LIVER DISEASE
+abx <- abx %>% diag_label(abx_name,"LIVER",1e4,pLIVER)
+ur_util <- ur_util %>% diag_label(AMP,"LIVER",1e4,pLIVER)
+
+#CARDIOVASCULAR DISEASE
+abx <- abx %>% diag_label(abx_name,"(HEART|CARDI)",1e4,pCARD)
+ur_util <- ur_util %>% diag_label(AMP,"(HEART|CARDI))",1e4,pCARD)
+
+
+#CANCER IN LAST YEAR
+abx <- abx %>% diag_label(abx_name,"MALIG",365,pCA)
+ur_util <- ur_util %>% diag_label(AMP,"MALIG",365,pCA)
+
+#STROKE
+abx <- abx %>% diag_label(abx_name,"STROKE",1e4,pCVA)
+ur_util <- ur_util %>% diag_label(AMP,"STROKE",1e4,pCVA)
+
+#MALE
+patskey2 <- pats %>% mutate(MALE = case_when(gender=="M" ~ TRUE, TRUE~FALSE)) %>% 
+                            select(subject_id,MALE)
+abx <- abx %>% left_join(patskey2,by="subject_id")
+
+#CURRENT SERVICE
+services <- read_csv("services.csv")
+serv_key <- services %>% select(hadm_id,curr_service) %>% distinct(hadm_id,.keep_all = T)
+abx <- abx %>% left_join(serv_key,by="hadm_id") %>% mutate(
+  curr_service = case_when(is.na(curr_service) ~ "UNKNOWN",
+                           TRUE ~ curr_service))
+recipethis <- recipe(~curr_service,data=abx)
+dummies <- recipethis %>% step_dummy(curr_service) %>% prep(training = abx)
+dummy_data <- bake(dummies,new_data = NULL)
+abx <- abx %>% cbind(dummy_data) %>% tibble()
+recipethis <- recipe(~curr_service,data=ur_util)
+dummies <- recipethis %>% step_dummy(curr_service) %>% prep(training = ur_util)
+dummy_data <- bake(dummies,new_data = NULL)
+ur_util <- ur_util %>% cbind(dummy_data) %>% tibble()
+
+#RECENT ICU ADMISSION (last 28 days)
+poe <- read_csv("poe_clean.csv")
+icu <- poe %>% filter(field_value=="ICU") %>% mutate(
+  field_value="ICU") %>% rename(admittime="ordertime")
+abx <- abx %>% 
+  prev_event_type_assign(pICU,icu,field_value,"ICU",28,1) %>%
+  ungroup()
+
+#RECENT SEPSIS
+abx <- abx %>% diag_label(abx_name,"SEPSIS",365,pSEPSIS)
+ur_util <- ur_util %>% diag_label(AMP,"SEPSIS",365,pSEPSIS)
+
+#LENGTH OF ANTIBIOTIC COURSE
+abx <- abx %>% mutate(course_length = as.numeric(stoptime-starttime)/24/60/60,
+                      course_length=case_when(course_length<0 ~ 0,TRUE~course_length),
+                      course_length=case_when(course_length>=365 ~ course_length-365,
+                                              TRUE~course_length),
+                      course_length = course_length/max(course_length)) %>% 
+  group_by(abx_name) %>% mutate(median_course = median(course_length)) %>% ungroup()
+
+med_course_key <- abx %>% select(abx_name,median_course) %>% 
+  rename(Antimicrobial="abx_name") %>% distinct() %>% 
+  mutate(Antimicrobial = str_replace(Antimicrobial,"/","-"))
 
 #dummy variables for antimicrobials
+
 recipethis <- recipe(~abx_name,data=abx)
 dummies <- recipethis %>% step_dummy(abx_name) %>% prep(training = abx)
 dummy_data <- bake(dummies,new_data = NULL)
 abx <- abx %>% cbind(dummy_data) %>% tibble()
-abx <- abx %>% mutate(abx_name_Amp.Amoxicillin = 
-                            case_when(abx_name=="Amp/Amoxicillin" ~
+abx <- abx %>% mutate(abx_name_Ampicillin = 
+                            case_when(abx_name=="Ampicillin" ~
                             1, TRUE ~ 0))
 
 
+########MARROW SUPPRESSION COST
 
-#CDI model
+new_lowvalue <- function(df,new_colname) {
+  
+  new_colname <- enquo(new_colname)
+  
+  df %>% group_by(subject_id) %>% mutate(
+    !!new_colname := case_when(
+      (valuenum < as.numeric(ref_range_lower)) &
+      !(lag(valuenum) < lag(as.numeric(ref_range_lower))) ~ TRUE,
+      TRUE~FALSE)
+  ) %>% ungroup()
+  
+}
+
+new_highvalue <- function(df,new_colname) {
+  
+  new_colname <- enquo(new_colname)
+  
+  df %>% group_by(subject_id) %>% mutate(
+    !!new_colname := case_when(
+      (valuenum > as.numeric(ref_range_upper)) &
+        !(lag(valuenum) > lag(as.numeric(ref_range_upper))) ~ TRUE,
+      TRUE~FALSE)
+  ) %>% ungroup()
+  
+  abnormal_label <- function(df,df2,new_column,search_term,filter_term) {
+    
+    filter_term <- enquo(filter_term)
+    new_column <- enquo(new_column)
+    search_term <- enquo(search_term)
+    
+    df2 <- df2 %>% mutate(admittime = #adjust to search after rather than before
+                                  charttime - (60*60*24*7))
+    
+    df %>% 
+      prev_event_type_assign(!!new_column,df2,!!search_term,TRUE,
+                             5,1) %>% ungroup() %>% 
+      mutate(!!new_column := factor(!!new_column)) %>% 
+      filter(!is.na(!!filter_term))
+    
+  }
+  
+}
+
+#WBCs
+print(d_labitems %>% filter(grepl("white",label,ignore.case=T)),n=25)
+wbcs <- labevents %>% filter(itemid==51301) %>% group_by(subject_id) %>% 
+  distinct(charttime,.keep_all = T) %>% ungroup()
+
+wbcs <- wbcs %>% new_lowvalue(new_leukopenia)
+abx <- abx %>% abnormal_label(wbcs,leukopenia,new_leukopenia,abx_name)
+ur_util <- ur_util %>% abnormal_label(wbcs,leukopenia,new_leukopenia,AMP)
+
+#Hb
+print(d_labitems %>% filter(grepl("Hemoglobin",label,ignore.case=T)),n=25)
+hbs <- labevents %>% filter(itemid==51222) %>% group_by(subject_id) %>% 
+  distinct(charttime,.keep_all = T) %>% ungroup()
+
+hbs <- hbs %>% new_lowvalue(new_anaemia)
+abx <- abx %>% abnormal_label(hbs,anaemia,new_anaemia,abx_name)
+ur_util <- ur_util %>% abnormal_label(hbs,anaemia,new_anaemia,AMP)
+
+#Plts
+print(d_labitems %>% filter(grepl("Platelet",label,ignore.case=T)),n=25)
+plts <- labevents %>% filter(itemid==51265) %>% group_by(subject_id) %>% 
+  distinct(charttime,.keep_all = T) %>% ungroup()
+
+plts <- plts %>% new_lowvalue(new_thrombocytopenia)
+abx <- abx %>% abnormal_label(plts,thrombocytopenia,new_thrombocytopenia,abx_name)
+ur_util <- ur_util %>% abnormal_label(plts,thrombocytopenia,new_thrombocytopenia,AMP)
+
+#Check for previous bleeding and other cytotoxic agents
+bleed_key <- d_icd_diagnoses %>% filter(grepl("bleed",long_title,ignore.case=T) &
+                             !grepl("without",long_title,ignore.case=T))
+bleeding <- diagnoses %>% semi_join(bleed_key) %>% distinct(hadm_id,.keep_all = T) %>% 
+  mutate(Bleeding_diagnosis = TRUE) %>% select(hadm_id,Bleeding_diagnosis)
+
+
+bleed_join <- function(df) {
+  df %>% left_join(bleeding) %>% mutate(
+    Bleeding_diagnosis = case_when(is.na(Bleeding_diagnosis) ~ FALSE, TRUE ~ Bleeding_diagnosis)
+  )
+}
+
+abx <- abx %>% bleed_join()
+ur_util <- ur_util %>% bleed_join()
+
+cytotoxins <- c("Allopurinol","Aprepitant",
+"Azathioprine",
+"Carmustine",
+"Cisplatin",
+"Cyclophosphamide",
+"Dacarbazine",
+"Daunorubicin",
+"Dexamethasone",
+"Doxorubicin hydrochloride",
+"Epirubicin hydrochloride",
+"Estramustine phosphate",
+"Etoposide",
+"Febuxostat",
+"Fluorouracil",
+"Idarubicin hydrochloride",
+"Ifosfamide",
+"Lomustine",
+"Lorazepam",
+"Melphalan",
+"Mercaptopurine",
+"Methotrexate",
+"Metoclopramide hydrochloride",
+"Mitomycin",
+"Mitoxantrone",
+"Pixantrone",
+"Rasburicase",
+"Vinblastine sulfate")
+
+cytotoxics_key <- drugs %>%
+  filter(drug %in% cytotoxins) %>% distinct(hadm_id) %>% 
+  mutate(Cytotoxic_agent = TRUE)
+
+cytotoxic_join <- function(df) {
+  df %>% left_join(cytotoxics_key) %>% mutate(
+    Cytotoxic_agent = case_when(is.na(Cytotoxic_agent) ~ FALSE, TRUE ~ Cytotoxic_agent)
+  )
+}
+
+abx <- abx %>% cytotoxic_join()
+ur_util <- ur_util %>% cytotoxic_join()
+
+#Marrow suppression overall
+marrow_check <- function(df) {
+  
+  df %>% mutate(marrow_suppress = case_when(
+    (leukopenia==TRUE|anaemia==TRUE|thrombocytopenia==TRUE)
+    & Bleeding_diagnosis==FALSE & Cytotoxic_agent==FALSE~TRUE, TRUE~FALSE
+  ))
+  
+}
+
+abx <- abx %>% marrow_check()
+ur_util <- ur_util %>% marrow_check()
+
+
+########LFT DERANGEMENT COST
+#ALP
+print(d_labitems %>% filter(grepl("Alkaline",label,ignore.case=T)),n=25)
+alps <- labevents %>% filter(itemid==50863) %>% group_by(subject_id) %>% 
+  distinct(charttime,.keep_all = T) %>% ungroup()
+
+alps <- alps %>% new_highvalue(new_high_alp)
+abx <- abx %>% abnormal_label(alps,high_alp,new_high_alp,abx_name)
+ur_util <- ur_util %>% abnormal_label(alps,high_alp,new_high_alp,AMP)
+
+#ALT
+print(d_labitems %>% filter(grepl("transferase",label,ignore.case=T)),n=25)
+alts <- labevents %>% filter(itemid==50861) %>% group_by(subject_id) %>% 
+  distinct(charttime,.keep_all = T) %>% ungroup()
+
+alts <- alts %>% new_highvalue(new_high_alt)
+abx <- abx %>% abnormal_label(alts,high_alt,new_high_alt,abx_name)
+ur_util <- ur_util %>% abnormal_label(alts,high_alt,new_high_alt,AMP)
+
+#AST
+print(d_labitems %>% filter(grepl("transferase",label,ignore.case=T)),n=25)
+asts <- labevents %>% filter(itemid==50878) %>% group_by(subject_id) %>% 
+  distinct(charttime,.keep_all = T) %>% ungroup()
+
+asts <- asts %>% new_highvalue(new_high_ast)
+abx <- abx %>% abnormal_label(asts,high_ast,new_high_ast,abx_name)
+ur_util <- ur_util %>% abnormal_label(asts,high_ast,new_high_ast,AMP)
+
+#Check for previous liver disease and recent biliary instrumentation
+biliary_proc_key <- d_icd_procedures %>% filter(grepl("Biliary",long_title,ignore.case=T) &
+                                                  (grepl("Removal",long_title,ignore.case=T) |
+                                                  grepl("Insertion",long_title,ignore.case=T) |
+                                                  grepl("Inspection",long_title,ignore.case=T) |
+                                                    grepl("Revision",long_title,ignore.case=T) |
+                                                    grepl("Repair",long_title,ignore.case=T) |
+                                                    grepl("Transplant",long_title,ignore.case=T) |
+                                                    grepl("Introduction",long_title,ignore.case=T) |
+                                                    grepl("Irrigation",long_title,ignore.case=T) |
+                                                    grepl("Measurement",long_title,ignore.case=T) |
+                                                    grepl("Endoscop",long_title,ignore.case=T) |
+                                                    grepl("Fluoroscopy",long_title,ignore.case=T) |
+                                                    grepl("Radiation",long_title,ignore.case=T)))
+biliary <- procedures %>% semi_join(biliary_proc_key) %>% 
+  distinct(hadm_id) %>% mutate(Biliary_procedure = TRUE)
+
+bil_proc_join <- function(df) {
+  df %>% left_join(biliary) %>% mutate(
+    Biliary_procedure = case_when(is.na(Biliary_procedure) ~ FALSE, TRUE ~ Biliary_procedure)
+  )
+}
+
+abx <- abx %>% bil_proc_join()
+ur_util <- ur_util %>% bil_proc_join()
+
+
+#Overall LFT derangement
+lft_check <- function(df) {
+  
+  df %>% mutate(deranged_lfts = case_when(
+    (high_alp==TRUE|high_alt==TRUE|high_ast==TRUE) &
+      pLIVER==FALSE&Biliary_procedure==FALSE~TRUE, TRUE~FALSE
+  ))
+  
+}
+abx <- abx %>% lft_check()
+ur_util <- ur_util %>% lft_check()
+
+#Overall toxicity
+toxicity_check <- function(df) {
+  
+  df %>% mutate(overall_tox = case_when(
+    AKI==TRUE|marrow_suppress==TRUE|deranged_lfts==TRUE ~TRUE, TRUE~FALSE
+  ))
+  
+}
+abx <- abx %>% toxicity_check()
+ur_util <- ur_util %>% toxicity_check()
+
+#row ids
+abx <- abx %>% mutate(row_id = seq(1,nrow(abx))) %>% 
+  relocate(row_id,.before = "subject_id")
+
+write_csv(abx,"interim_abx.csv")
+write_csv(ur_util,"interim_ur_util.csv")
+
+abx <- read_csv("interim_abx.csv")
+util_probs_df <- read_csv("probs_df_overall.csv")
+ur_util <- read_csv("interim_ur_util.csv")
+
+#split abx into train_test
+subjects <- abx %>% distinct(subject_id)
+smp_size <- floor(0.8 * nrow(subjects))
+set.seed(123)
+train_ind <- sample(seq_len(nrow(subjects)), size = smp_size)
+train_ids <- subjects[train_ind,]
+test_ids <- subjects[-train_ind,]
+
+abx <- abx %>% mutate(CDI = factor(CDI),
+                      overall_tox = factor(overall_tox))
+
+train_abx <- abx %>% semi_join(train_ids,by="subject_id")
+test_abx <- abx %>% semi_join(test_ids,by="subject_id")
+
+
+
+
+
+
+
+##############CDI model
 log_reg_spec <- logistic_reg(penalty = 0.1, mixture = 1) %>%
   set_engine("glm") %>%
   set_mode("classification")
 
-log_reg_fit <- log_reg_spec %>%
-  fit(CDI ~ pCDI+pHADM+age65+abx_name_Amp.Amoxicillin+
+#fit model (ampicillin excluded)
+cdi_fit <- log_reg_spec %>%
+  fit(CDI ~ pCDI+pHADM+age65+pCKD+pDIAB+pLIVER+pCARD+pCVA+pCA+MALE+
         abx_name_Ampicillin.sulbactam+abx_name_Cefazolin+
         abx_name_Cefepime+abx_name_Ceftazidime+
         abx_name_Ceftriaxone+abx_name_Ciprofloxacin+
         abx_name_Gentamicin+abx_name_Meropenem+
         abx_name_Nitrofurantoin+abx_name_Piperacillin.tazobactam+
-        abx_name_Trimethoprim.sulfamethoxazole,
-        data = abx)
+        abx_name_Trimethoprim.sulfamethoxazole+
+        curr_service_CSURG+curr_service_ENT+curr_service_GU+
+        curr_service_GYN+curr_service_MED+curr_service_NMED+
+        curr_service_NSURG+curr_service_OBS+curr_service_OMED+
+        curr_service_ORTHO+curr_service_PSURG+curr_service_PSYCH+
+        curr_service_SURG+curr_service_TRAUM+curr_service_TSURG+
+        curr_service_VSURG+pICU+pSEPSIS,
+        data = train_abx)
 
-log_reg_fit
+underlying_cdi <- extract_fit_engine(cdi_fit)
+coef(underlying_cdi) %>% round(2)
 
+#Evaluate on test data
+cdi_test_probs <- predict(underlying_cdi, test_abx,type="response")
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-##Attach base utilities to probability dataframe
-
-util_probs_df <- read_csv("probs_df_overall.csv")
-
-
-for (i in 1:nrow(ab_props)) {
-  
-  ab_props[i,2:ncol(ab_props)] <- ab_props[i,2:ncol(ab_props)] *
-    rank_coefs$standardised_mean
-  
-}
-
-util_probs_df <- util_probs_df %>% left_join(ab_props,by="Antimicrobial")
-
-
-
-
-
-
-############Identifying weighting factors
-
-
-
-
-###REF: Antibiotics and hospital-acquired Clostridium difficile infection: update of systematic review and meta-analysis
-#REF: Comparison of Different Antibiotics and the Risk for Community-Associated Clostridioides difficile Infection: A Case–Control Study
-
-#Previous C difficile
-micaborgs <- micro %>% filter(!is.na(org_name))
-micabnas <- micro %>% filter(is.na(org_name))
-micaborgab <- micaborgs %>% select(PEN:MTR)
-micaborgab[is.na(micaborgab)] <- "NT"
-micaborgs[,17:81] <- micaborgab
-micro2 <- tibble(rbind(micaborgs,micabnas))
-micro2 <- micro2 %>% rename(admittime = "charttime")
-
-ur_util <- ur_util %>% 
-  prev_event_type_assign(pCDI,micro2,org_fullname,"Clostridioides difficile",
-                         1825,1) %>% ungroup()
-
-#age > 65
-pats <- read_csv("patients.csv")
-pats <- pats %>% mutate(age65 = case_when(
-  anchor_age >=65 ~ TRUE, TRUE~FALSE
-))
-patskey <- pats %>% select(subject_id,age65)
-ur_util <- ur_util %>% left_join(patskey,by="subject_id")
-
-#age > 80
-pats <- read_csv("patients.csv")
-pats <- pats %>% mutate(age80 = case_when(
-  anchor_age >=80 ~ TRUE, TRUE~FALSE
-))
-patskey <- pats %>% select(subject_id,age80)
-ur_util <- ur_util %>% left_join(patskey,by="subject_id")
-
-#Any abx in the last 7d
-ur_util <- ur_util %>% mutate(
-  abx_7d = case_when(
-    d7AMPrx|d7AMXrx|d7AMCrx|d7SAMrx|d7TZPrx|d7CZOrx|d7CROrx|d7CAZrx|
-      d7FEPrx|d7MEMrx|d7ETPrx|d7ATMrx|d7CIPrx|d7GENrx|d7TOBrx|d7AMKrx|
-      d7RIFrx|d7SXTrx|d7NITrx|d7ERYrx|d7CLRrx|d7AZMrx|d7CLIrx|d7VANrx|
-      d7MTRrx|d7LNZrx|d7DAPrx|d7DOXrx ~ TRUE, TRUE~FALSE
-  )
-)
-
-#diabetes
-diagnoses <- read_csv("diagnoses_icd.csv")
-drgcodes <- read_csv("drgcodes.csv")
-diabkey <- drgcodes %>% filter(grepl("DIAB",description)) %>% 
-  select(hadm_id,description)
-hadm <- read_csv("admissions.csv")
-hadm <- hadm %>% left_join(diabkey,by="hadm_id")
-ur_util <- ur_util %>% 
-  prev_event_type_assign(pDIAB,hadm,description,
-                         "DIAB",
-                         1e4,1) %>% ungroup()
-
-#heart failure
-hfkey <- drgcodes %>% filter(grepl("HEART FAILURE",description)) %>% 
-  select(hadm_id,description)
-hadm <- read_csv("admissions.csv")
-hadm <- hadm %>% left_join(hfkey,by="hadm_id")
-ur_util <- ur_util %>% 
-  prev_event_type_assign(pHF,hadm,description,
-                         "HEART FAILURE",
-                         1e4,1) %>% ungroup()
-
-#CKD
-ckdkey <- drgcodes %>% filter(grepl("CHRONIC KIDNEY",description)) %>% 
-  select(hadm_id,description)
-hadm <- read_csv("admissions.csv")
-hadm <- hadm %>% left_join(ckdkey,by="hadm_id")
-ur_util <- ur_util %>% 
-  prev_event_type_assign(pCKD,hadm,description,
-                         "CHRONIC KIDNEY",
-                         1e4,1) %>% ungroup()
-
-#LIVER DISEASE
-liverkey <- drgcodes %>% filter(grepl("LIVER",description)&
-                                !grepl("DELIVERY",description)) %>% 
-  select(hadm_id,description)
-hadm <- read_csv("admissions.csv")
-hadm <- hadm %>% left_join(liverkey,by="hadm_id")
-ur_util <- ur_util %>% 
-  prev_event_type_assign(pLD,hadm,description,
-                         "LIVER",
-                         1e4,1) %>% ungroup()
-
-#CARDIOVASCULAR DISEASE
-cardikey <- drgcodes %>% filter(grepl("HEART",description)|grepl("CARDI",description)) %>% 
-  select(hadm_id,description)
-hadm <- read_csv("admissions.csv")
-hadm <- hadm %>% left_join(cardikey,by="hadm_id")
-ur_util <- ur_util %>% 
-  prev_event_type_assign(pCVD,hadm,description,
-                         "(HEART|CARDI)",
-                         1e4,1) %>% ungroup()
-
-#HEART FAILURE
-HFkey <- drgcodes %>% filter(grepl("HEART FAILURE",description)) %>% 
-  select(hadm_id,description)
-hadm <- read_csv("admissions.csv")
-hadm <- hadm %>% left_join(HFkey,by="hadm_id")
-ur_util <- ur_util %>% 
-  prev_event_type_assign(pHF,hadm,description,
-                         "HEART FAILURE",
-                         1e4,1) %>% ungroup()
-
-#CANCER IN LAST YEAR
-cancerkey <- drgcodes %>% filter(grepl("MALIG",description) & !grepl("EXCEPT MALI",description)) %>% 
-  select(hadm_id,description)
-hadm <- read_csv("admissions.csv")
-hadm <- hadm %>% left_join(cancerkey,by="hadm_id")
-ur_util <- ur_util %>% 
-  prev_event_type_assign(pCa,hadm,description,
-                         "MALIG",
-                         365,1) %>% ungroup()
-
-#CIRRHOSIS
-cirrkey <- drgcodes %>% filter(grepl("CIRRHO",description)) %>% 
-  select(hadm_id,description)
-hadm <- read_csv("admissions.csv")
-hadm <- hadm %>% left_join(cirrkey,by="hadm_id")
-ur_util <- ur_util %>% 
-  prev_event_type_assign(pCirr,hadm,description,
-                         "CIRRHO",
-                         1e4,1) %>% ungroup()
-
-#STROKE
-strokekey <- drgcodes %>% filter(grepl("STROKE",description)) %>% 
-  select(hadm_id,description)
-hadm <- read_csv("admissions.csv")
-hadm <- hadm %>% left_join(strokekey,by="hadm_id")
-ur_util <- ur_util %>% 
-  prev_event_type_assign(pStroke,hadm,description,
-                         "STROKE",
-                         1e4,1) %>% ungroup()
-
-
-
-#Incorporating weighting factors
-
-weight_key <- ur_util %>%
-  select(micro_specimen_id,
-         pCDI,
-         age65,
-         pHADM,
-         abx_7d,
-         pDIAB,
-         pCKD,
-         pLD,
-         pCVD,
-         pSurg,
-         provider_id,
-         pHF,
-         age80,
-         MALE
-         ) #provider_id true if not admitted to hospital
-
-util_probs_df <- util_probs_df %>%
-  left_join(weight_key,by="micro_specimen_id")
-
-
-#odds ratios (from literature)
-
-#CDI ORs
+#Attach to probs_df
+cdi_util_key <- ur_util %>% select(micro_specimen_id,pHADM,MALE,pICU,
+                                   CDI:pSEPSIS) %>% 
+  select(-AKI)
+cdi_util_key
 util_probs_df <- util_probs_df %>% 
-  mutate(
-    pCDI_CDI = case_when(
-      pCDI ~ 2.70, TRUE~1
-    ),
-    age65_CDI = case_when(
-      age65 ~ 1.84, TRUE~1
-    ),
-    pHADM_CDI = case_when(
-      pHADM ~ 1.98, TRUE~1
-    ),
-    abx_7d_CDI = case_when(
-      abx_7d ~ 1.30, TRUE~1
-    ),
-    pSurg_CDI = case_when(
-      pSurg ~ 1.78, TRUE~1
-    ),
-    CDI_util = CDI_highrisk*pCDI_CDI*age65_CDI*pHADM_CDI*pSurg_CDI*abx_7d_CDI
-  )
+  left_join(cdi_util_key,by="micro_specimen_id",
+            relationship = "many-to-one")
 
+############Toxicity model
+log_reg_spec <- logistic_reg(penalty = 0.1, mixture = 1) %>%
+  set_engine("glm") %>%
+  set_mode("classification")
 
-#toxicity ORs
+#fit model (ampicillin excluded)
+tox_fit <- log_reg_spec %>%
+  fit(overall_tox ~ prAKI+pHADM+age65+pCKD+pDIAB+pLIVER+pCARD+pCVA+pCA+MALE+
+        abx_name_Ampicillin.sulbactam+abx_name_Cefazolin+
+        abx_name_Cefepime+abx_name_Ceftazidime+
+        abx_name_Ceftriaxone+abx_name_Ciprofloxacin+
+        abx_name_Gentamicin+abx_name_Meropenem+
+        abx_name_Nitrofurantoin+abx_name_Piperacillin.tazobactam+
+        abx_name_Trimethoprim.sulfamethoxazole +
+        curr_service_CSURG+curr_service_ENT+curr_service_GU+
+        curr_service_GYN+curr_service_MED+curr_service_NMED+
+        curr_service_NSURG+curr_service_OBS+curr_service_OMED+
+        curr_service_ORTHO+curr_service_PSURG+curr_service_PSYCH+
+        curr_service_SURG+curr_service_TRAUM+curr_service_TSURG+
+        curr_service_VSURG+pICU+pSEPSIS,
+      data = train_abx)
+
+underlying_tox <- extract_fit_engine(tox_fit)
+coef(underlying_tox) %>% round(2)
+
+#evaluate on test data
+tox_test_probs <- predict(underlying_tox, test_abx,type="response")
+
+#Attach to probs_df
+tox_util_key <- ur_util %>% select(micro_specimen_id,overall_tox)
 util_probs_df <- util_probs_df %>% 
-  mutate(
-    pDIAB_tox = case_when(
-      pDIAB ~ 2.13, TRUE~1
-    ),
-    pCKD_tox = case_when(
-      pCKD ~ 0.42, TRUE~1
-    ),
-    pLD_tox = case_when(
-      pLD~ 1.83, TRUE~1
-    ),
-    pCVD_tox = case_when(
-      pCVD ~ 1.47, TRUE~1
-    ),
-    pSurg_tox = case_when(
-      pSurg ~ 1.31, TRUE~1
-    ),
-    Tox_util = Toxicity_highrisk*pDIAB_tox*pCKD_tox*pLD_tox*
-      pCVD_tox*pSurg_tox
-  )
-
-#IV option
-util_probs_df <- util_probs_df %>% 
-  mutate(
-    not_IP_IV = case_when(provider_id &
-                            grepl("(Piperacillin-tazobactam|Cefazolin|Cefepime|Meropenem|Gentamicin)",Antimicrobial)
-                          ~ 0, TRUE~1),
-    IV_util = IV_option*not_IP_IV
-  )
-
-#Resistance utility
+  left_join(tox_util_key,by="micro_specimen_id",
+            relationship = "many-to-one")
 
 util_probs_df <- util_probs_df %>% 
-  mutate(
-    R_utility = 
-      R + IV_option
-  )
+  mutate(abx_name_Ampicillin.sulbactam=case_when(
+    Antimicrobial=="Ampicillin-sulbactam" ~ 1,
+    TRUE ~ 0),
+  abx_name_Cefazolin=case_when(
+    Antimicrobial=="Cefazolin" ~ 1,
+    TRUE ~ 0),
+  abx_name_Cefepime=case_when(
+    Antimicrobial=="Cefepime" ~ 1,
+    TRUE ~ 0),
+  abx_name_Ceftazidime=case_when(
+    Antimicrobial=="Ceftazidime" ~ 1,
+    TRUE ~ 0),
+  abx_name_Ceftriaxone=case_when(
+    Antimicrobial=="Ceftriaxone" ~ 1,
+    TRUE ~ 0),
+  abx_name_Ciprofloxacin=case_when(
+    Antimicrobial=="Ciprofloxacin" ~ 1,
+    TRUE ~ 0),
+  abx_name_Gentamicin=case_when(
+    Antimicrobial=="Gentamicin" ~ 1,
+    TRUE ~ 0),
+  abx_name_Meropenem=case_when(
+    Antimicrobial=="Meropenem" ~ 1,
+    TRUE ~ 0),
+  abx_name_Nitrofurantoin=case_when(
+    Antimicrobial=="Nitrofurantoin" ~ 1,
+    TRUE ~ 0),
+  abx_name_Piperacillin.tazobactam=case_when(
+    Antimicrobial=="Piperacillin-tazobactam" ~ 1,
+    TRUE ~ 0),
+  abx_name_Trimethoprim.sulfamethoxazole=case_when(
+    Antimicrobial=="Trimethoprim-sulfamethoxazole" ~ 1,
+    TRUE ~ 0),
+  abx_name_Ampicillin=case_when(
+    Antimicrobial=="Ampicillin" ~ 1,
+    TRUE ~ 0))
+
+####CURRENT POSITION############
+
+cdi_util_probs <- predict(underlying_cdi, util_probs_df,type="response")
+cdi_value <- scores[rownames(scores)=="CDI_highrisk",] %>% 
+  select(stan_OR) %>% unlist()
+
+tox_util_probs <- predict(underlying_tox, util_probs_df,type="response")
+tox_value <- scores[rownames(scores)=="Toxicity_highrisk",] %>% 
+  select(stan_OR) %>% unlist()
+
+uti_specifics <- c("Nitrofurantoin")
+uti_value <- scores[rownames(scores)=="UTI_specific",] %>% 
+  select(stan_OR) %>% unlist()
+
+access_abs <- c("AMP","SAM","CZO",
+                "GEN","SXT","NIT") %>% ab_name() %>% 
+  str_replace("/","-")
+access_value <- scores[rownames(scores)=="Access",] %>% 
+  select(stan_OR) %>% unlist()
+
+oral_abs <- c("AMP","SAM","CIP",
+                "GEN","SXT","NIT") %>% ab_name() %>% 
+  str_replace("/","-")
+oral_value <- scores[rownames(scores)=="Oral_option",] %>% 
+  select(stan_OR) %>% unlist()
+
+iv_abs <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
+              "GEN","SXT","VAN") %>% ab_name() %>% 
+  str_replace("/","-")
+iv_value <- scores[rownames(scores)=="IV_option",] %>% 
+  select(stan_OR) %>% unlist()
+
+reserve_abs <- c()
+reserve_value <- scores[rownames(scores)=="Reserve",] %>% 
+  select(stan_OR) %>% unlist()
+
+highcost_abs <- c()
+cost_value <- scores[rownames(scores)=="High_cost",] %>% 
+  select(stan_OR) %>% unlist()
 
 
-###Overall S utility score
 
-util_probs_df <- util_probs_df %>% mutate(
-  S_utility = 
-    S * (CDI_util+Tox_util+UTI_specific+
-           Oral_option+IV_util+High_cost+Access+Reserve)
-)
+util_probs_df <- util_probs_df %>% 
+  mutate(prob_CDI = cdi_util_probs,
+         value_CDI = cdi_value,
+         util_CDI = prob_CDI * value_CDI,
+         prob_tox = tox_util_probs,
+         value_tox = tox_value,
+         util_tox = prob_tox * value_tox,
+         UTI_specific = case_when(Antimicrobial %in% uti_specifics ~ 1, TRUE~0),
+         value_UTI = uti_value,
+         util_uti = UTI_specific * value_UTI,
+         Access_agent = case_when(Antimicrobial %in% access_abs ~ 1, TRUE~0),
+         value_access = access_value,
+         util_access = Access_agent * value_access,
+         Oral_agent = case_when(Antimicrobial %in% oral_abs ~ 1, TRUE~0),
+         value_oral = oral_value,
+         util_oral = Oral_agent * value_oral,
+         IV_agent = case_when(Antimicrobial %in% iv_abs ~ 1, TRUE~0),
+         value_iv = iv_value,
+         util_iv = IV_agent * value_iv,
+         Reserve_agent = case_when(Antimicrobial %in% reserve_abs ~ 1, TRUE~0),
+         value_reserve = reserve_value,
+         util_reserve = Reserve_agent * value_reserve,
+         Highcost_agent = case_when(Antimicrobial %in% highcost_abs ~ 1, TRUE~0),
+         value_highcost = cost_value,
+         util_highcost = Highcost_agent * value_highcost,
+         )
 
-#Overall AST utility
-util_probs_df <- util_probs_df %>% mutate(
-  AST_utility = 
-    S_utility + R_utility 
-)
 
+
+
+
+#OVERALL UTILITY SCORE
+
+util_probs_df <- util_probs_df %>% mutate(overall_util = util_CDI + util_tox +
+                                            util_uti + util_access +
+                                            util_oral + util_iv +
+                                            util_reserve + util_highcost,
+                      S_utility = S*overall_util)
+
+
+
+
+
+
+#RECOMMENDATIONS
 
 #Formulary recommendations
 
@@ -2199,14 +2608,14 @@ util_mk1 = function(df,spec_id,panel_size) {
 }
 
 
-test_recs <-  data.frame(matrix(nrow=12,ncol=0))
+test_recs <-  data.frame(matrix(nrow=13,ncol=0))
 
 access_abs <- c("AMP","SAM","CZO",
                 "GEN","SXT","NIT")
 
 for (i in 1:nrow(ur_util)) {
   
-  rec <- util_probs_df %>% util_mk1(spec_id = ur_util$micro_specimen_id[i], panel_size = 12) %>% 
+  rec <- util_probs_df %>% util_mk1(spec_id = ur_util$micro_specimen_id[i], panel_size = 13) %>% 
     select(1)
   
   test_recs <- cbind(test_recs,rec)
@@ -2219,16 +2628,13 @@ test_recs <- data.frame(t(test_recs))
 test_recs <- data.frame(cbind(ur_util$micro_specimen_id,test_recs))
 colnames(test_recs) <- c("micro_specimen_id","PDRx_1","PDRx_2","PDRx_3",
                          "PDRx_4","PDRx_5","PDRx_6","PDRx_7","PDRx_8",
-                         "PDRx_9","PDRx_10","PDRx_11","PDRx_12")
+                         "PDRx_9","PDRx_10","PDRx_11","PDRx_12","PDRx_13")
 
 ur_util <- ur_util %>% left_join(test_recs,by="micro_specimen_id")
 
-ur_util <- ur_util %>% mutate(across(PDRx_1:PDRx_12,as.ab))
+ur_util <- ur_util %>% mutate(across(PDRx_1:PDRx_13,as.ab))
 
 ur_util %>% count(PDRx_1) %>% arrange(desc(n))
-
-
-
 
 
 
