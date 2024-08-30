@@ -1,15 +1,15 @@
-library("brms")
-library("tidyverse")
-library("tidymodels")
-library("openxlsx")
-library("mlogit")
-library("AMR")
-library("glue")
-library("reshape2")
-library("car")
-library("glmnet")
-library("boot")
-library("gtools")
+library(brms)
+library(tidyverse)
+library(tidymodels)
+library(openxlsx)
+library(mlogit)
+library(AMR)
+library(glue)
+library(reshape2)
+library(car)
+library(glmnet)
+library(boot)
+library(gtools)
 
 options(error=NULL)
 
@@ -1683,6 +1683,109 @@ plot_probs <- function(df,chosen_test_df,spec_id) {
   
 }
 
+###Assigning personalised recommendations to dataframe
+
+util_mk1 = function(df,spec_id,panel_size) {
+  df %>% filter(micro_specimen_id==spec_id) %>%
+    arrange(desc(Rx_utility)) %>% select(Antimicrobial,Rx_utility) %>% 
+    mutate(Rx_utility = round(Rx_utility,1)) %>% slice(1:panel_size) %>% 
+    rename(`Antimicrobial ranking` = "Antimicrobial",`Rx Utility` = "Rx_utility")
+  
+}
+
+util_mk2 = function(df,spec_id,panel_size) {
+  df %>% filter(micro_specimen_id==spec_id) %>%
+    arrange(desc(AST_utility)) %>% select(Antimicrobial,AST_utility) %>% 
+    mutate(AST_utility = round(AST_utility,1)) %>% slice(1:panel_size) %>% 
+    rename(`Antimicrobial ranking` = "Antimicrobial",`Rx Utility` = "AST_utility")
+  
+}
+
+
+assign_PDRx <- function(df,probab_df,method_used) {
+  
+  test_recs <-  data.frame(matrix(nrow=length(all_abs),ncol=0))
+  
+  for (i in 1:nrow(df)) {
+    
+    rec <- probab_df %>% util_mk1(spec_id = df$micro_specimen_id[i], panel_size = length(all_abs)) %>% 
+      select(1)
+    
+    test_recs <- cbind(test_recs,rec)
+    
+    print(glue("{round((i/nrow(df)) * 100,0)}%"))
+    
+  }
+  
+  test_recs <- data.frame(t(test_recs))
+  test_recs <- data.frame(cbind(df$micro_specimen_id,test_recs))
+  testrec_cols <- c("micro_specimen_id")
+  
+  for(i in 1:length(all_abs)) {
+    
+    testrec_cols[i+1] <- paste0(method_used,i)
+    
+  }
+  
+  colnames(test_recs) <- testrec_cols
+  
+  df %>% 
+    left_join(test_recs,by="micro_specimen_id") 
+  
+}
+
+assign_PDAST <- function(df,probab_df,method_used) {
+  
+  test_recs <-  data.frame(matrix(nrow=length(all_abs),ncol=0))
+  
+  for (i in 1:nrow(df)) {
+    
+    rec <- probab_df %>% util_mk2(spec_id = df$micro_specimen_id[i], panel_size = length(all_abs)) %>% 
+      select(1)
+    
+    test_recs <- cbind(test_recs,rec)
+    
+    print(glue("{round((i/nrow(df)) * 100,0)}%"))
+    
+  }
+  
+  test_recs <- data.frame(t(test_recs))
+  test_recs <- data.frame(cbind(df$micro_specimen_id,test_recs))
+  testrec_cols <- c("micro_specimen_id")
+  
+  for(i in 1:length(all_abs)) {
+    
+    testrec_cols[i+1] <- paste0(method_used,i)
+    
+  }
+  
+  colnames(test_recs) <- testrec_cols
+  
+  df %>% 
+    left_join(test_recs,by="micro_specimen_id") 
+  
+}
+
+###Assigning standard recommendations to dataframe
+assign_standard <- function(df,probab_df,micro_df,method_used) {
+  
+  ab_vector <- probab_df %>% mutate(Antimicrobial=as.ab(Antimicrobial)) %>% 
+    distinct(Antimicrobial) %>% pull(Antimicrobial)
+  standard_panel <- micro_df %>% filter(!is.na(org_name) & test_name == "URINE CULTURE") %>%
+    count(ab_name) %>% arrange(desc(n)) %>% mutate(ab_name=as.ab(ab_name)) %>% pull(ab_name) %>% 
+    intersect(ab_vector)
+  print(standard_panel)
+  standard_columns <- paste0(method_used, seq_along(standard_panel))
+  df <- df %>%
+    bind_cols(setNames(as.data.frame(matrix(NA, nrow = nrow(df), ncol = length(standard_columns))), standard_columns))
+  for (i in seq_along(standard_panel)) {
+    df[[standard_columns[i]]] <- standard_panel[i]
+  }
+  
+  df
+  
+}
+
 #########################################################
 
 #Read-in and clean up
@@ -1825,8 +1928,8 @@ mic_ref <- micro %>% anti_join(ur_util,by="subject_id")
 drugs <- read_csv("drugs_clean.csv")
 abx <- drugs %>% filter(grepl(
   "(Ampicillin|Piperacillin/tazobactam|Cefazolin|Ceftriaxone|^Ceftazidime$|Cefepime|Meropenem|Ciprofloxacin|Gentamicin|Trimethoprim/sulfamethoxazole|Nitrofurantoin)",
-  abx_name
-)) %>% filter(!grepl("avibactam",abx_name)) %>% anti_join(ur_util,by="subject_id") %>% 
+  abx_name) | (grepl("Vancomycin",abx_name) & route=="IV")
+  ) %>% filter(!grepl("avibactam",abx_name)) %>% anti_join(ur_util,by="subject_id") %>% 
   filter(grepl("(PO|NG|IV)",route))
 abx <- abx %>% mutate(charttime = starttime,
                       ab_name = abx_name)
@@ -1925,10 +2028,10 @@ creats <- creats %>% group_by(subject_id) %>% mutate(
     TRUE~ FALSE),
   AKI1 = case_when(
     match_48h &
-      valuenum >= (lag(valuenum)+0.3) ~ TRUE,
+      valuenum >= 3.54 ~ TRUE,
     TRUE ~ FALSE),
   AKI2 = case_when(
-      valuenum >= (1.5*baseline) ~ TRUE,
+      valuenum >= (3*baseline) ~ TRUE,
     TRUE ~ FALSE),
   AKI3 = case_when(AKI1|AKI2 ~ TRUE, TRUE~FALSE)) %>% 
   ungroup()
@@ -1986,9 +2089,7 @@ nephrotoxins <- str_to_title(str_to_lower(nephrotoxins))
 nephrotoxics_key <- drugs %>%
   filter(drug %in% nephrotoxins) %>% distinct(hadm_id) %>% 
   mutate(Nephrotoxic_agent = TRUE)
-nephrotoxics_key <- drugs %>%
-  filter(drug %in% nephrotoxins) %>% distinct(hadm_id) %>% 
-  mutate(Nephrotoxic_agent = TRUE)
+
 nephrotoxic_join <- function(df) {
   df %>% left_join(nephrotoxics_key) %>% mutate(
     Nephrotoxic_agent = case_when(is.na(Nephrotoxic_agent) ~ FALSE, TRUE ~ Nephrotoxic_agent)
@@ -2167,6 +2268,8 @@ new_highvalue <- function(df,new_colname) {
       TRUE~FALSE)
   ) %>% ungroup()
   
+}
+  
   abnormal_label <- function(df,df2,new_column,search_term,filter_term) {
     
     filter_term <- enquo(filter_term)
@@ -2184,7 +2287,6 @@ new_highvalue <- function(df,new_colname) {
     
   }
   
-}
 
 #WBCs
 print(d_labitems %>% filter(grepl("white",label,ignore.case=T)),n=25)
@@ -2229,33 +2331,49 @@ bleed_join <- function(df) {
 abx <- abx %>% bleed_join()
 ur_util <- ur_util %>% bleed_join()
 
-cytotoxins <- c("Allopurinol","Aprepitant",
-"Azathioprine",
-"Carmustine",
-"Cisplatin",
-"Cyclophosphamide",
-"Dacarbazine",
-"Daunorubicin",
-"Dexamethasone",
-"Doxorubicin hydrochloride",
-"Epirubicin hydrochloride",
-"Estramustine phosphate",
-"Etoposide",
-"Febuxostat",
-"Fluorouracil",
-"Idarubicin hydrochloride",
-"Ifosfamide",
-"Lomustine",
-"Lorazepam",
-"Melphalan",
-"Mercaptopurine",
-"Methotrexate",
-"Metoclopramide hydrochloride",
-"Mitomycin",
-"Mitoxantrone",
-"Pixantrone",
-"Rasburicase",
-"Vinblastine sulfate")
+cytotoxins <- c("adalimumab","aldesleukin","alemtuzumab",
+                "amsacrine","arsenic trioxide","asparaginase",
+                "axitinib","azacitidine","azathioprine",
+                "belatacept","bendamustine","bevacizumab",
+                "bexarotene","bleomycin","blinatumomab",
+                "bortezomib","bosutinib","brentuximab vedotin",
+                "busulfan","cabazitaxel","cabozantinib",
+                "canakinumab","capecitabine","carboplatin",
+                "carfilzomib","carmustine","ceritinib",
+                "certolizumab pegol","chlorambucil","cisplatin",
+                "cladribine","clofarabine","crisantaspase",
+                "cyclophosphamide","cytarabine","dacarbazine",
+                "dactinomycin","daratumumab","dasatinib",
+                "daunorubicin","decitabine","dexrazoxane",
+                "dinutuximab","docetaxel","doxorubicin",
+                "epirubicin","eribulin","estramustine",
+                "etoposide","fludarabine","fluorouracil",
+                "ganciclovir","gemcitabine","gemtuzumab ozogamicin",
+                "golimumab","hydroxycarbamide","ibrutinib",
+                "idarubicin","ifosfamide","imatinib",
+                "infliximab","inotuzumab ozogamicin","ipilimumab",
+                "irinotecan","leflunomide","lenalidomide",
+                "lomustine","melphalan","mercaptopurine",
+                "methotrexate","mifamurtide","mitomycin",
+                "mitotane","mitoxantrone","mogamulizumab",
+                "nelarabine","nilotinib","niraparib",
+                "nivolumab","obinutuzumab","olaparib",
+                "oxaliplatin","paclitaxel","palbociclib",
+                "panobinostat","pegaspargase","peginterferon alfa",
+                "pembrolizumab","pemetrexed","pentostatin",
+                "pixantrone","pomalidomide","procarbazine",
+                "raltitrexed","ramucirumab","regorafenib",
+                "ribociclib","rituximab","ropeginterferon alfa",
+                "rucaparib","ruxolitinib","sorafenib",
+                "streptozocin","sulfasalazine","sunitinib",
+                "talazoparib","tegafur","temozolomide",
+                "temsirolimus","thalidomide","thiotepa",
+                "tioguanine","topotecan","trabectedin",
+                "trastuzumab","trastuzumab","deruxtecan","trastuzumab","emtansine",
+                "treosulfan","valganciclovir","vinblastine",
+                "vincristine","vindesine","vinorelbine")
+
+cytotoxins <- str_to_title(str_to_lower(cytotoxins))
 
 cytotoxics_key <- drugs %>%
   filter(drug %in% cytotoxins) %>% distinct(hadm_id) %>% 
@@ -2362,6 +2480,143 @@ toxicity_check <- function(df) {
 abx <- abx %>% toxicity_check()
 ur_util <- ur_util %>% toxicity_check()
 
+#Currently prescribed antimicrobial agent
+drugs_clean <- read_csv("drugs_clean.csv")
+ab_key <- drugs_clean %>% filter(is_abx) %>% 
+  select(subject_id,abx_name,starttime,stoptime)
+urine_abx <- ur_util %>% left_join(ab_key,by="subject_id") %>% 
+  mutate(on_ab = case_when(
+    storetime > starttime & storetime < stoptime ~ TRUE,
+    TRUE ~ FALSE )) %>% filter(on_ab)
+
+urine_abx <- urine_abx %>%
+  group_by(micro_specimen_id) %>%
+  summarise(abx_name = paste(abx_name, collapse = ", "), .groups = 'drop') %>% 
+  ungroup() %>% mutate(on_ab=TRUE)
+
+ur_util <- ur_util %>% left_join(urine_abx)
+
+ur_util <- ur_util %>% mutate(
+  AMP_R_value = case_when(on_ab & grepl("(Amoxicillin|Benzylpenicillin|Ampicillin)",abx_name) 
+                          & !grepl("(clavulanic|sulbactam)",abx_name) ~ TRUE, TRUE~FALSE),
+  SAM_R_value = case_when(on_ab & grepl("(Amoxicillin|Benzylpenicillin|Ampicillin)",abx_name)
+                          & !grepl("clavulanic",abx_name) ~ TRUE, TRUE~FALSE),
+  TZP_R_value = case_when(on_ab & grepl("(Amoxicillin|Benzylpenicillin|Ampicillin|Piperacillin)",abx_name)
+                          ~ TRUE, TRUE~FALSE),
+  CZO_R_value = case_when(on_ab & grepl("Cefazolin",abx_name)
+                          ~ TRUE, TRUE~FALSE),
+  CRO_R_value = case_when(on_ab &((org_order=="Enterobacterales" &
+                            grepl("(Cefazolin|Cefalexin)",abx_name))|
+                              grepl("Ceftriaxone",abx_name) |
+                              (org_order=="Staphylococcus" &
+                                 grepl("(Amoxicillin|Benzylpenicillin|Ampicillin|Piperacillin)",abx_name)))
+                          ~ TRUE, TRUE~FALSE),
+  CAZ_R_value = case_when(on_ab &((org_order=="Enterobacterales" &
+                                     grepl("(Cefazolin|Cefalexin)",abx_name))|
+                                    grepl("Ceftazidime",abx_name))
+                          ~ TRUE, TRUE~FALSE),
+  FEP_R_value = case_when(on_ab &((org_order=="Enterobacterales" &
+                                     grepl("(Cefazolin|Cefalexin)",abx_name))|
+                                    grepl("Cefepime",abx_name))
+                          ~ TRUE, TRUE~FALSE),
+  MEM_R_value = case_when(on_ab & grepl("(Meropenem|Ertapenem|Amoxicillin|Benzylpenicillin|Ampicillin|Piperacillin)",abx_name)
+                          ~ TRUE, TRUE~FALSE),
+  CIP_R_value = case_when(on_ab &((org_order=="Enterobacterales" &
+                                     grepl("(Levofloxacin|Moxifloxacin)",abx_name))|
+                                    grepl("Ciprofloxacin",abx_name))
+                          ~ TRUE, TRUE~FALSE),
+  GEN_R_value = case_when(on_ab & grepl("Gentamicin",abx_name)
+                          ~ TRUE, TRUE~FALSE),
+  SXT_R_value = case_when(on_ab & grepl("Trimethoprim",abx_name)
+                          ~ TRUE, TRUE~FALSE),
+  NIT_R_value = case_when(on_ab & grepl("Nitrofurantoin",abx_name)
+                          ~ TRUE, TRUE~FALSE),
+  VAN_R_value = case_when(on_ab & grepl("Vancomycin",abx_name)
+                          ~ TRUE, TRUE~FALSE),
+  )
+
+#Admission sepsis diagnosis and death or ITU admission within 7 days
+sepsis_key <- d_icd_diagnoses %>% filter(grepl("SEPSIS",long_title,ignore.case=T))
+sepsis_key <- diagnoses %>% semi_join(sepsis_key) %>% distinct(hadm_id) %>% 
+  mutate(admission_sepsis=TRUE)
+abx <- abx %>% left_join(sepsis_key)
+ur_util <- ur_util %>% left_join(sepsis_key)
+
+obfreq_key <- ur_util %>% select(hadm_id,ob_freq) %>% distinct(hadm_id,.keep_all = T)
+abx <- abx %>% left_join(obfreq_key)
+
+update_sepsis <- function(df) {
+  
+  df %>% mutate(admission_sepsis = case_when(admission_sepsis==TRUE |
+                                               ob_freq > median(df$ob_freq) ~TRUE,
+                                             TRUE~FALSE))
+}
+
+abx <- abx %>% update_sepsis()
+ur_util <- ur_util %>% update_sepsis()
+
+death_check <- function(df,df2,new_column,filter_term) {
+  
+  new_column <- enquo(new_column)
+  filter_term <- enquo(filter_term)
+  
+  df2 <- df2 %>% mutate(admittime = deathtime-(60*60*24*28))
+  
+  df %>% 
+    prev_event_assign(!!new_column,df2,deathtime,
+                           28,1) %>% ungroup() %>% 
+    mutate(!!new_column := factor(!!new_column)) %>% 
+    filter(!is.na(!!filter_term))
+  
+}
+ur_util$ob_freq %>% sort(T)
+abx <- abx %>% death_check(hadm,death_28d,abx_name)
+ur_util <- ur_util %>% death_check(hadm,death_28d,AMP)
+
+icu_check <- function(df,df2,new_column,filter_term) {
+  
+  new_column <- enquo(new_column)
+  filter_term <- enquo(filter_term)
+  
+  df2 <- df2 %>% mutate(admittime = admittime-(60*60*24*28))
+  
+  df %>% 
+    prev_event_type_assign(!!new_column,df2,field_value,"ICU",28,1) %>%
+    ungroup() %>% 
+    mutate(!!new_column := factor(!!new_column)) %>% 
+    filter(!is.na(!!filter_term))
+  
+}
+
+abx <- abx %>% icu_check(icu,icu_28d,abx_name)
+ur_util <- ur_util %>% icu_check(icu,icu_28d,AMP)
+
+inpt7d_check <- function(df){
+  
+  disch_key <- hadm %>% select(hadm_id,dischtime) %>% distinct(hadm_id,.keep_all = T)
+  
+  df %>% left_join(disch_key) %>% mutate(inpatient_7d = 
+                                                case_when(dischtime>
+                                                            charttime + (60*60*24*7) ~ TRUE,
+                                                          TRUE~FALSE))
+}
+
+abx <- abx %>% inpt7d_check()
+ur_util <- ur_util %>% inpt7d_check()
+
+sepsis_ae_check <- function(df) {
+  
+  df %>% mutate(sepsis_ae = case_when(admission_sepsis==TRUE &
+                                        (death_28d==TRUE |
+                                           icu_28d==TRUE |
+                                           inpatient_7d==TRUE) ~ TRUE,
+                                      TRUE~FALSE),
+                sepsis_ae=factor(sepsis_ae))
+}
+
+abx <- abx %>% sepsis_ae_check()
+ur_util <- ur_util %>% sepsis_ae_check()
+
 #row ids
 abx <- abx %>% mutate(row_id = seq(1,nrow(abx))) %>% 
   relocate(row_id,.before = "subject_id")
@@ -2373,7 +2628,7 @@ abx <- read_csv("interim_abx.csv")
 util_probs_df <- read_csv("probs_df_overall.csv")
 ur_util <- read_csv("interim_ur_util.csv")
 
-#split abx into train_test
+#split dfs into train_test
 subjects <- abx %>% distinct(subject_id)
 smp_size <- floor(0.8 * nrow(subjects))
 set.seed(123)
@@ -2382,15 +2637,11 @@ train_ids <- subjects[train_ind,]
 test_ids <- subjects[-train_ind,]
 
 abx <- abx %>% mutate(CDI = factor(CDI),
-                      overall_tox = factor(overall_tox))
+                      overall_tox = factor(overall_tox),
+                      sepsis_ae=factor(sepsis_ae))
 
 train_abx <- abx %>% semi_join(train_ids,by="subject_id")
 test_abx <- abx %>% semi_join(test_ids,by="subject_id")
-
-
-
-
-
 
 
 ##############CDI model
@@ -2425,7 +2676,7 @@ cdi_test_probs <- predict(underlying_cdi, test_abx,type="response")
 cdi_util_key <- ur_util %>% select(micro_specimen_id,pHADM,MALE,pICU,
                                    CDI:pSEPSIS) %>% 
   select(-AKI)
-cdi_util_key
+
 util_probs_df <- util_probs_df %>% 
   left_join(cdi_util_key,by="micro_specimen_id",
             relationship = "many-to-one")
@@ -2502,47 +2753,84 @@ util_probs_df <- util_probs_df %>%
     Antimicrobial=="Ampicillin" ~ 1,
     TRUE ~ 0))
 
-####CURRENT POSITION############
+##############Sepsis adverse events model
+log_reg_spec <- logistic_reg(penalty = 0.1, mixture = 1) %>%
+  set_engine("glm") %>%
+  set_mode("classification")
+
+#fit model (ampicillin excluded)
+sepsis_fit <- log_reg_spec %>%
+  fit(sepsis_ae ~ pCDI+pHADM+age65+pCKD+pDIAB+pLIVER+pCARD+pCVA+pCA+MALE+
+        abx_name_Ampicillin.sulbactam+abx_name_Cefazolin+
+        abx_name_Cefepime+abx_name_Ceftazidime+
+        abx_name_Ceftriaxone+abx_name_Ciprofloxacin+
+        abx_name_Gentamicin+abx_name_Meropenem+
+        abx_name_Nitrofurantoin+abx_name_Piperacillin.tazobactam+
+        abx_name_Trimethoprim.sulfamethoxazole+
+        curr_service_CSURG+curr_service_ENT+curr_service_GU+
+        curr_service_GYN+curr_service_MED+curr_service_NMED+
+        curr_service_NSURG+curr_service_OBS+curr_service_OMED+
+        curr_service_ORTHO+curr_service_PSURG+curr_service_PSYCH+
+        curr_service_SURG+curr_service_TRAUM+curr_service_TSURG+
+        curr_service_VSURG+pICU+pSEPSIS,
+      data = train_abx)
+
+underlying_sepsis <- extract_fit_engine(sepsis_fit)
+coef(underlying_sepsis) %>% round(2)
+
+#Evaluate on test data
+sepsis_test_probs <- predict(underlying_sepsis, test_abx,type="response")
+
+#Attach to probs_df
+sepsis_util_key <- ur_util %>% select(micro_specimen_id,sepsis_ae)
+
+util_probs_df <- util_probs_df %>% 
+  left_join(sepsis_util_key,by="micro_specimen_id",
+            relationship = "many-to-one")
+
+#Calculate utility for microsimulation dataset
 
 cdi_util_probs <- predict(underlying_cdi, util_probs_df,type="response")
 cdi_value <- scores[rownames(scores)=="CDI_highrisk",] %>% 
-  select(stan_OR) %>% unlist()
+  select(Value) %>% unlist()
 
 tox_util_probs <- predict(underlying_tox, util_probs_df,type="response")
 tox_value <- scores[rownames(scores)=="Toxicity_highrisk",] %>% 
-  select(stan_OR) %>% unlist()
+  select(Value) %>% unlist()
+
+sepsis_util_probs <- predict(underlying_sepsis, util_probs_df,type="response")
 
 uti_specifics <- c("Nitrofurantoin")
 uti_value <- scores[rownames(scores)=="UTI_specific",] %>% 
-  select(stan_OR) %>% unlist()
+  select(Value) %>% unlist()
 
 access_abs <- c("AMP","SAM","CZO",
                 "GEN","SXT","NIT") %>% ab_name() %>% 
   str_replace("/","-")
 access_value <- scores[rownames(scores)=="Access",] %>% 
-  select(stan_OR) %>% unlist()
+  select(Value) %>% unlist()
 
 oral_abs <- c("AMP","SAM","CIP",
                 "GEN","SXT","NIT") %>% ab_name() %>% 
   str_replace("/","-")
 oral_value <- scores[rownames(scores)=="Oral_option",] %>% 
-  select(stan_OR) %>% unlist()
+  select(Value) %>% unlist()
 
 iv_abs <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
               "GEN","SXT","VAN") %>% ab_name() %>% 
   str_replace("/","-")
 iv_value <- scores[rownames(scores)=="IV_option",] %>% 
-  select(stan_OR) %>% unlist()
+  select(Value) %>% unlist()
 
 reserve_abs <- c()
 reserve_value <- scores[rownames(scores)=="Reserve",] %>% 
-  select(stan_OR) %>% unlist()
+  select(Value) %>% unlist()
 
 highcost_abs <- c()
 cost_value <- scores[rownames(scores)=="High_cost",] %>% 
-  select(stan_OR) %>% unlist()
+  select(Value) %>% unlist()
 
-
+Rval_key <- ur_util %>% select(micro_specimen_id,AMP_R_value:VAN_R_value)
 
 util_probs_df <- util_probs_df %>% 
   mutate(prob_CDI = cdi_util_probs,
@@ -2566,75 +2854,229 @@ util_probs_df <- util_probs_df %>%
          Reserve_agent = case_when(Antimicrobial %in% reserve_abs ~ 1, TRUE~0),
          value_reserve = reserve_value,
          util_reserve = Reserve_agent * value_reserve,
-         Highcost_agent = case_when(Antimicrobial %in% highcost_abs ~ 1, TRUE~0),
+         Highcost_agent = case_when(Antimicrobial %in% highcost_abs ~ 0.25, TRUE~0),
          value_highcost = cost_value,
          util_highcost = Highcost_agent * value_highcost,
-         )
+         prob_sepsisae = sepsis_util_probs,
+         
+         ) %>% left_join(Rval_key)
 
 
 
+#OVERALL UTILITY SCORES
 
+calculate_utilities <- function(df,formulary_list=NULL) {
 
-#OVERALL UTILITY SCORE
-
-util_probs_df <- util_probs_df %>% mutate(overall_util = util_CDI + util_tox +
+df %>% mutate(overall_util = exp(util_CDI + util_tox +
                                             util_uti + util_access +
                                             util_oral + util_iv +
-                                            util_reserve + util_highcost,
-                      S_utility = S*overall_util)
+                                            util_reserve + util_highcost),
+                                          S_utility = S*overall_util,
+                                          AMPR_utility = case_when(
+                                            Antimicrobial=="Ampicillin" ~
+                                              AMP_R_value*R, TRUE~0
+                                          ),
+                                          SAMR_utility = case_when(
+                                            Antimicrobial=="Ampicillin-sulbactam" ~
+                                              SAM_R_value*R, TRUE~0
+                                          ),
+                                          TZPR_utility = case_when(
+                                            Antimicrobial=="Piperacillin-tazobactam" ~
+                                              TZP_R_value*R, TRUE~0
+                                          ),
+                                          CZOR_utility = case_when(
+                                            Antimicrobial=="Cefazolin" ~
+                                              CZO_R_value*R, TRUE~0
+                                          ),
+                                          CROR_utility = case_when(
+                                            Antimicrobial=="Ceftriaxone" ~
+                                              CRO_R_value*R, TRUE~0
+                                          ),
+                                          CAZR_utility = case_when(
+                                            Antimicrobial=="Ceftazidime" ~
+                                              CAZ_R_value*R, TRUE~0
+                                          ),
+                                          FEPR_utility = case_when(
+                                            Antimicrobial=="Cefepime" ~
+                                              FEP_R_value*R, TRUE~0
+                                          ),
+                                          MEMR_utility = case_when(
+                                            Antimicrobial=="Meropenem" ~
+                                              MEM_R_value*R, TRUE~0
+                                          ),
+                                          CIPR_utility = case_when(
+                                            Antimicrobial=="Ciprofloxacin" ~
+                                              CIP_R_value*R, TRUE~0
+                                          ),
+                                          GENR_utility = case_when(
+                                            Antimicrobial=="Gentamicin" ~
+                                              GEN_R_value*R, TRUE~0
+                                          ),
+                                          SXTR_utility = case_when(
+                                            Antimicrobial=="Trimethoprim-sulfamethoxazole" ~
+                                              SXT_R_value*R, TRUE~0
+                                          ),
+                                          NITR_utility = case_when(
+                                            Antimicrobial=="Nitrofurantoin" ~
+                                              NIT_R_value*R, TRUE~0
+                                          ),
+                                          VANR_utility = case_when(
+                                            Antimicrobial=="Vancomycin" ~
+                                              VAN_R_value*R, TRUE~0
+                                          ),
+                                          Formulary_agent = case_when(
+                                            Antimicrobial%in%formulary_list ~
+                                              TRUE, TRUE~FALSE
+                                          ),
+                                          Formulary_utility = 
+                                              Formulary_agent*R,
+                                          AST_utility = S_utility+
+                                            AMPR_utility +
+                                            SAMR_utility +
+                                            TZPR_utility +
+                                            CZOR_utility +
+                                            CROR_utility +
+                                            CAZR_utility +
+                                            FEPR_utility +
+                                            MEMR_utility +
+                                            CIPR_utility +
+                                            GENR_utility +
+                                            SXTR_utility +
+                                            NITR_utility +
+                                            VANR_utility +
+                                            Formulary_utility,
+                                          Rx_utility = (overall_util * S) -
+                                            (R*prob_sepsisae))
 
+}
 
+formulary_agents <- c()
 
+util_probs_df <- util_probs_df %>% calculate_utilities(
+  formulary_list = formulary_agents)
 
+#UTILITY ANALYSIS
 
+##Utility distribution
+
+util_probs_df %>% group_by(Antimicrobial) %>% 
+  summarise(Median_util=median(Rx_utility)) %>% 
+  arrange(desc(Median_util))
+
+utility_plot <- function(df, variable,utility) {
+  
+  variable <- enquo(variable)
+  
+  axiscols <- if_else(
+    df %>% pull(Antimicrobial) %in% formulary_agents,
+    "seagreen", "black")
+  
+  thisplot <- ggplot(df %>% mutate(Antimicrobial = 
+                                     factor(Antimicrobial,
+                                            levels = df %>% group_by(Antimicrobial) %>% 
+                                              summarise(Median_util=median(!!variable)) %>% 
+                                              arrange(Median_util) %>% select(Antimicrobial) %>% unlist())), 
+                     aes(x=!!variable,y=Antimicrobial,fill=Antimicrobial)) +
+    geom_boxplot() +
+    theme_minimal() +
+    theme(legend.position = "None",axis.text.y = element_text(
+      colour = axiscols))+
+    xlab(utility)+
+    theme()
+  
+  print(thisplot)
+  
+}
+
+util_probs_df %>% utility_plot(Rx_utility,"Treatment utility")
+util_probs_df %>% utility_plot(AST_utility,"Test utility")
+
+dens_check <- function(df,abx_agent,result,alpha,beta) {
+
+  result <- enquo(result)
+  
+  test_dist <- tibble(prob=rbeta(nrow(ur_util),alpha,beta),dist="test")
+  actual_dist <- tibble(
+    prob=df %>% filter(Antimicrobial==abx_agent) %>% pull(!!result),
+    dist="actual")
+  dist_df <- tibble(rbind(test_dist,actual_dist))
+  
+  thisplot <- ggplot(dist_df,
+         aes(x=prob,color=dist)) + 
+    geom_density()+
+    ggtitle(abx_agent)
+
+print(thisplot)
+
+}
+
+long_allabs <- all_abs %>% ab_name() %>% str_replace("/","-")
+
+for (i in seq_along(long_allabs)) {
+
+util_probs_df %>% dens_check(long_allabs[i],S,1,4) 
+  
+}
+
+util_probs_df %>% dens_check("Nitrofurantoin",R,12,3)
+
+dist_replace <- function(df,df2,abx_agent,result,result2,alpha,beta) {
+  
+  replacement <- rbeta(nrow(df2),alpha,beta)
+  
+  dfrows <- which(df$Antimicrobial== abx_agent)
+  dfcols <- which(colnames(df)==result)
+  
+  dfrows2 <- which(df$Antimicrobial== abx_agent)
+  dfcols2 <- which(colnames(df)==result2)
+  
+  df[dfrows,dfcols] <- replacement
+  df[dfrows2,dfcols2] <- 1-replacement
+  
+  df
+  
+}
+
+nitro_sens_df <- util_probs_df %>% dist_replace(ur_util,"Nitrofurantoin","R","S",12,3) %>%
+  calculate_utilities()
+
+nitro_sens_df %>% utility_plot(Rx_utility,"Treatment utility (Nitro R increased)")
+nitro_sens_df %>% utility_plot(AST_utility,"Test utility (Nitro R increased)")
 
 #RECOMMENDATIONS
 
+
 #Formulary recommendations
 
-util_probs_df %>% group_by(Antimicrobial) %>% 
+form_recs <- util_probs_df %>% group_by(Antimicrobial) %>% 
   summarise(Mean_util=mean(S_utility)) %>% 
-  arrange(desc(Mean_util))
+  arrange(desc(Mean_util)) %>% select(Antimicrobial) %>% unlist()
+
+for (i in 1:length(form_recs)) {
+  ur_util <- ur_util %>%
+    mutate(!!paste0("PDFo_", i) := form_recs[[i]])
+}
 
 
 #Individualised recommendations (S)
 
-util_mk1 = function(df,spec_id,panel_size) {
-  df %>% filter(micro_specimen_id==spec_id) %>%
-    arrange(desc(S_utility)) %>% select(Antimicrobial,S_utility) %>% 
-    mutate(S_utility = round(S_utility,1)) %>% slice(1:panel_size) %>% 
-    rename(`Antimicrobial ranking` = "Antimicrobial",`Rx Utility` = "S_utility")
-  
-}
+###Add aware utility-based antimicrobial rankings to microsimulation dataset
+all_abs <- c("AMP","SAM","CZO",
+             "GEN","SXT","NIT",
+             "TZP","CRO","CAZ",
+             "FEP","MEM","CIP","VAN")
+
+ur_util <- ur_util %>% assign_PDRx(util_probs_df,"PDRx_") %>% 
+  mutate(across(starts_with("PDRx_"), as.ab))
+
+ur_util <- ur_util %>% assign_PDAST(util_probs_df,"PDAST_") %>%
+  mutate(across(starts_with("PDAST_"), as.ab))
+
+###Add standard panel antimicrobial rankings to microsimulation dataset
+micro_raw <- read_csv("microbiologyevents.csv")
+ur_util <- ur_util %>% assign_standard(util_probs_df,micro_raw,"STANDARD_")
 
 
-test_recs <-  data.frame(matrix(nrow=13,ncol=0))
-
-access_abs <- c("AMP","SAM","CZO",
-                "GEN","SXT","NIT")
-
-for (i in 1:nrow(ur_util)) {
-  
-  rec <- util_probs_df %>% util_mk1(spec_id = ur_util$micro_specimen_id[i], panel_size = 13) %>% 
-    select(1)
-  
-  test_recs <- cbind(test_recs,rec)
-  
-  print(glue("{round((i/nrow(ur_util)) * 100,0)}%"))
-  
-}
-
-test_recs <- data.frame(t(test_recs))
-test_recs <- data.frame(cbind(ur_util$micro_specimen_id,test_recs))
-colnames(test_recs) <- c("micro_specimen_id","PDRx_1","PDRx_2","PDRx_3",
-                         "PDRx_4","PDRx_5","PDRx_6","PDRx_7","PDRx_8",
-                         "PDRx_9","PDRx_10","PDRx_11","PDRx_12","PDRx_13")
-
-ur_util <- ur_util %>% left_join(test_recs,by="micro_specimen_id")
-
-ur_util <- ur_util %>% mutate(across(PDRx_1:PDRx_13,as.ab))
-
-ur_util %>% count(PDRx_1) %>% arrange(desc(n))
 
 
 
