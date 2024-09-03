@@ -21,7 +21,7 @@ Before running the code, the data and *Python* files should be saved into a secu
 ***Reproducing the study***
 
 1. To reproduce the study, all scripts above must be stored in the working directory. The following scripts must then be run:  
-   a. **UF_packages&setup.R**
+   a. **UF_packages&setup.R**  
    b. **UF_cleaning.R**  
    c. **UF_prediction&preprocessing.R**  
    d. **UF_recommendation_function.R** 
