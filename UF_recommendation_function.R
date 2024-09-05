@@ -23,12 +23,32 @@ util_mk2 = function(df,spec_id,panel_size) {
   df %>% filter(micro_specimen_id==spec_id) %>%
     arrange(desc(AST_utility)) %>% select(Antimicrobial,AST_utility) %>% 
     mutate(AST_utility = round(AST_utility,1)) %>% slice(1:panel_size) %>% 
-    rename(`Antimicrobial ranking` = "Antimicrobial",`Rx Utility` = "AST_utility")
+    rename(`Antimicrobial ranking` = "Antimicrobial",`AST Utility` = "AST_utility")
+  
+}
+
+###Prioritisation by urosepsis utility
+util_mk3 = function(df,spec_id,panel_size) {
+  df %>% filter(micro_specimen_id==spec_id) %>%
+    arrange(desc(Urosepsis_Rx_utility)) %>% select(Antimicrobial,Urosepsis_Rx_utility) %>% 
+    mutate(Urosepsis_Rx_utility = round(Urosepsis_Rx_utility,1)) %>% slice(1:panel_size) %>% 
+    rename(`Antimicrobial ranking` = "Antimicrobial",`Urosepsis Rx Utility` = "Urosepsis_Rx_utility")
+  
+}
+
+###Prioritisation by outpatient utility
+util_mk4 = function(df,spec_id,panel_size) {
+  df %>% filter(micro_specimen_id==spec_id) %>%
+    arrange(desc(Outpatient_Rx_utility)) %>% select(Antimicrobial,Outpatient_Rx_utility) %>% 
+    mutate(Outpatient_Rx_utility = round(Outpatient_Rx_utility,1)) %>% slice(1:panel_size) %>% 
+    rename(`Antimicrobial ranking` = "Antimicrobial",`Oupatient Rx Utility` = "Outpatient_Rx_utility")
   
 }
 
 ###Assigning treatment recommendations
 assign_PDRx <- function(df,probab_df,method_used) {
+  
+  
   
   test_recs <-  data.frame(matrix(nrow=length(all_abs),ncol=0))
   
@@ -93,6 +113,75 @@ assign_PDAST <- function(df,probab_df,method_used) {
   
 }
 
+###Assigning urosepsis treatment recommendations
+assign_urosepsis <- function(df,probab_df,method_used) {
+  
+  
+  
+  test_recs <-  data.frame(matrix(nrow=length(iv_abs),ncol=0))
+  
+  for (i in 1:nrow(df)) {
+    
+    rec <- probab_df %>% util_mk3(spec_id = df$micro_specimen_id[i], panel_size = length(iv_abs)) %>% 
+      select(1)
+    
+    test_recs <- cbind(test_recs,rec)
+    
+    print(glue("{round((i/nrow(df)) * 100,0)}%"))
+    
+  }
+  
+  test_recs <- data.frame(t(test_recs))
+  test_recs <- data.frame(cbind(df$micro_specimen_id,test_recs))
+  testrec_cols <- c("micro_specimen_id")
+  
+  for(i in 1:length(iv_abs)) {
+    
+    testrec_cols[i+1] <- paste0(method_used,i)
+    
+  }
+  
+  colnames(test_recs) <- testrec_cols
+  
+  df %>% 
+    left_join(test_recs,by="micro_specimen_id") 
+  
+}
+
+###Assigning outpatient treatment recommendations
+assign_outpatient <- function(df,probab_df,method_used) {
+  
+  
+  test_recs <-  data.frame(matrix(nrow=length(oral_abs),ncol=0))
+  
+  for (i in 1:nrow(df)) {
+    
+    rec <- probab_df %>% util_mk4(spec_id = df$micro_specimen_id[i], panel_size = length(oral_abs)) %>% 
+      select(1)
+    
+    test_recs <- cbind(test_recs,rec)
+    
+    print(glue("{round((i/nrow(df)) * 100,0)}%"))
+    
+  }
+  
+  test_recs <- data.frame(t(test_recs))
+  test_recs <- data.frame(cbind(df$micro_specimen_id,test_recs))
+  testrec_cols <- c("micro_specimen_id")
+  
+  for(i in 1:length(oral_abs)) {
+    
+    testrec_cols[i+1] <- paste0(method_used,i)
+    
+  }
+  
+  colnames(test_recs) <- testrec_cols
+  
+  df %>% 
+    left_join(test_recs,by="micro_specimen_id") 
+  
+}
+
 ###Assigning standard recommendations
 assign_standard <- function(df,probab_df,micro_df,method_used) {
   
@@ -116,7 +205,7 @@ assign_standard <- function(df,probab_df,micro_df,method_used) {
 ###Utility score calculator
 calculate_utilities <- function(df,formulary_list=NULL) {
   
-  df %>% mutate(overall_util = exp(util_CDI + util_tox +
+  df <- df %>% mutate(overall_util = exp(util_CDI + util_tox +
                                      util_uti + util_access +
                                      util_oral + util_iv +
                                      util_reserve + util_highcost),
@@ -197,6 +286,16 @@ calculate_utilities <- function(df,formulary_list=NULL) {
                 Rx_utility = (overall_util * S) -
                   (R*prob_sepsisae))
   
+  df %>% 
+    mutate(
+      Urosepsis_Rx_utility = case_when(
+        util_iv == 0 ~ min(df$Rx_utility)-0.01, TRUE ~ Rx_utility
+      ),
+      Outpatient_Rx_utility = case_when(
+        util_oral ==0 ~min(df$Rx_utility)-0.01, TRUE ~ Rx_utility
+      )
+    )
+  
 }
 
 ###Utility data visualisation
@@ -262,6 +361,115 @@ dist_replace <- function(df,df2,abx_agent,result,result2,alpha,beta) {
   df
   
 }
+
+###Counting the number of S results per antimicrobial provided by the personalised approach
+number_abs_pdast <- function(df) {
+  
+  all_si <- c()
+  
+  for(i in 1:nrow(df)) {
+    
+    all_s <- df %>%
+      select(all_of(intersect(df %>% select(PDAST_1:PDAST_6) %>%slice(i) %>% unlist(),all_abs))) %>% 
+      slice(i) %>% t() %>% data.frame() %>% filter(. =="S") %>% rownames()
+    
+    all_i <- df %>%
+      select(all_of(intersect(df %>% select(PDAST_1:PDAST_6) %>%slice(i) %>% unlist(),all_abs))) %>% 
+      slice(i) %>% t() %>% data.frame() %>% filter(. =="I") %>% rownames()
+    
+    ac_si <- all_s %>% append(all_i)
+    
+    all_si <- all_si %>% append(ac_si)
+    
+  }
+  
+  all_si %>% table() %>% stack()
+  
+}
+
+###Counting the number of S results per antimicrobial provided by the personalised approach
+number_abs_pdrx <- function(df) {
+  
+  all_si <- c()
+  
+  for(i in 1:nrow(df)) {
+    
+    all_s <- df %>%
+      select(all_of(intersect(df %>% select(PDRx_1:PDRx_6) %>%slice(i) %>% unlist(),all_abs))) %>% 
+      slice(i) %>% t() %>% data.frame() %>% filter(. =="S") %>% rownames()
+    
+    all_i <- df %>%
+      select(all_of(intersect(df %>% select(PDRx_1:PDRx_6) %>%slice(i) %>% unlist(),all_abs))) %>% 
+      slice(i) %>% t() %>% data.frame() %>% filter(. =="I") %>% rownames()
+    
+    ac_si <- all_s %>% append(all_i)
+    
+    all_si <- all_si %>% append(ac_si)
+    
+  }
+  
+  all_si %>% table() %>% stack()
+  
+}
+
+###Counting the number of S results per antimicrobial provided by the personalised approach
+number_abs_standard <- function(df) {
+  
+  all_si <- c()
+  
+  for(i in 1:nrow(df)) {
+    
+    all_s <- df %>%
+      select(all_of(intersect(df %>% select(STANDARD_1,STANDARD_2,STANDARD_3,
+                                                      STANDARD_7,STANDARD_8,STANDARD_11) %>%slice(i) %>% unlist(),all_abs))) %>% 
+      slice(i) %>% t() %>% data.frame() %>% filter(. =="S") %>% rownames()
+    
+    all_i <- df %>%
+      select(all_of(intersect(df %>% select(STANDARD_1,STANDARD_2,STANDARD_3,
+                                                      STANDARD_7,STANDARD_8,STANDARD_11) %>%slice(i) %>% unlist(),all_abs))) %>% 
+      slice(i) %>% t() %>% data.frame() %>% filter(. =="I") %>% rownames()
+    
+    
+    ac_si <- all_s %>% append(all_i)
+    
+    all_si <- all_si %>% append(ac_si)
+    
+  }
+  
+  all_si %>% table() %>% stack()
+  
+}
+
+###Comparison of differences between number of results per antimicrobial with each approach
+minuser <- function(df,abx) {
+  
+  df %>% filter(ind==ab_name(abx)) %>% arrange(Approach) %>% select(values)
+  
+  if(nrow(abs_df %>% filter(ind==ab_name(abx)) %>% select(1)) ==2 &
+     abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% slice(1) =="PDAST") {
+    
+    abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(1) -
+      abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(2)
+    
+  } else if (nrow(abs_df %>% filter(ind==ab_name(abx)) %>% select(1)) ==2 &
+             abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% slice(1) =="Standard"){
+    
+    -(abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(1) -
+        abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(2))
+    
+  } else if (nrow(abs_df %>% filter(ind==ab_name(abx)) %>% select(1)) ==1 &
+             abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% slice(1) =="PDAST") {
+    
+    abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(1)
+    
+  } else {
+    
+    -(abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(1))
+    
+  }
+  
+}
+
 
 ##Read_in and final preprocessing
 
@@ -550,7 +758,6 @@ util_probs_df <- util_probs_df %>%
   left_join(sepsis_util_key,by="micro_specimen_id",
             relationship = "many-to-one")
 
-
 ##Utility score calculation
 
 ###CDI risk utility
@@ -580,7 +787,7 @@ access_value <- scores[rownames(scores)=="Access",] %>%
 
 ###Oral option utilituy
 oral_abs <- c("AMP","SAM","CIP",
-              "GEN","SXT","NIT") %>% ab_name() %>% 
+              "SXT","NIT") %>% ab_name() %>% 
   str_replace("/","-")
 oral_value <- scores[rownames(scores)=="Oral_option",] %>% 
   select(Value) %>% unlist()
@@ -646,6 +853,8 @@ util_probs_df %>% group_by(Antimicrobial) %>%
   summarise(Median_util=median(Rx_utility)) %>% 
   arrange(desc(Median_util))
 util_probs_df %>% utility_plot(Rx_utility,"Treatment utility")
+util_probs_df %>% utility_plot(Urosepsis_Rx_utility,"Urosepsis treatment utility")
+util_probs_df %>% utility_plot(Outpatient_Rx_utility,"Outpatient treatment utility")
 util_probs_df %>% utility_plot(AST_utility,"Test utility")
 
 ##Sensitivity analysis
@@ -665,22 +874,69 @@ for (i in seq_along(long_allabs)) {
 util_probs_df %>% dens_check("Nitrofurantoin",R,12,3) ####Add full name of antimicrobial of interest
 
 ###Replace probability distribution with simulated distribution
-nitro_sens_df <- util_probs_df %>% dist_replace(ur_util,"Nitrofurantoin","R","S",12,3) %>%
+sens_df <- util_probs_df %>% dist_replace(ur_util,"Nitrofurantoin","R","S",12,3) %>%
   calculate_utilities() ####Add atimicrobial agent of interest
-nitro_sens_df %>% utility_plot(Rx_utility,"Treatment utility (Nitro R increased)")
-nitro_sens_df %>% utility_plot(AST_utility,"Test utility (Nitro R increased)")
+sens_df %>% utility_plot(Outpatient_Rx_utility,"Outpatient treatment utility (Nitro R increased)")
+sens_df %>% utility_plot(AST_utility,"Test utility (Ampsulb R increased)")
 
 ##Recommendations
 
 ###Antimicrobial formulary recommendations
+senskey <- ur_util %>% select(micro_specimen_id,AMP:VAN)
+form_recs <- util_probs_df %>% left_join(senskey) %>% mutate(
+  Confirmed_S = case_when(
+    Antimicrobial=="Ampicillin" & AMP=="S" ~ TRUE,
+    Antimicrobial=="Ampicillin-sulbactam" & SAM=="S" ~ TRUE,
+    Antimicrobial=="Piperacillin-tazobactam" & TZP=="S" ~ TRUE,
+    Antimicrobial=="Cefazolin" & CZO=="S" ~ TRUE,
+    Antimicrobial=="Ceftriaxone" & CRO=="S" ~ TRUE,
+    Antimicrobial=="Ceftazidime" & CAZ=="S" ~ TRUE,
+    Antimicrobial=="Cefepime" & FEP=="S" ~ TRUE,
+    Antimicrobial=="Meropenem" & MEM=="S" ~ TRUE,
+    Antimicrobial=="Ciprofloxacin" & CIP=="S" ~ TRUE,
+    Antimicrobial=="Gentamicin" & GEN=="S" ~ TRUE,
+    Antimicrobial=="Trimethoprim-sulfamethoxazole" & SXT=="S" ~ TRUE,
+    Antimicrobial=="Nitrofurantoin" & NIT=="S" ~ TRUE,
+    Antimicrobial=="Vancomycin" & VAN=="S" ~ TRUE,TRUE~FALSE
+  ),
+  Confirmed_R = case_when(
+    Antimicrobial=="Ampicillin" & AMP=="R" ~ TRUE,
+    Antimicrobial=="Ampicillin-sulbactam" & SAM=="R" ~ TRUE,
+    Antimicrobial=="Piperacillin-tazobactam" & TZP=="R" ~ TRUE,
+    Antimicrobial=="Cefazolin" & CZO=="R" ~ TRUE,
+    Antimicrobial=="Ceftriaxone" & CRO=="R" ~ TRUE,
+    Antimicrobial=="Ceftazidime" & CAZ=="R" ~ TRUE,
+    Antimicrobial=="Cefepime" & FEP=="R" ~ TRUE,
+    Antimicrobial=="Meropenem" & MEM=="R" ~ TRUE,
+    Antimicrobial=="Ciprofloxacin" & CIP=="R" ~ TRUE,
+    Antimicrobial=="Gentamicin" & GEN=="R" ~ TRUE,
+    Antimicrobial=="Trimethoprim-sulfamethoxazole" & SXT=="R" ~ TRUE,
+    Antimicrobial=="Nitrofurantoin" & NIT=="R" ~ TRUE,
+    Antimicrobial=="Vancomycin" & VAN=="R" ~ TRUE,TRUE~FALSE
+  ),
+  Urosepsis_Formutil = case_when(util_iv==0 ~ 0, TRUE ~ (Confirmed_S*overall_util) - (Confirmed_R*sepsis_ae)),
+  Outpatient_Formutil = case_when(util_oral==0~0, TRUE ~ (Confirmed_S*overall_util) - (Confirmed_R*sepsis_ae)),
+) %>% group_by(Antimicrobial) %>% 
+  summarise(Formulary_util_urosepsis=mean(Urosepsis_Formutil),
+            Formulary_util_outpatient=mean(Outpatient_Formutil)
+            )
 
-form_recs <- util_probs_df %>% group_by(Antimicrobial) %>% 
-  summarise(Mean_util=mean(S_utility)) %>% 
-  arrange(desc(Mean_util)) %>% select(Antimicrobial) %>% unlist()
+form_recs_urosepsis <- form_recs %>% 
+  arrange(desc(Formulary_util_urosepsis)) %>% 
+  slice(1:length(iv_abs)) %>% select(Antimicrobial) %>% unlist()
 
-for (i in 1:length(form_recs)) {
+form_recs_outpatient <- form_recs %>% 
+  arrange(desc(Formulary_util_outpatient)) %>% 
+  slice(1:length(oral_abs)) %>% select(Antimicrobial) %>% unlist()
+
+for (i in 1:length(form_recs_urosepsis)) {
   ur_util <- ur_util %>%
-    mutate(!!paste0("PDFo_", i) := form_recs[[i]])
+    mutate(!!paste0("PDFo_Urosepsis_", i) := form_recs_urosepsis[[i]])
+}
+
+for (i in 1:length(form_recs_outpatient)) {
+  ur_util <- ur_util %>%
+    mutate(!!paste0("PDFo_Outpatient_", i) := form_recs_outpatient[[i]])
 }
 
 ###Individual treatment recommendations
@@ -692,6 +948,14 @@ all_abs <- c("AMP","SAM","CZO",
 ur_util <- ur_util %>% assign_PDRx(util_probs_df,"PDRx_") %>% 
   mutate(across(starts_with("PDRx_"), as.ab))
 
+###Urosepsis treatment recommendations
+ur_util <- ur_util %>% assign_urosepsis(util_probs_df,"Urosepsis_") %>% 
+  mutate(across(starts_with("Urosepsis_"), as.ab))
+
+###Urosepsis treatment recommendations
+ur_util <- ur_util %>% assign_outpatient(util_probs_df,"Outpatient_") %>% 
+  mutate(across(starts_with("Outpatient_"), as.ab))
+
 ###Individual AST recommendations
 ur_util <- ur_util %>% assign_PDAST(util_probs_df,"PDAST_") %>%
   mutate(across(starts_with("PDAST_"), as.ab))
@@ -699,3 +963,4 @@ ur_util <- ur_util %>% assign_PDAST(util_probs_df,"PDAST_") %>%
 ###Standard panel treatment & AST recommendations
 micro_raw <- read_csv("microbiologyevents.csv")
 ur_util <- ur_util %>% assign_standard(util_probs_df,micro_raw,"STANDARD_")
+
