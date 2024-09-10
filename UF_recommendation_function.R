@@ -307,6 +307,8 @@ utility_plot <- function(df, variable,utility) {
     df %>% pull(Antimicrobial) %in% formulary_agents,
     "seagreen", "black")
   
+  df <- df %>% mutate(Antimicrobial = str_replace_all(Antimicrobial,"_"," & "))
+  
   thisplot <- ggplot(df %>% mutate(Antimicrobial = 
                                      factor(Antimicrobial,
                                             levels = df %>% group_by(Antimicrobial) %>% 
@@ -483,7 +485,6 @@ micro <- read_csv("micro_clean2.csv")
 mic_ref <- micro %>% anti_join(ur_util,by="subject_id")
 results <- read_csv("ADAPT-AST Factors influencing Antimicrobial Prescribing for Urinary Tract Infection.csv")
 
-
 ###Factorising outcome variables on abx dataframes
 train_abx <- train_abx %>% factorise()
 test_abx <- test_abx %>% factorise()
@@ -611,43 +612,13 @@ ggplot(scores,aes(x=OR_dif,y=Coefficient,fill=colour)) +
   geom_vline(xintercept = 0)
 
 ###Antimicrobial dummy variables in probability prediction dataframe
-util_probs_df <- util_probs_df %>% 
-  mutate(abx_name_Ampicillin.sulbactam=case_when(
-    Antimicrobial=="Ampicillin-sulbactam" ~ 1,
-    TRUE ~ 0),
-    abx_name_Cefazolin=case_when(
-      Antimicrobial=="Cefazolin" ~ 1,
-      TRUE ~ 0),
-    abx_name_Cefepime=case_when(
-      Antimicrobial=="Cefepime" ~ 1,
-      TRUE ~ 0),
-    abx_name_Ceftazidime=case_when(
-      Antimicrobial=="Ceftazidime" ~ 1,
-      TRUE ~ 0),
-    abx_name_Ceftriaxone=case_when(
-      Antimicrobial=="Ceftriaxone" ~ 1,
-      TRUE ~ 0),
-    abx_name_Ciprofloxacin=case_when(
-      Antimicrobial=="Ciprofloxacin" ~ 1,
-      TRUE ~ 0),
-    abx_name_Gentamicin=case_when(
-      Antimicrobial=="Gentamicin" ~ 1,
-      TRUE ~ 0),
-    abx_name_Meropenem=case_when(
-      Antimicrobial=="Meropenem" ~ 1,
-      TRUE ~ 0),
-    abx_name_Nitrofurantoin=case_when(
-      Antimicrobial=="Nitrofurantoin" ~ 1,
-      TRUE ~ 0),
-    abx_name_Piperacillin.tazobactam=case_when(
-      Antimicrobial=="Piperacillin-tazobactam" ~ 1,
-      TRUE ~ 0),
-    abx_name_Trimethoprim.sulfamethoxazole=case_when(
-      Antimicrobial=="Trimethoprim-sulfamethoxazole" ~ 1,
-      TRUE ~ 0),
-    abx_name_Ampicillin=case_when(
-      Antimicrobial=="Ampicillin" ~ 1,
-      TRUE ~ 0))
+util_probs_df$abx_name_ <- as.factor(util_probs_df$Antimicrobial)
+util_probs_df <- util_probs_df %>% mutate(
+  abx_name_ = str_replace_all(abx_name_,"-",".")
+)
+dummy_vars <- model.matrix(~ abx_name_ - 1, data = util_probs_df)
+util_probs_df <- cbind(util_probs_df, dummy_vars) %>% tibble() %>% 
+  select(-abx_name_)
 
 ##CDI prediction model
 
@@ -657,21 +628,14 @@ log_reg_spec <- logistic_reg(penalty = 0.1, mixture = 1) %>%
   set_mode("classification")
 
 ###Fit model
+abx_columns <- grep("^abx_name_", names(train_abx), value = TRUE)
+curr_service_columns <- grep("^curr_service_", names(train_abx), value = TRUE)
+predictors <- c("pCDI", "pHADM", "age65", "pCKD", "pDIAB", "pLIVER", "pCARD", "pCVA", "pCA", "MALE",
+                abx_columns, service_columns, "pICU", "pSEPSIS")
+predictors <- predictors[predictors != "abx_name_Ampicillin"]
+formula <- reformulate(predictors, response = "CDI")
 cdi_fit <- log_reg_spec %>%
-  fit(CDI ~ pCDI+pHADM+age65+pCKD+pDIAB+pLIVER+pCARD+pCVA+pCA+MALE+
-        abx_name_Ampicillin.sulbactam+abx_name_Cefazolin+
-        abx_name_Cefepime+abx_name_Ceftazidime+
-        abx_name_Ceftriaxone+abx_name_Ciprofloxacin+
-        abx_name_Gentamicin+abx_name_Meropenem+
-        abx_name_Nitrofurantoin+abx_name_Piperacillin.tazobactam+
-        abx_name_Trimethoprim.sulfamethoxazole+
-        curr_service_CSURG+curr_service_ENT+curr_service_GU+
-        curr_service_GYN+curr_service_MED+curr_service_NMED+
-        curr_service_NSURG+curr_service_OBS+curr_service_OMED+
-        curr_service_ORTHO+curr_service_PSURG+curr_service_PSYCH+
-        curr_service_SURG+curr_service_TRAUM+curr_service_TSURG+
-        curr_service_VSURG+pICU+pSEPSIS,
-      data = train_abx)
+  fit(formula,data = train_abx)
 
 underlying_cdi <- extract_fit_engine(cdi_fit)
 coef(underlying_cdi) %>% round(2)
@@ -695,20 +659,12 @@ log_reg_spec <- logistic_reg(penalty = 0.1, mixture = 1) %>%
   set_mode("classification")
 
 ###Fit model
+predictors <- c("prAKI", "pHADM", "age65", "pCKD", "pDIAB", "pLIVER", "pCARD", "pCVA", "pCA", "MALE",
+                abx_columns, service_columns, "pICU", "pSEPSIS")
+predictors <- predictors[predictors != "abx_name_Ampicillin"]
+formula <- reformulate(predictors, response = "overall_tox")
 tox_fit <- log_reg_spec %>%
-  fit(overall_tox ~ prAKI+pHADM+age65+pCKD+pDIAB+pLIVER+pCARD+pCVA+pCA+MALE+
-        abx_name_Ampicillin.sulbactam+abx_name_Cefazolin+
-        abx_name_Cefepime+abx_name_Ceftazidime+
-        abx_name_Ceftriaxone+abx_name_Ciprofloxacin+
-        abx_name_Gentamicin+abx_name_Meropenem+
-        abx_name_Nitrofurantoin+abx_name_Piperacillin.tazobactam+
-        abx_name_Trimethoprim.sulfamethoxazole +
-        curr_service_CSURG+curr_service_ENT+curr_service_GU+
-        curr_service_GYN+curr_service_MED+curr_service_NMED+
-        curr_service_NSURG+curr_service_OBS+curr_service_OMED+
-        curr_service_ORTHO+curr_service_PSURG+curr_service_PSYCH+
-        curr_service_SURG+curr_service_TRAUM+curr_service_TSURG+
-        curr_service_VSURG+pICU+pSEPSIS,
+  fit(formula,
       data = train_abx)
 
 underlying_tox <- extract_fit_engine(tox_fit)
@@ -731,20 +687,12 @@ log_reg_spec <- logistic_reg(penalty = 0.1, mixture = 1) %>%
   set_mode("classification")
 
 ###Fit model
+predictors <- c("prAKI","pCDI", "pHADM", "age65", "pCKD", "pDIAB", "pLIVER", "pCARD", "pCVA", "pCA", "MALE",
+                abx_columns, service_columns, "pICU", "pSEPSIS")
+predictors <- predictors[predictors != "abx_name_Ampicillin"]
+formula <- reformulate(predictors, response = "sepsis_ae")
 sepsis_fit <- log_reg_spec %>%
-  fit(sepsis_ae ~ pCDI+pHADM+age65+pCKD+pDIAB+pLIVER+pCARD+pCVA+pCA+MALE+
-        abx_name_Ampicillin.sulbactam+abx_name_Cefazolin+
-        abx_name_Cefepime+abx_name_Ceftazidime+
-        abx_name_Ceftriaxone+abx_name_Ciprofloxacin+
-        abx_name_Gentamicin+abx_name_Meropenem+
-        abx_name_Nitrofurantoin+abx_name_Piperacillin.tazobactam+
-        abx_name_Trimethoprim.sulfamethoxazole+
-        curr_service_CSURG+curr_service_ENT+curr_service_GU+
-        curr_service_GYN+curr_service_MED+curr_service_NMED+
-        curr_service_NSURG+curr_service_OBS+curr_service_OMED+
-        curr_service_ORTHO+curr_service_PSURG+curr_service_PSYCH+
-        curr_service_SURG+curr_service_TRAUM+curr_service_TSURG+
-        curr_service_VSURG+pICU+pSEPSIS,
+  fit(formula,
       data = train_abx)
 underlying_sepsis <- extract_fit_engine(sepsis_fit)
 coef(underlying_sepsis) %>% round(2)
@@ -757,6 +705,14 @@ sepsis_util_key <- ur_util %>% select(micro_specimen_id,sepsis_ae)
 util_probs_df <- util_probs_df %>% 
   left_join(sepsis_util_key,by="micro_specimen_id",
             relationship = "many-to-one")
+
+##Sync columns
+curr_service_columns_1 <- grep("^curr_service_", names(train_abx), value = TRUE)
+curr_service_columns_2 <- grep("^curr_service_", names(util_probs_df), value = TRUE)
+columns_to_add <- setdiff(curr_service_columns_1, curr_service_columns_2)
+for (col in columns_to_add) {
+  util_probs_df[[col]] <- 0
+}
 
 ##Utility score calculation
 
@@ -782,6 +738,9 @@ uti_value <- scores[rownames(scores)=="UTI_specific",] %>%
 access_abs <- c("AMP","SAM","CZO",
                 "GEN","SXT","NIT") %>% ab_name() %>% 
   str_replace("/","-")
+access_combos <- combn(access_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+access_abs <- c(access_abs, access_combos)
+
 access_value <- scores[rownames(scores)=="Access",] %>% 
   select(Value) %>% unlist()
 
@@ -789,15 +748,22 @@ access_value <- scores[rownames(scores)=="Access",] %>%
 oral_abs <- c("AMP","SAM","CIP",
               "SXT","NIT") %>% ab_name() %>% 
   str_replace("/","-")
+oral_combos <- combn(oral_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+oral_abs <- c(oral_abs, oral_combos)
+
 oral_value <- scores[rownames(scores)=="Oral_option",] %>% 
   select(Value) %>% unlist()
 
 ###IV option utility
 iv_abs <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
             "GEN","SXT","VAN") %>% ab_name() %>% 
-  str_replace("/","-")
+  str_replace("/","-") 
+iv_combos <- combn(iv_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+iv_abs <- c(iv_abs, iv_combos)
+
 iv_value <- scores[rownames(scores)=="IV_option",] %>% 
   select(Value) %>% unlist()
+
 
 ###Reserve category utility
 reserve_abs <- c()
@@ -863,6 +829,10 @@ util_probs_df %>% utility_plot(AST_utility,"Test utility")
 all_abs <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
              "MEM","CIP","GEN","SXT","NIT","VAN")
 long_allabs <- all_abs %>% ab_name() %>% str_replace("/","-")
+all_combos <- combn(all_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+all_abs <- c(all_abs, all_combos)
+long_allcombos <- combn(long_allabs, 2, FUN = function(x) paste(x, collapse = "_"))
+long_allabs <- c(long_allabs, long_allcombos)
 
 for (i in seq_along(long_allabs)) {
   
@@ -876,7 +846,7 @@ util_probs_df %>% dens_check("Nitrofurantoin",R,12,3) ####Add full name of antim
 ###Replace probability distribution with simulated distribution
 sens_df <- util_probs_df %>% dist_replace(ur_util,"Nitrofurantoin","R","S",12,3) %>%
   calculate_utilities() ####Add atimicrobial agent of interest
-sens_df %>% utility_plot(Outpatient_Rx_utility,"Outpatient treatment utility (Nitro R increased)")
+sens_df %>% utility_plot(Rx_utility,"Treatment utility (Nitro R increased)")
 sens_df %>% utility_plot(AST_utility,"Test utility (Ampsulb R increased)")
 
 ##Recommendations
