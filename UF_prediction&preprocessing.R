@@ -581,7 +581,7 @@ pc_dummies <- function(df) {
 omr <- read_csv("omr.csv") #Measurements e.g., height, weight
 hadm <- read_csv("admissions.csv") #Admission data
 labevents <- read_csv("labevents.csv") #Laboratory tests (non-micro)
-labitems <- read_csv("d_labitems.csv") #Laboratory test codes
+d_labitems <- read_csv("d_labitems.csv") #Laboratory test codes
 pats <- read_csv("patients.csv") #Patient demographics
 services <- read_csv("services.csv") #Service providers
 d_icd_diagnoses <- read_csv("d_icd_diagnoses.csv") #icd codes
@@ -824,7 +824,7 @@ recipethis <- recipe(~org_fullname,data=pos_urines)
 dummies <- recipethis %>% step_dummy(org_fullname) %>% prep(training = pos_urines)
 dummy_data <- bake(dummies,new_data = NULL)
 pos_urines <- pos_urines %>% cbind(dummy_data) %>% tibble()
-write_csv(pos_urines,"pos_urines_w_features")
+write_csv(pos_urines,"pos_urines_w_features.csv")
 
 ##Preprocessing for prediction model
 
@@ -837,11 +837,26 @@ pos_urines <- pos_urines %>% group_by(subject_id) %>%
 train_ind <- pos_urines %>% split_indexer(0.9,123)
 urines <- pos_urines[train_ind,]
 urines_assess <- pos_urines[-train_ind,]
-ur_util <- urines_assess
+
+###Modify to include effect of AmpCs
+ampc_species <- c("Citrobacter braakii","Citrobacter freundii","Citrobacter gillenii",
+                  "Citrobacter murliniae","Citrobacter rodenticum",
+                  "Citrobacter sedlakii","Citrobacter werkmanii",
+                  "Citrobacter youngae","Enterobacter",
+                  "Hafnia alvei","Klebsiella aerogenes",
+                  "Morganella morganii","Providencia",
+                  "Serratia marcescens")
+AmpC_variable <- function(df) {
+  df %>% mutate(AmpC=case_when(org_fullname %in% ampc_species~TRUE,TRUE~FALSE))
+}
+
+urines <- urines %>% AmpC_variable()
+urines_assess <- urines_assess %>% AmpC_variable()
 
 ###Assign and save reference datasets
+ur_util <- urines_assess
 urines_ref <- urines
-urines <- tibble(urines %>% ungroup() %>% select(AMP:VAN,pAMPr:org_fullname_Staphylococcus.aureus))
+urines <- tibble(urines %>% ungroup() %>% select(AMP:VAN,pAMPr:org_fullname_Staphylococcus.aureus,AmpC))
 write_csv(urines, "urines.csv")
 write_csv(urines_ref,"urines_ref.csv")
 write_csv(urines_assess,"urines_assess.csv")
@@ -852,7 +867,7 @@ write_csv(urines_assess,"urines_assess.csv")
 urines5 <- urines
 
 ###Select only variables to be used for model development
-urines5 <- urines5 %>% select(1:pTPN)
+urines5 <- urines5 %>% select(1:pTPN,AmpC)
 
 ###Binarise AST results
 urines5 <- urines5 %>% binarise_full_df("R","S")
@@ -876,7 +891,26 @@ double_sens_columns <- function(df) {
 
 ur_util <- ur_util %>% double_sens_columns()
 urines5 <- urines5 %>% double_sens_columns()
-urines5 %>% select(AMP_SAM:NIT_VAN) %>% colnames()
+
+###AmpC conversion
+AmpC_converter <- function(df) {
+df %>% mutate(
+  AMP=case_when(AmpC~"R",TRUE~AMP),SAM=case_when(AmpC~"R",TRUE~SAM),
+  TZP=case_when(AmpC~"R",TRUE~TZP),CZO=case_when(AmpC~"R",TRUE~CZO),
+  CRO=case_when(AmpC~"R",TRUE~CRO),CAZ=case_when(AmpC~"R",TRUE~CAZ),
+  AMP=case_when(AmpC~"R",TRUE~AMP),AMP_SAM=case_when(AmpC~"R",TRUE~AMP_SAM),
+  AMP_TZP=case_when(AmpC~"R",TRUE~AMP_TZP),AMP_CZO=case_when(AmpC~"R",TRUE~AMP_CZO),
+  AMP_CRO=case_when(AmpC~"R",TRUE~AMP_CRO),AMP_CAZ=case_when(AmpC~"R",TRUE~AMP_CAZ),
+  SAM_TZP=case_when(AmpC~"R",TRUE~SAM_TZP),SAM_CZO=case_when(AmpC~"R",TRUE~SAM_CZO),
+  SAM_CRO=case_when(AmpC~"R",TRUE~SAM_CRO),SAM_CAZ=case_when(AmpC~"R",TRUE~SAM_CAZ),
+  TZP_CZO=case_when(AmpC~"R",TRUE~TZP_CZO),TZP_CRO=case_when(AmpC~"R",TRUE~TZP_CRO),
+  CZO_CAZ=case_when(AmpC~"R",TRUE~CZO_CAZ),CZO_CRO=case_when(AmpC~"R",TRUE~CZO_CRO),
+  CZO_CAZ=case_when(AmpC~"R",TRUE~CZO_CAZ),CRO_CAZ=case_when(AmpC~"R",TRUE~CRO_CAZ)
+)
+}
+ur_util <- ur_util %>% AmpC_converter()
+urines5 <- urines5 %>% AmpC_converter() %>% select(-AmpC)
+
 ###Save to file
 write_csv(urines5,"urines5.csv")
 write_csv(ur_util,"ur_util.csv")
@@ -937,9 +971,6 @@ abx <- abx %>% left_join(patskey,by="subject_id")
 ur_util <- ur_util %>% left_join(patskey,by="subject_id")
 
 ##Nephrotoxicity-related labels
-diagnoses <- read_csv("diagnoses_icd.csv")
-drgcodes <- read_csv("drgcodes.csv")
-d_icd_diagnoses <- read_csv("d_icd_diagnoses.csv")
 
 ###Pre-adjusted AKI label
 print(d_labitems %>% filter(grepl("creat",label,ignore.case=T)),n=25)
@@ -1265,8 +1296,17 @@ abx <- abx %>% left_join(infection_key)
 ur_util <- ur_util %>% left_join(infection_key)
 
 ###High obs frequency in ED
-obfreq_key <- ur_util %>% select(hadm_id,ob_freq) %>% distinct(hadm_id,.keep_all = T)
-abx <- abx %>% left_join(obfreq_key)
+obfreq_key <- urines_ref %>% select(hadm_id,ob_freq) %>% distinct(hadm_id,.keep_all = T)
+abx <- abx %>% left_join(obfreq_key) 
+abx <- abx %>% mutate(high_obfreq = case_when(ob_freq > median(abx$ob_freq,na.rm=T)~TRUE,
+                                 TRUE~FALSE))
+ur_util <- ur_util %>% mutate(high_obfreq = case_when(ob_freq > median(ur_util$ob_freq,na.rm=T)~TRUE,
+                                                      TRUE~FALSE))
+
+###High CRP on admission
+highcrp_key <- urines_ref %>% select(hadm_id,highCRP) %>% distinct(hadm_id,.keep_all = T)
+abx <- abx %>% left_join(highcrp_key) %>% mutate(highCRP=case_when(highCRP~highCRP,
+                                                  TRUE~FALSE))
 
 ###Sepsis high-risk based on ED observations themselves
 staykey <- edstays %>% select(hadm_id,stay_id) %>% 
@@ -1298,7 +1338,8 @@ ed_obskey <- ed_obskey %>% group_by(hadm_id) %>%
   distinct(hadm_id,.keep_all=T)
 
 abx <- abx %>% left_join(ed_obskey)
-ur_util <- ur_util %>% left_join(ed_obskey)
+ur_util <- ur_util %>% left_join(ed_obskey) %>% 
+  mutate(SIRS=case_when(SIRS~SIRS,TRUE~FALSE))
 
 ###Update sepsis criterion with above variables
 abx <- abx %>% update_sepsis()
@@ -2072,7 +2113,11 @@ abx <- abx %>% filter(str_count(abx_name,"_") <2)
 common_combos <- abx %>% count(abx_name) %>% filter(n>=500) %>% pull(abx_name)
 abx <- abx %>% filter(abx_name%in%common_combos)
 
-###Re-engineer antimicrobial dummy variables
+###Filter out combinations that last less than 24 hours
+abx <- abx %>% mutate(combo_24h = case_when(as.numeric(stoptime-starttime) > 1~TRUE,
+                      TRUE~FALSE)) %>% filter(combo_24h)
+
+###Re-engineer antimicrobial dummy variables##combo_24h#Re-engineer antimicrobial dummy variables
 abx <- abx %>% select(-(abx_name_Ampicillin.sulbactam:abx_name_Ampicillin))
 recipethis <- recipe(~abx_name,data=abx)
 dummies <- recipethis %>% step_dummy(abx_name) %>% prep(training = abx)
@@ -2083,7 +2128,7 @@ abx <- abx %>% mutate(abx_name_Ampicillin =
                                     1, TRUE ~ 0))
 
 ##Antimicrobial-related variables in ur_util
-ab_key
+
 ###Check for currently prescribed antimicrobial agent
 ab_key <- abx_ref %>% select(subject_id,abx_name,starttime,stoptime)
 urine_abx <- ur_util %>% left_join(ab_key,by=c("subject_id")) %>% 
