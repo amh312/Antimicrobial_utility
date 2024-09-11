@@ -268,7 +268,7 @@ calculate_utilities <- function(df,formulary_list=NULL) {
                 ),
                 Formulary_utility = 
                   Formulary_agent*R,
-                AST_utility = S_utility+
+                AST_utility = (S_utility+
                   AMPR_utility +
                   SAMR_utility +
                   TZPR_utility +
@@ -282,7 +282,7 @@ calculate_utilities <- function(df,formulary_list=NULL) {
                   SXTR_utility +
                   NITR_utility +
                   VANR_utility +
-                  Formulary_utility,
+                  Formulary_utility)*single_agent,
                 Rx_utility = (overall_util * S) -
                   (R*prob_sepsisae))
   
@@ -299,7 +299,7 @@ calculate_utilities <- function(df,formulary_list=NULL) {
 }
 
 ###Utility data visualisation
-utility_plot <- function(df, variable,utility) {
+utility_plot <- function(df, variable,application,modification="") {
   
   variable <- enquo(variable)
   
@@ -308,6 +308,20 @@ utility_plot <- function(df, variable,utility) {
     "seagreen", "black")
   
   df <- df %>% mutate(Antimicrobial = str_replace_all(Antimicrobial,"_"," & "))
+  
+  if (application=="Intravenous treatment") {
+    
+    df <- df %>% filter(Urosepsis_Rx_utility != min(Urosepsis_Rx_utility))
+    
+  } else if (application=="Oral treatment") {
+    
+    df <- df %>% filter(Outpatient_Rx_utility != min(Outpatient_Rx_utility))
+    
+  } else if (application=="AST") {
+    
+    df <- df %>% filter(AST_utility != min(AST_utility))
+    
+  }
   
   thisplot <- ggplot(df %>% mutate(Antimicrobial = 
                                      factor(Antimicrobial,
@@ -319,7 +333,7 @@ utility_plot <- function(df, variable,utility) {
     theme_minimal() +
     theme(legend.position = "None",axis.text.y = element_text(
       colour = axiscols))+
-    xlab(utility)+
+    xlab(glue("{application} utility{modification}"))+
     theme()
   
   print(thisplot)
@@ -660,7 +674,8 @@ log_reg_spec <- logistic_reg(penalty = 0.1, mixture = 1) %>%
 
 ###Fit model
 predictors <- c("prAKI", "pHADM", "age65", "pCKD", "pDIAB", "pLIVER", "pCARD", "pCVA", "pCA", "MALE",
-                abx_columns, service_columns, "pICU", "pSEPSIS")
+                abx_columns, service_columns, "pICU", "pSEPSIS","admission_sepsis",
+                "SIRS","highCRP")
 predictors <- predictors[predictors != "abx_name_Ampicillin"]
 formula <- reformulate(predictors, response = "overall_tox")
 tox_fit <- log_reg_spec %>%
@@ -674,10 +689,11 @@ coef(underlying_tox) %>% round(2)
 tox_test_probs <- predict(underlying_tox, test_abx,type="response")
 
 ###Attach to probability prediction dataframe
-tox_util_key <- ur_util %>% select(micro_specimen_id,overall_tox)
+tox_util_key <- ur_util %>% select(micro_specimen_id,overall_tox,
+                                   admission_sepsis,
+                                   SIRS,highCRP)
 util_probs_df <- util_probs_df %>% 
-  left_join(tox_util_key,by="micro_specimen_id",
-            relationship = "many-to-one")
+  left_join(tox_util_key,by="micro_specimen_id")
 
 ##Sepsis adverse outcomes prediction model
 
@@ -805,6 +821,7 @@ util_probs_df <- util_probs_df %>%
          value_highcost = cost_value,
          util_highcost = Highcost_agent * value_highcost,
          prob_sepsisae = sepsis_util_probs,
+         single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE)
   ) %>% left_join(Rval_key)
 
 ###Calculate overall utility score
@@ -812,16 +829,21 @@ formulary_agents <- c() ####Populate with formulary agent full names
 util_probs_df <- util_probs_df %>% calculate_utilities(
   formulary_list = formulary_agents)
 
+###Filter out combination predictions not present in training dataset
+abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+  str_replace_all("/","-")
+util_probs_df <- util_probs_df %>% filter(Antimicrobial %in% abx_in_train)
+
 ##Utility analysis
 
 ###Utility data visualisation
 util_probs_df %>% group_by(Antimicrobial) %>% 
   summarise(Median_util=median(Rx_utility)) %>% 
   arrange(desc(Median_util))
-util_probs_df %>% utility_plot(Rx_utility,"Treatment utility")
-util_probs_df %>% utility_plot(Urosepsis_Rx_utility,"Urosepsis treatment utility")
-util_probs_df %>% utility_plot(Outpatient_Rx_utility,"Outpatient treatment utility")
-util_probs_df %>% utility_plot(AST_utility,"Test utility")
+util_probs_df %>% utility_plot(Rx_utility,"Treatment")
+util_probs_df %>% utility_plot(Urosepsis_Rx_utility,"Intravenous treatment")
+util_probs_df %>% utility_plot(Outpatient_Rx_utility,"Oral treatment")
+util_probs_df %>% utility_plot(AST_utility,"AST")
 
 ##Sensitivity analysis
 
@@ -844,52 +866,53 @@ for (i in seq_along(long_allabs)) {
 util_probs_df %>% dens_check("Nitrofurantoin",R,12,3) ####Add full name of antimicrobial of interest
 
 ###Replace probability distribution with simulated distribution
-sens_df <- util_probs_df %>% dist_replace(ur_util,"Nitrofurantoin","R","S",12,3) %>%
+sens_df <- util_probs_df %>% dist_replace(ur_util,"Ampicillin_Vancomycin","R","S",3,12) %>%
   calculate_utilities() ####Add atimicrobial agent of interest
-sens_df %>% utility_plot(Rx_utility,"Treatment utility (Nitro R increased)")
-sens_df %>% utility_plot(AST_utility,"Test utility (Ampsulb R increased)")
-
-##Recommendations
+sens_df %>% utility_plot(Rx_utility,"Intravenous treatment"," (Vanc R down)")
+sens_df %>% utility_plot(AST_utility,"Test utility")
 
 ###Antimicrobial formulary recommendations
-senskey <- ur_util %>% select(micro_specimen_id,AMP:VAN)
-form_recs <- util_probs_df %>% left_join(senskey) %>% mutate(
-  Confirmed_S = case_when(
-    Antimicrobial=="Ampicillin" & AMP=="S" ~ TRUE,
-    Antimicrobial=="Ampicillin-sulbactam" & SAM=="S" ~ TRUE,
-    Antimicrobial=="Piperacillin-tazobactam" & TZP=="S" ~ TRUE,
-    Antimicrobial=="Cefazolin" & CZO=="S" ~ TRUE,
-    Antimicrobial=="Ceftriaxone" & CRO=="S" ~ TRUE,
-    Antimicrobial=="Ceftazidime" & CAZ=="S" ~ TRUE,
-    Antimicrobial=="Cefepime" & FEP=="S" ~ TRUE,
-    Antimicrobial=="Meropenem" & MEM=="S" ~ TRUE,
-    Antimicrobial=="Ciprofloxacin" & CIP=="S" ~ TRUE,
-    Antimicrobial=="Gentamicin" & GEN=="S" ~ TRUE,
-    Antimicrobial=="Trimethoprim-sulfamethoxazole" & SXT=="S" ~ TRUE,
-    Antimicrobial=="Nitrofurantoin" & NIT=="S" ~ TRUE,
-    Antimicrobial=="Vancomycin" & VAN=="S" ~ TRUE,TRUE~FALSE
-  ),
-  Confirmed_R = case_when(
-    Antimicrobial=="Ampicillin" & AMP=="R" ~ TRUE,
-    Antimicrobial=="Ampicillin-sulbactam" & SAM=="R" ~ TRUE,
-    Antimicrobial=="Piperacillin-tazobactam" & TZP=="R" ~ TRUE,
-    Antimicrobial=="Cefazolin" & CZO=="R" ~ TRUE,
-    Antimicrobial=="Ceftriaxone" & CRO=="R" ~ TRUE,
-    Antimicrobial=="Ceftazidime" & CAZ=="R" ~ TRUE,
-    Antimicrobial=="Cefepime" & FEP=="R" ~ TRUE,
-    Antimicrobial=="Meropenem" & MEM=="R" ~ TRUE,
-    Antimicrobial=="Ciprofloxacin" & CIP=="R" ~ TRUE,
-    Antimicrobial=="Gentamicin" & GEN=="R" ~ TRUE,
-    Antimicrobial=="Trimethoprim-sulfamethoxazole" & SXT=="R" ~ TRUE,
-    Antimicrobial=="Nitrofurantoin" & NIT=="R" ~ TRUE,
-    Antimicrobial=="Vancomycin" & VAN=="R" ~ TRUE,TRUE~FALSE
-  ),
-  Urosepsis_Formutil = case_when(util_iv==0 ~ 0, TRUE ~ (Confirmed_S*overall_util) - (Confirmed_R*sepsis_ae)),
-  Outpatient_Formutil = case_when(util_oral==0~0, TRUE ~ (Confirmed_S*overall_util) - (Confirmed_R*sepsis_ae)),
-) %>% group_by(Antimicrobial) %>% 
+senskey <- ur_util %>% select(micro_specimen_id,AMP:VAN,AMP_SAM:NIT_VAN)
+antimicrobial_map <- c(
+  "Ampicillin" = "AMP",
+  "Ampicillin-sulbactam" = "SAM",
+  "Piperacillin-tazobactam" = "TZP",
+  "Cefazolin" = "CZO",
+  "Ceftriaxone" = "CRO",
+  "Ceftazidime" = "CAZ",
+  "Cefepime" = "FEP",
+  "Meropenem" = "MEM",
+  "Ciprofloxacin" = "CIP",
+  "Gentamicin" = "GEN",
+  "Trimethoprim-sulfamethoxazole" = "SXT",
+  "Nitrofurantoin" = "NIT",
+  "Vancomycin" = "VAN"
+)
+
+map_combinations <- combn(names(antimicrobial_map), 2, simplify = FALSE)
+combined_antimicrobial_map <- c(
+  antimicrobial_map,
+  setNames(
+    lapply(map_combinations, function(x) paste(antimicrobial_map[x], collapse = "_")),
+    sapply(map_combinations, function(x) paste(x, collapse = "_"))
+  )
+)
+form_recs <- util_probs_df %>%
+  left_join(senskey) %>% 
+  rowwise() %>%
+  mutate(
+    Confirmed_S = ifelse(combined_antimicrobial_map[[Antimicrobial]] %in% names(.) && 
+                           get(combined_antimicrobial_map[[Antimicrobial]]) == "S", TRUE, FALSE),
+    Confirmed_R = ifelse(combined_antimicrobial_map[[Antimicrobial]] %in% names(.) && 
+                           get(combined_antimicrobial_map[[Antimicrobial]]) == "R", TRUE, FALSE)
+  ) %>%
+  ungroup() %>% mutate(
+    Urosepsis_Formutil = case_when(util_iv==0 ~ 0, TRUE ~ (Confirmed_S*overall_util) - (Confirmed_R*sepsis_ae)),
+    Outpatient_Formutil = case_when(util_oral==0~0, TRUE ~ (Confirmed_S*overall_util) - (Confirmed_R*sepsis_ae)),
+  ) %>% group_by(Antimicrobial) %>% 
   summarise(Formulary_util_urosepsis=mean(Urosepsis_Formutil),
             Formulary_util_outpatient=mean(Outpatient_Formutil)
-            )
+  ) %>% ungroup()
 
 form_recs_urosepsis <- form_recs %>% 
   arrange(desc(Formulary_util_urosepsis)) %>% 
@@ -909,28 +932,37 @@ for (i in 1:length(form_recs_outpatient)) {
     mutate(!!paste0("PDFo_Outpatient_", i) := form_recs_outpatient[[i]])
 }
 
+
 ###Individual treatment recommendations
-all_abs <- c("AMP","SAM","CZO",
-             "GEN","SXT","NIT",
-             "TZP","CRO","CAZ",
-             "FEP","MEM","CIP","VAN")
+all_abs <- all_combos
+replace_values <- function(column, map) {
+  column %>%
+    as.character() %>%
+    sapply(function(x) if (x %in% names(map)) map[[x]] else x)
+}
 
 ur_util <- ur_util %>% assign_PDRx(util_probs_df,"PDRx_") %>% 
-  mutate(across(starts_with("PDRx_"), as.ab))
+  mutate(across(starts_with("PDRx_"), ~ replace_values(., combined_antimicrobial_map)))
 
 ###Urosepsis treatment recommendations
 ur_util <- ur_util %>% assign_urosepsis(util_probs_df,"Urosepsis_") %>% 
-  mutate(across(starts_with("Urosepsis_"), as.ab))
+  mutate(across(starts_with("Urosepsis_"), ~ replace_values(., combined_antimicrobial_map)))
 
-###Urosepsis treatment recommendations
+###Outpatient treatment recommendations
 ur_util <- ur_util %>% assign_outpatient(util_probs_df,"Outpatient_") %>% 
-  mutate(across(starts_with("Outpatient_"), as.ab))
+  mutate(across(starts_with("Outpatient_"), ~ replace_values(., combined_antimicrobial_map)))
 
 ###Individual AST recommendations
 ur_util <- ur_util %>% assign_PDAST(util_probs_df,"PDAST_") %>%
-  mutate(across(starts_with("PDAST_"), as.ab))
+  mutate(across(starts_with("PDAST_"), ~ replace_values(., combined_antimicrobial_map)))
 
 ###Standard panel treatment & AST recommendations
 micro_raw <- read_csv("microbiologyevents.csv")
 ur_util <- ur_util %>% assign_standard(util_probs_df,micro_raw,"STANDARD_")
+
+##Treatment recommendation analysis
+
+
+
+
 
