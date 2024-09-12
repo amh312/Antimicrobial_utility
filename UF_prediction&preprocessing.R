@@ -53,6 +53,12 @@ prev_event_type_assign <- function(df,B_var,event_df,event_var,event_type,no_day
   
 }
 
+###Search for previous event across multiple variables
+apply_prev_event <- function(df, param,organism) {
+  df %>%
+    prev_event_type_assign(!!sym(param), urine_df, org_fullname,organism, 365, 1)
+}
+
 ###Assigning "NT" variable to relevant NAs in microbiology dataframe
 NT_assigner <- function(df) {
   micaborgs <- df %>% filter(!is.na(org_name))
@@ -145,6 +151,14 @@ demographic_assign <- function(df,demographic) {
   df %>% left_join(hadm_demographic,by="subject_id") %>%
     mutate(!!demographic:=case_when(is.na(!!demographic) ~ "UNKNOWN",
                                     TRUE~!!demographic))
+  
+}
+
+###Check for hospital admission from outpatient location
+outpatient_check <- function(df) {
+  
+  df %>% mutate(admission_location=case_when(is.na(admission_location) ~ "OUTPATIENT",
+                                             TRUE~admission_location))
   
 }
 
@@ -411,6 +425,21 @@ death_check <- function(df,df2,new_column,filter_term) {
   
 }
 
+###Check for prior abnormal BMI categorisations
+categorise_bmi <- function(df) {
+  df %>%
+    filter(grepl("BMI", result_name)) %>%
+    mutate(
+      BMI_cat = case_when(
+        as.numeric(result_value) >= 30 ~ "Obese",
+        as.numeric(result_value) >= 25 & as.numeric(result_value) < 30 ~ "Overweight",
+        as.numeric(result_value) >= 18.5 & as.numeric(result_value) < 25 ~ "Normal weight",
+        as.numeric(result_value) < 18.5 ~ "Underweight"
+      ),
+      admittime = as.POSIXct(chartdate, format = '%Y-%m-%d %H:%M:%S')
+    )
+}
+
 ###Check for ICU in the following 28 days
 icu_check <- function(df,df2,new_column,filter_term) {
   
@@ -577,7 +606,729 @@ pc_dummies <- function(df) {
   
 }
 
-###Data upload (CSV files accessible at https://physionet.org/content/mimiciv/2.2/)
+###Check for combinations
+combocheck <- function(df) {
+  
+  df %>%
+    arrange(subject_id, starttime) %>%
+    group_by(subject_id) %>%
+    mutate(combination_drug2 = case_when(
+      starttime < lag(stoptime) &
+        ab_name!=lag(ab_name)~ lag(ab_name),
+      TRUE~NA
+    ),
+    combination_drug3 = case_when(
+      starttime < lag(stoptime,n=2) &
+        ab_name!=lag(ab_name,n=2)~ lag(ab_name,n=2),
+      TRUE~NA
+    ),
+    combination_drug4 = case_when(
+      starttime < lag(stoptime,n=3) &
+        ab_name!=lag(ab_name,n=3)~ lag(ab_name,n=3),
+      TRUE~NA
+    ),
+    combination_drug5 = case_when(
+      starttime < lag(stoptime,n=4) &
+        ab_name!=lag(ab_name,n=4)~ lag(ab_name,n=4),
+      TRUE~NA
+    ),
+    combination_drug6 = case_when(
+      starttime < lag(stoptime,n=5) &
+        ab_name!=lag(ab_name,n=5)~ lag(ab_name,n=5),
+      TRUE~NA
+    ),
+    combination_drug7 = case_when(
+      starttime < lag(stoptime,n=6) &
+        ab_name!=lag(ab_name,n=6)~ lag(ab_name,n=6),
+      TRUE~NA
+    ),
+    combination_drug8 = case_when(
+      starttime < lag(stoptime,n=7) &
+        ab_name!=lag(ab_name,n=7)~ lag(ab_name,n=7),
+      TRUE~NA
+    ),
+    combination_drug9 = case_when(
+      starttime < lag(stoptime,n=8) &
+        ab_name!=lag(ab_name,n=8)~ lag(ab_name,n=8),
+      TRUE~NA
+    ),
+    combination_drug10 = case_when(
+      starttime < lag(stoptime,n=9) &
+        ab_name!=lag(ab_name,n=9)~ lag(ab_name,n=9),
+      TRUE~NA
+    ),
+    combination_drug11 = case_when(
+      starttime < lag(stoptime,n=10) &
+        ab_name!=lag(ab_name,n=10)~ lag(ab_name,n=10),
+      TRUE~NA
+    ),
+    combination_drug12 = case_when(
+      starttime < lag(stoptime,n=11) &
+        ab_name!=lag(ab_name,n=11)~ lag(ab_name,n=11),
+      TRUE~NA
+    ),
+    combination_drug13 = case_when(
+      starttime < lag(stoptime,n=12) &
+        ab_name!=lag(ab_name,n=12)~ lag(ab_name,n=12),
+      TRUE~NA
+    ),
+    combination_drug14 = case_when(
+      starttime < lag(stoptime,n=13) &
+        ab_name!=lag(ab_name,n=13)~ lag(ab_name,n=13),
+      TRUE~NA
+    ),
+    combination_drug15 = case_when(
+      starttime < lag(stoptime,n=14) &
+        ab_name!=lag(ab_name,n=14)~ lag(ab_name,n=14),
+      TRUE~NA
+    ),
+    combination_drug16 = case_when(
+      starttime < lag(stoptime,n=15) &
+        ab_name!=lag(ab_name,n=15)~ lag(ab_name,n=15),
+      TRUE~NA
+    ),
+    combination_drug17 = case_when(
+      starttime < lag(stoptime,n=16) &
+        ab_name!=lag(ab_name,n=16)~ lag(ab_name,n=16),
+      TRUE~NA
+    ),
+    combination_drug18 = case_when(
+      starttime < lag(stoptime,n=17) &
+        ab_name!=lag(ab_name,n=17)~ lag(ab_name,n=17),
+      TRUE~NA
+    ),
+    combination_drug19 = case_when(
+      starttime < lag(stoptime,n=18) &
+        ab_name!=lag(ab_name,n=18)~ lag(ab_name,n=18),
+      TRUE~NA
+    ),
+    combination_drug20 = case_when(
+      starttime < lag(stoptime,n=19) &
+        ab_name!=lag(ab_name,n=19)~ lag(ab_name,n=19),
+      TRUE~NA
+    ),
+    combination_drug21 = case_when(
+      starttime < lag(stoptime,n=20) &
+        ab_name!=lag(ab_name,n=20)~ lag(ab_name,n=20),
+      TRUE~NA
+    ),
+    combination_drug22 = case_when(
+      starttime < lag(stoptime,n=21) &
+        ab_name!=lag(ab_name,n=21)~ lag(ab_name,n=21),
+      TRUE~NA
+    ),
+    combination_drug23 = case_when(
+      starttime < lag(stoptime,n=22) &
+        ab_name!=lag(ab_name,n=22)~ lag(ab_name,n=22),
+      TRUE~NA
+    ),
+    combination_drug24 = case_when(
+      starttime < lag(stoptime,n=23) &
+        ab_name!=lag(ab_name,n=23)~ lag(ab_name,n=23),
+      TRUE~NA
+    ),
+    combination_drug25 = case_when(
+      starttime < lag(stoptime,n=24) &
+        ab_name!=lag(ab_name,n=24)~ lag(ab_name,n=24),
+      TRUE~NA
+    ),
+    combination_drug26 = case_when(
+      starttime < lag(stoptime,n=25) &
+        ab_name!=lag(ab_name,n=25)~ lag(ab_name,n=25),
+      TRUE~NA
+    ),
+    combination_drug27 = case_when(
+      starttime < lag(stoptime,n=26) &
+        ab_name!=lag(ab_name,n=26)~ lag(ab_name,n=26),
+      TRUE~NA
+    ),
+    combination_drug28 = case_when(
+      starttime < lag(stoptime,n=27) &
+        ab_name!=lag(ab_name,n=27)~ lag(ab_name,n=27),
+      TRUE~NA
+    ),
+    combination_drug29 = case_when(
+      starttime < lag(stoptime,n=28) &
+        ab_name!=lag(ab_name,n=28)~ lag(ab_name,n=28),
+      TRUE~NA
+    ),
+    combination_drug30 = case_when(
+      starttime < lag(stoptime,n=29) &
+        ab_name!=lag(ab_name,n=29)~ lag(ab_name,n=29),
+      TRUE~NA
+    ),
+    combination_drug31 = case_when(
+      starttime < lag(stoptime,n=30) &
+        ab_name!=lag(ab_name,n=30)~ lag(ab_name,n=30),
+      TRUE~NA
+    ),
+    combination_drug32 = case_when(
+      starttime < lag(stoptime,n=31) &
+        ab_name!=lag(ab_name,n=31)~ lag(ab_name,n=31),
+      TRUE~NA
+    ),
+    combination_drug33 = case_when(
+      starttime < lag(stoptime,n=32) &
+        ab_name!=lag(ab_name,n=32)~ lag(ab_name,n=32),
+      TRUE~NA
+    ),
+    combination_drug34 = case_when(
+      starttime < lag(stoptime,n=33) &
+        ab_name!=lag(ab_name,n=33)~ lag(ab_name,n=33),
+      TRUE~NA
+    ),
+    combination_drug35 = case_when(
+      starttime < lag(stoptime,n=34) &
+        ab_name!=lag(ab_name,n=34)~ lag(ab_name,n=34),
+      TRUE~NA
+    ),
+    combination_drug36 = case_when(
+      starttime < lag(stoptime,n=35) &
+        ab_name!=lag(ab_name,n=35)~ lag(ab_name,n=35),
+      TRUE~NA
+    ),
+    combination_drug37 = case_when(
+      starttime < lag(stoptime,n=36) &
+        ab_name!=lag(ab_name,n=36)~ lag(ab_name,n=36),
+      TRUE~NA
+    )) %>%
+    ungroup()
+  
+}
+combodrugcheck <- function(df) {
+  
+  df %>% group_by(subject_id) %>% 
+    mutate(
+      combo_agent = case_when(
+        any(!is.na(combination_drug2))|
+          any(!is.na(combination_drug3))|
+          any(!is.na(combination_drug4))|
+          any(!is.na(combination_drug5))|
+          any(!is.na(combination_drug6))|
+          any(!is.na(combination_drug7))|
+          any(!is.na(combination_drug8))|
+          any(!is.na(combination_drug9))|
+          any(!is.na(combination_drug10))|
+          any(!is.na(combination_drug11))|
+          any(!is.na(combination_drug12))|
+          any(!is.na(combination_drug13))|
+          any(!is.na(combination_drug14))|
+          any(!is.na(combination_drug15))|
+          any(!is.na(combination_drug16))|
+          any(!is.na(combination_drug17))|
+          any(!is.na(combination_drug18))|
+          any(!is.na(combination_drug19))|
+          any(!is.na(combination_drug20))|
+          any(!is.na(combination_drug21))|
+          any(!is.na(combination_drug22))|
+          any(!is.na(combination_drug23))|
+          any(!is.na(combination_drug24))|
+          any(!is.na(combination_drug25))|
+          any(!is.na(combination_drug26))|
+          any(!is.na(combination_drug27))|
+          any(!is.na(combination_drug28))|
+          any(!is.na(combination_drug29))|
+          any(!is.na(combination_drug30))|
+          any(!is.na(combination_drug31))|
+          any(!is.na(combination_drug32))|
+          any(!is.na(combination_drug33))|
+          any(!is.na(combination_drug34))|
+          any(!is.na(combination_drug35))|
+          any(!is.na(combination_drug36))|
+          any(!is.na(combination_drug37))~ TRUE,
+        TRUE~FALSE
+      )
+    ) %>% ungroup()
+  
+}
+
+###Prior agent start and stop times for combinations
+prior_agent_stoptimes <- function(df) {
+  
+  df %>%
+    arrange(subject_id, starttime) %>%
+    group_by(subject_id) %>%
+    mutate(prioragent_stoptime2 = case_when(
+      !is.na(combination_drug2)~lag(stoptime),
+      TRUE~NA
+    ),
+    prioragent_stoptime3 = case_when(
+      !is.na(combination_drug3)~lag(stoptime,n=2),
+      TRUE~NA
+    ),
+    prioragent_stoptime4 = case_when(
+      !is.na(combination_drug4)~lag(stoptime,n=3),
+      TRUE~NA
+    ),
+    prioragent_stoptime5 = case_when(
+      !is.na(combination_drug5)~lag(stoptime,n=4),
+      TRUE~NA
+    ),
+    prioragent_stoptime6 = case_when(
+      !is.na(combination_drug6)~lag(stoptime,n=5),
+      TRUE~NA
+    ),
+    prioragent_stoptime7 = case_when(
+      !is.na(combination_drug7)~lag(stoptime,n=6),
+      TRUE~NA
+    ),
+    prioragent_stoptime8 = case_when(
+      !is.na(combination_drug8)~lag(stoptime,n=7),
+      TRUE~NA
+    ),
+    prioragent_stoptime9 = case_when(
+      !is.na(combination_drug9)~lag(stoptime,n=8),
+      TRUE~NA
+    ),
+    prioragent_stoptime10 = case_when(
+      !is.na(combination_drug10)~lag(stoptime,n=9),
+      TRUE~NA
+    ),
+    prioragent_stoptime11 = case_when(
+      !is.na(combination_drug11)~lag(stoptime,n=10),
+      TRUE~NA
+    ),
+    prioragent_stoptime12 = case_when(
+      !is.na(combination_drug12)~lag(stoptime,n=11),
+      TRUE~NA
+    ),
+    prioragent_stoptime13 = case_when(
+      !is.na(combination_drug13)~lag(stoptime,n=12),
+      TRUE~NA
+    ),
+    prioragent_stoptime14 = case_when(
+      !is.na(combination_drug14)~lag(stoptime,n=13),
+      TRUE~NA
+    ),
+    prioragent_stoptime15 = case_when(
+      !is.na(combination_drug15)~lag(stoptime,n=14),
+      TRUE~NA
+    ),
+    prioragent_stoptime16 = case_when(
+      !is.na(combination_drug16)~lag(stoptime,n=15),
+      TRUE~NA
+    ),
+    prioragent_stoptime17 = case_when(
+      !is.na(combination_drug17)~lag(stoptime,n=16),
+      TRUE~NA
+    ),
+    prioragent_stoptime18 = case_when(
+      !is.na(combination_drug18)~lag(stoptime,n=17),
+      TRUE~NA
+    ),
+    prioragent_stoptime19 = case_when(
+      !is.na(combination_drug19)~lag(stoptime,n=18),
+      TRUE~NA
+    ),
+    prioragent_stoptime20 = case_when(
+      !is.na(combination_drug20)~lag(stoptime,n=19),
+      TRUE~NA
+    ),
+    prioragent_stoptime21 = case_when(
+      !is.na(combination_drug21)~lag(stoptime,n=20),
+      TRUE~NA
+    ),
+    prioragent_stoptime22 = case_when(
+      !is.na(combination_drug22)~lag(stoptime,n=21),
+      TRUE~NA
+    ),
+    prioragent_stoptime23 = case_when(
+      !is.na(combination_drug23)~lag(stoptime,n=22),
+      TRUE~NA
+    ),
+    prioragent_stoptime24 = case_when(
+      !is.na(combination_drug24)~lag(stoptime,n=23),
+      TRUE~NA
+    ),
+    prioragent_stoptime25 = case_when(
+      !is.na(combination_drug25)~lag(stoptime,n=24),
+      TRUE~NA
+    ),
+    prioragent_stoptime26 = case_when(
+      !is.na(combination_drug26)~lag(stoptime,n=25),
+      TRUE~NA
+    ),
+    prioragent_stoptime27 = case_when(
+      !is.na(combination_drug27)~lag(stoptime,n=26),
+      TRUE~NA
+    ),
+    prioragent_stoptime28 = case_when(
+      !is.na(combination_drug28)~lag(stoptime,n=27),
+      TRUE~NA
+    ),
+    prioragent_stoptime29 = case_when(
+      !is.na(combination_drug29)~lag(stoptime,n=28),
+      TRUE~NA
+    ),
+    prioragent_stoptime30 = case_when(
+      !is.na(combination_drug30)~lag(stoptime,n=29),
+      TRUE~NA
+    ),
+    prioragent_stoptime31 = case_when(
+      !is.na(combination_drug31)~lag(stoptime,n=30),
+      TRUE~NA
+    ),
+    prioragent_stoptime32 = case_when(
+      !is.na(combination_drug32)~lag(stoptime,n=31),
+      TRUE~NA
+    ),
+    prioragent_stoptime33 = case_when(
+      !is.na(combination_drug33)~lag(stoptime,n=32),
+      TRUE~NA
+    ),
+    prioragent_stoptime34 = case_when(
+      !is.na(combination_drug34)~lag(stoptime,n=33),
+      TRUE~NA
+    ),
+    prioragent_stoptime35 = case_when(
+      !is.na(combination_drug35)~lag(stoptime,n=34),
+      TRUE~NA
+    ),
+    prioragent_stoptime36 = case_when(
+      !is.na(combination_drug36)~lag(stoptime,n=35),
+      TRUE~NA
+    ),
+    prioragent_stoptime37 = case_when(
+      !is.na(combination_drug37)~lag(stoptime,n=36),
+      TRUE~NA
+    )) %>%
+    ungroup()
+  
+}
+starttime_check <- function(df) {
+  
+  df %>%
+    mutate(combo_starttime = map_dbl(pmap(list(
+      starttime,prioragent_stoptime2,prioragent_stoptime3,
+      prioragent_stoptime4,prioragent_stoptime5,prioragent_stoptime6,
+      prioragent_stoptime7,prioragent_stoptime8,prioragent_stoptime9,
+      prioragent_stoptime10,prioragent_stoptime11,prioragent_stoptime12,
+      prioragent_stoptime13,prioragent_stoptime14,prioragent_stoptime15,
+      prioragent_stoptime16,prioragent_stoptime17,prioragent_stoptime18,
+      prioragent_stoptime19,prioragent_stoptime20,prioragent_stoptime21,
+      prioragent_stoptime22,prioragent_stoptime23,prioragent_stoptime24,
+      prioragent_stoptime25,prioragent_stoptime26,prioragent_stoptime27,
+      prioragent_stoptime28,prioragent_stoptime29,prioragent_stoptime30,
+      prioragent_stoptime31,prioragent_stoptime32,prioragent_stoptime33,
+      prioragent_stoptime34,prioragent_stoptime35,prioragent_stoptime36,
+      prioragent_stoptime37
+    ), ~ min(c(...), na.rm = TRUE)),as.POSIXct))
+}
+curr_regime_stoptimes <- function(df) {
+  
+  df %>%
+    arrange(subject_id, starttime) %>%
+    group_by(subject_id) %>%
+    mutate(curr_regime_stoptime2 = case_when(
+      !is.na(lead(combination_drug2))~lead(starttime),
+      TRUE~NA
+    ),
+    curr_regime_stoptime3 = case_when(
+      !is.na(lead(combination_drug3))~lead(starttime,n=2),
+      TRUE~NA
+    ),
+    curr_regime_stoptime4 = case_when(
+      !is.na(lead(combination_drug4))~lead(starttime,n=3),
+      TRUE~NA
+    ),
+    curr_regime_stoptime5 = case_when(
+      !is.na(lead(combination_drug5))~lead(starttime,n=4),
+      TRUE~NA
+    ),
+    curr_regime_stoptime6 = case_when(
+      !is.na(lead(combination_drug6))~lead(starttime,n=5),
+      TRUE~NA
+    ),
+    curr_regime_stoptime7 = case_when(
+      !is.na(lead(combination_drug7))~lead(starttime,n=6),
+      TRUE~NA
+    ),
+    curr_regime_stoptime8 = case_when(
+      !is.na(lead(combination_drug8))~lead(starttime,n=7),
+      TRUE~NA
+    ),
+    curr_regime_stoptime9 = case_when(
+      !is.na(lead(combination_drug9))~lead(starttime,n=8),
+      TRUE~NA
+    ),
+    curr_regime_stoptime10 = case_when(
+      !is.na(lead(combination_drug10))~lead(starttime,n=9),
+      TRUE~NA
+    ),
+    curr_regime_stoptime11 = case_when(
+      !is.na(lead(combination_drug11))~lead(starttime,n=10),
+      TRUE~NA
+    ),
+    curr_regime_stoptime12 = case_when(
+      !is.na(lead(combination_drug12))~lead(starttime,n=11),
+      TRUE~NA
+    ),
+    curr_regime_stoptime13 = case_when(
+      !is.na(lead(combination_drug13))~lead(starttime,n=12),
+      TRUE~NA
+    ),
+    curr_regime_stoptime14 = case_when(
+      !is.na(lead(combination_drug14))~lead(starttime,n=13),
+      TRUE~NA
+    ),
+    curr_regime_stoptime15 = case_when(
+      !is.na(lead(combination_drug15))~lead(starttime,n=14),
+      TRUE~NA
+    ),
+    curr_regime_stoptime16 = case_when(
+      !is.na(lead(combination_drug16))~lead(starttime,n=15),
+      TRUE~NA
+    ),
+    curr_regime_stoptime17 = case_when(
+      !is.na(lead(combination_drug17))~lead(starttime,n=16),
+      TRUE~NA
+    ),
+    curr_regime_stoptime18 = case_when(
+      !is.na(lead(combination_drug18))~lead(starttime,n=17),
+      TRUE~NA
+    ),
+    curr_regime_stoptime19 = case_when(
+      !is.na(lead(combination_drug19))~lead(starttime,n=18),
+      TRUE~NA
+    ),
+    curr_regime_stoptime20 = case_when(
+      !is.na(lead(combination_drug20))~lead(starttime,n=19),
+      TRUE~NA
+    ),
+    curr_regime_stoptime21 = case_when(
+      !is.na(lead(combination_drug21))~lead(starttime,n=20),
+      TRUE~NA
+    ),
+    curr_regime_stoptime22 = case_when(
+      !is.na(lead(combination_drug22))~lead(starttime,n=21),
+      TRUE~NA
+    ),
+    curr_regime_stoptime23 = case_when(
+      !is.na(lead(combination_drug23))~lead(starttime,n=22),
+      TRUE~NA
+    ),
+    curr_regime_stoptime24 = case_when(
+      !is.na(lead(combination_drug24))~lead(starttime,n=23),
+      TRUE~NA
+    ),
+    curr_regime_stoptime25 = case_when(
+      !is.na(lead(combination_drug25))~lead(starttime,n=24),
+      TRUE~NA
+    ),
+    curr_regime_stoptime26 = case_when(
+      !is.na(lead(combination_drug26))~lead(starttime,n=25),
+      TRUE~NA
+    ),
+    curr_regime_stoptime27 = case_when(
+      !is.na(lead(combination_drug27))~lead(starttime,n=26),
+      TRUE~NA
+    ),
+    curr_regime_stoptime28 = case_when(
+      !is.na(lead(combination_drug28))~lead(starttime,n=27),
+      TRUE~NA
+    ),
+    curr_regime_stoptime29 = case_when(
+      !is.na(lead(combination_drug29))~lead(starttime,n=28),
+      TRUE~NA
+    ),
+    curr_regime_stoptime30 = case_when(
+      !is.na(lead(combination_drug30))~lead(starttime,n=29),
+      TRUE~NA
+    ),
+    curr_regime_stoptime31 = case_when(
+      !is.na(lead(combination_drug31))~lead(starttime,n=30),
+      TRUE~NA
+    ),
+    curr_regime_stoptime32 = case_when(
+      !is.na(lead(combination_drug32))~lead(starttime,n=31),
+      TRUE~NA
+    ),
+    curr_regime_stoptime33 = case_when(
+      !is.na(lead(combination_drug33))~lead(starttime,n=32),
+      TRUE~NA
+    ),
+    curr_regime_stoptime34 = case_when(
+      !is.na(lead(combination_drug34))~lead(starttime,n=33),
+      TRUE~NA
+    ),
+    curr_regime_stoptime35 = case_when(
+      !is.na(lead(combination_drug35))~lead(starttime,n=34),
+      TRUE~NA
+    ),
+    curr_regime_stoptime36 = case_when(
+      !is.na(lead(combination_drug36))~lead(starttime,n=35),
+      TRUE~NA
+    ),
+    curr_regime_stoptime37 = case_when(
+      !is.na(lead(combination_drug37))~lead(starttime,n=36),
+      TRUE~NA
+    )) %>%
+    ungroup()
+  
+}
+stoptime_check <- function(df) {
+  df %>%
+    mutate(combo_stoptime = map_dbl(pmap(list(
+      stoptime,curr_regime_stoptime2,curr_regime_stoptime3,
+      curr_regime_stoptime4,curr_regime_stoptime5,curr_regime_stoptime6,
+      curr_regime_stoptime7,curr_regime_stoptime8,curr_regime_stoptime9,
+      curr_regime_stoptime10,curr_regime_stoptime11,curr_regime_stoptime12,
+      curr_regime_stoptime13,curr_regime_stoptime14,curr_regime_stoptime15,
+      curr_regime_stoptime16,curr_regime_stoptime17,curr_regime_stoptime18,
+      curr_regime_stoptime19,curr_regime_stoptime20,curr_regime_stoptime21,
+      curr_regime_stoptime22,curr_regime_stoptime23,curr_regime_stoptime24,
+      curr_regime_stoptime25,curr_regime_stoptime26,curr_regime_stoptime27,
+      curr_regime_stoptime28,curr_regime_stoptime29,curr_regime_stoptime30,
+      curr_regime_stoptime31,curr_regime_stoptime32,curr_regime_stoptime33,
+      curr_regime_stoptime34,curr_regime_stoptime35,curr_regime_stoptime36,
+      curr_regime_stoptime37
+    ), ~ min(c(...), na.rm = TRUE)),as.POSIXct))
+}
+
+###Check if second agent of combination
+combo_booleans <- function(df) {
+  
+  df <- df %>%
+    unite("all_combo_abs", ab_name,combination_drug2:combination_drug37, sep = "_", remove = FALSE,na.rm=TRUE)
+  
+  df <- df %>% mutate(
+    all_combo_abs = paste0(all_combo_abs,"_end")
+  )
+  
+  df %>% mutate(
+    Ampicillin = case_when(
+      grepl("Ampicillin_",all_combo_abs)|grepl("Ampicillin_end",all_combo_abs) ~ TRUE,
+      TRUE~FALSE),
+    `Ampicillin/sulbactam` = case_when(
+      grepl("Ampicillin/sulbactam",all_combo_abs) ~ TRUE,
+      TRUE~FALSE),
+    `Piperacillin/tazobactam` = case_when(
+      grepl("Piperacillin/tazobactam",all_combo_abs) ~ TRUE,
+      TRUE~FALSE),
+    Cefazolin = case_when(
+      grepl("Cefazolin",all_combo_abs) ~ TRUE,
+      TRUE~FALSE),
+    Ceftriaxone = case_when(
+      grepl("Ceftriaxone",all_combo_abs) ~ TRUE,
+      TRUE~FALSE),
+    Ceftazidime = case_when(
+      grepl("Ceftazidime",all_combo_abs) ~ TRUE,
+      TRUE~FALSE),
+    Cefepime = case_when(
+      grepl("Cefepime",all_combo_abs) ~ TRUE,
+      TRUE~FALSE),
+    Meropenem = case_when(
+      grepl("Meropenem",all_combo_abs) ~ TRUE,
+      TRUE~FALSE),
+    Ciprofloxacin = case_when(
+      grepl("Ciprofloxacin",all_combo_abs) ~ TRUE,
+      TRUE~FALSE),
+    Gentamicin = case_when(
+      grepl("Gentamicin",all_combo_abs) ~ TRUE,
+      TRUE~FALSE),
+    `Trimethoprim/sulfamethoxazole` = case_when(
+      grepl("Trimethoprim/sulfamethoxazole",all_combo_abs) ~ TRUE,
+      TRUE~FALSE),
+    Nitrofurantoin = case_when(
+      grepl("Nitrofurantoin",all_combo_abs) ~ TRUE,
+      TRUE~FALSE),
+    Vancomycin = case_when(
+      grepl("Vancomycin",all_combo_abs) ~ TRUE,
+      TRUE~FALSE)
+  )
+  
+}
+
+###Count number of drugs in combination
+count_drugs <- function(df) {
+  df %>% mutate(drug_count=Ampicillin+`Ampicillin/sulbactam`+
+                  `Piperacillin/tazobactam`+Cefazolin+Ceftriaxone+
+                  Ceftazidime+Cefepime+
+                  Meropenem+Ciprofloxacin+
+                  Gentamicin+`Trimethoprim/sulfamethoxazole`+
+                  Nitrofurantoin+Vancomycin)
+}
+
+###Replace name, starttimes, and stoptimes with combination values
+combo_mutate <- function(df) {
+  df %>%
+    mutate(ab_combination = apply(select(., start_col:end_col), 1, function(row) {
+      true_names <- names(row)[row]
+      str_c(true_names, collapse = "_")
+    }))
+}
+times_amend <- function(df) {
+  df %>% mutate(ab_name=ab_combination,abx_name=ab_combination,
+                starttime=case_when(
+                  !is.na(combo_starttime)~as_datetime(combo_starttime),
+                  TRUE~as_datetime(starttime)
+                ),
+                stoptime=case_when(
+                  !is.na(combo_stoptime)~as_datetime(combo_stoptime),
+                  TRUE~as_datetime(stoptime)
+                )) %>% 
+    select(-(startdate:ab_combination)) %>% select(-all_combo_abs)
+}
+
+###Filtering and binding combinations to full dataset
+dup_remove <- function(df) {
+  df %>% distinct(subject_id,ab_name,as.Date(starttime),.keep_all = T) %>% 
+    select(-`as.Date(starttime)`)
+}
+bind_combos <- function(abx_df,combo_df) {
+  abx_df <- abx_df %>% anti_join(combo_df,by="poe_id")
+  tibble(rbind(abx_df,combo_df)) %>% arrange(subject_id,starttime)
+}
+rowids <- function(df) {
+  df %>% mutate(row_id = seq(1,nrow(df))) %>% 
+    relocate(row_id,.before = "subject_id")
+}
+
+###Make 2-agent combination susceptibilities
+double_sens_columns <- function(df) {
+  
+  for (pair in comb_pairs) {
+    col1 <- df[[pair[1]]]
+    col2 <- df[[pair[2]]]
+    new_col_name <- paste(pair, collapse = "_")
+    df[[new_col_name]] <- ifelse(col1 == 'R' & col2 == 'R', 'R', 'S')
+  }
+  
+  df
+  
+}
+
+###Amending results for chromosomal AmpCs
+AmpC_variable <- function(df) {
+  df %>% mutate(AmpC=case_when(org_fullname %in% ampc_species~TRUE,TRUE~FALSE))
+}
+AmpC_converter <- function(df) {
+  df %>% mutate(
+    AMP=case_when(AmpC~"R",TRUE~AMP),SAM=case_when(AmpC~"R",TRUE~SAM),
+    TZP=case_when(AmpC~"R",TRUE~TZP),CZO=case_when(AmpC~"R",TRUE~CZO),
+    CRO=case_when(AmpC~"R",TRUE~CRO),CAZ=case_when(AmpC~"R",TRUE~CAZ),
+    AMP=case_when(AmpC~"R",TRUE~AMP),AMP_SAM=case_when(AmpC~"R",TRUE~AMP_SAM),
+    AMP_TZP=case_when(AmpC~"R",TRUE~AMP_TZP),AMP_CZO=case_when(AmpC~"R",TRUE~AMP_CZO),
+    AMP_CRO=case_when(AmpC~"R",TRUE~AMP_CRO),AMP_CAZ=case_when(AmpC~"R",TRUE~AMP_CAZ),
+    SAM_TZP=case_when(AmpC~"R",TRUE~SAM_TZP),SAM_CZO=case_when(AmpC~"R",TRUE~SAM_CZO),
+    SAM_CRO=case_when(AmpC~"R",TRUE~SAM_CRO),SAM_CAZ=case_when(AmpC~"R",TRUE~SAM_CAZ),
+    TZP_CZO=case_when(AmpC~"R",TRUE~TZP_CZO),TZP_CRO=case_when(AmpC~"R",TRUE~TZP_CRO),
+    CZO_CAZ=case_when(AmpC~"R",TRUE~CZO_CAZ),CZO_CRO=case_when(AmpC~"R",TRUE~CZO_CRO),
+    CZO_CAZ=case_when(AmpC~"R",TRUE~CZO_CAZ),CRO_CAZ=case_when(AmpC~"R",TRUE~CRO_CAZ)
+  )
+}
+
+###Key generation for triage data and observations
+keymaker <- function(df) {
+  df %>% select(hadm_id,temperature,heartrate,
+                resprate,o2sat,sbp,dbp,
+                chiefcomplaint) %>% 
+    distinct(hadm_id,.keep_all = T)
+  
+}
+
+##Data upload (CSV files accessible at https://physionet.org/content/mimiciv/2.2/)
+
 omr <- read_csv("omr.csv") #Measurements e.g., height, weight
 hadm <- read_csv("admissions.csv") #Admission data
 labevents <- read_csv("labevents.csv") #Laboratory tests (non-micro)
@@ -630,10 +1381,6 @@ urine_df <- micro %>% filter(test_name=="URINE CULTURE" & !is.na(org_fullname)) 
 organisms <- urine_df %>% count(org_fullname) %>% arrange(desc(n)) %>% 
   slice(1:10) %>% pull(org_fullname)
 params <- paste0("pG", organisms,"Urine")
-apply_prev_event <- function(df, param,organism) {
-  df %>%
-    prev_event_type_assign(!!sym(param), urine_df, org_fullname,organism, 365, 1)
-}
 pos_urines <- reduce(seq_along(organisms), function(df, i) {
   apply_prev_event(df, params[i], organisms[i])
 }, .init = pos_urines) %>%
@@ -723,12 +1470,6 @@ pos_urines <- pos_urines %>%
   demographic_assign(language) #Whether the patient speaks English
 
 ###Hospital admission from outpatient location
-outpatient_check <- function(df) {
-  
-  df %>% mutate(admission_location=case_when(is.na(admission_location) ~ "OUTPATIENT",
-                                             TRUE~admission_location))
-  
-}
 hadm_admission <- hadm %>%
   select(hadm_id,admission_location) %>% outpatient_check() %>% 
   mutate(hadm_id = case_when(is.na(hadm_id) ~ 0,
@@ -771,19 +1512,6 @@ pos_urines <- pos_urines %>% left_join(serv_key,by="hadm_id") %>% mutate(
                            TRUE ~ curr_service))
 
 ###At least one measured obese, underweight, or overweight BMI category in the last 3 years
-categorise_bmi <- function(df) {
-  df %>%
-    filter(grepl("BMI", result_name)) %>%
-    mutate(
-      BMI_cat = case_when(
-        as.numeric(result_value) >= 30 ~ "Obese",
-        as.numeric(result_value) >= 25 & as.numeric(result_value) < 30 ~ "Overweight",
-        as.numeric(result_value) >= 18.5 & as.numeric(result_value) < 25 ~ "Normal weight",
-        as.numeric(result_value) < 18.5 ~ "Underweight"
-      ),
-      admittime = as.POSIXct(chartdate, format = '%Y-%m-%d %H:%M:%S')
-    )
-}
 bmi <- categorise_bmi(omr)
 bmi_categories <- c("Obese", "Underweight", "Overweight")
 pos_urines <- assign_bmi_events(pos_urines, bmi, bmi_categories, 1095, 1) %>%
@@ -846,10 +1574,6 @@ ampc_species <- c("Citrobacter braakii","Citrobacter freundii","Citrobacter gill
                   "Hafnia alvei","Klebsiella aerogenes",
                   "Morganella morganii","Providencia",
                   "Serratia marcescens")
-AmpC_variable <- function(df) {
-  df %>% mutate(AmpC=case_when(org_fullname %in% ampc_species~TRUE,TRUE~FALSE))
-}
-
 urines <- urines %>% AmpC_variable()
 urines_assess <- urines_assess %>% AmpC_variable()
 
@@ -861,6 +1585,10 @@ write_csv(urines, "urines.csv")
 write_csv(urines_ref,"urines_ref.csv")
 write_csv(urines_assess,"urines_assess.csv")
 
+###Dataset for enterococcal sensitivity analysis
+urines_ref2 <- urines_ref %>% filter(!grepl("Enterococcus",org_fullname))
+urines5_ent <- tibble(urines_ref2 %>% ungroup() %>% select(AMP:VAN,pAMPr:org_fullname_Staphylococcus.aureus,AmpC))
+
 ##Main binomial analysis model development dataset
 
 ###Split off dataset from stem
@@ -868,51 +1596,27 @@ urines5 <- urines
 
 ###Select only variables to be used for model development
 urines5 <- urines5 %>% select(1:pTPN,AmpC)
+urines5_ent <- urines5_ent %>% select(1:pTPN,AmpC)
 
 ###Binarise AST results
 urines5 <- urines5 %>% binarise_full_df("R","S")
+urines5_ent <- urines5_ent %>% binarise_full_df("R","S")
 
 ###Make 2-agent combination susceptibilities from urines and ur_util dataframes
 columns <- c("AMP", "SAM", "TZP", "CZO", "CRO", "CAZ", "FEP", "MEM", "CIP", "GEN", "SXT", "NIT", "VAN")
 comb_pairs <- combn(columns, 2, simplify = FALSE)
-
-double_sens_columns <- function(df) {
-  
-  for (pair in comb_pairs) {
-    col1 <- df[[pair[1]]]
-    col2 <- df[[pair[2]]]
-    new_col_name <- paste(pair, collapse = "_")
-    df[[new_col_name]] <- ifelse(col1 == 'R' & col2 == 'R', 'R', 'S')
-  }
-  
-  df
-  
-}
-
 ur_util <- ur_util %>% double_sens_columns()
 urines5 <- urines5 %>% double_sens_columns()
+urines5_ent <- urines5_ent %>% double_sens_columns()
 
 ###AmpC conversion
-AmpC_converter <- function(df) {
-df %>% mutate(
-  AMP=case_when(AmpC~"R",TRUE~AMP),SAM=case_when(AmpC~"R",TRUE~SAM),
-  TZP=case_when(AmpC~"R",TRUE~TZP),CZO=case_when(AmpC~"R",TRUE~CZO),
-  CRO=case_when(AmpC~"R",TRUE~CRO),CAZ=case_when(AmpC~"R",TRUE~CAZ),
-  AMP=case_when(AmpC~"R",TRUE~AMP),AMP_SAM=case_when(AmpC~"R",TRUE~AMP_SAM),
-  AMP_TZP=case_when(AmpC~"R",TRUE~AMP_TZP),AMP_CZO=case_when(AmpC~"R",TRUE~AMP_CZO),
-  AMP_CRO=case_when(AmpC~"R",TRUE~AMP_CRO),AMP_CAZ=case_when(AmpC~"R",TRUE~AMP_CAZ),
-  SAM_TZP=case_when(AmpC~"R",TRUE~SAM_TZP),SAM_CZO=case_when(AmpC~"R",TRUE~SAM_CZO),
-  SAM_CRO=case_when(AmpC~"R",TRUE~SAM_CRO),SAM_CAZ=case_when(AmpC~"R",TRUE~SAM_CAZ),
-  TZP_CZO=case_when(AmpC~"R",TRUE~TZP_CZO),TZP_CRO=case_when(AmpC~"R",TRUE~TZP_CRO),
-  CZO_CAZ=case_when(AmpC~"R",TRUE~CZO_CAZ),CZO_CRO=case_when(AmpC~"R",TRUE~CZO_CRO),
-  CZO_CAZ=case_when(AmpC~"R",TRUE~CZO_CAZ),CRO_CAZ=case_when(AmpC~"R",TRUE~CRO_CAZ)
-)
-}
 ur_util <- ur_util %>% AmpC_converter()
 urines5 <- urines5 %>% AmpC_converter() %>% select(-AmpC)
+urines5_ent <- urines5_ent %>% AmpC_converter() %>% select(-AmpC)
 
 ###Save to file
 write_csv(urines5,"urines5.csv")
+write_csv(urines5_ent,"urines5_ent.csv")
 write_csv(ur_util,"ur_util.csv")
 
 ##Training and testing prediction model
@@ -928,6 +1632,10 @@ write_csv(daily_urines,"daily_urines.csv")
 
 ###Make probability predictions
 reticulate::source_python("/Users/alexhoward/Documents/Projects/UDAST_code//UF_Prediction_run.py")
+
+###Probability predictions minus Enterococcus spp.
+reticulate::source_python("/Users/alexhoward/Documents/Projects/UDAST_code//UF_ent_train_test.py")
+reticulate::source_python("/Users/alexhoward/Documents/Projects/UDAST_code//UF_ent_prediction_run.py")
 
 ###Drugs data frames for training and testing weighting models
 abx1 <- drugs %>% filter(grepl(
@@ -1313,13 +2021,6 @@ staykey <- edstays %>% select(hadm_id,stay_id) %>%
   distinct(hadm_id,.keep_all = T) %>% filter(!is.na(hadm_id))
 triage <- triage %>% left_join(staykey)
 vitalsign <- vitalsign %>% left_join(staykey)
-keymaker <- function(df) {
-  df %>% select(hadm_id,temperature,heartrate,
-                resprate,o2sat,sbp,dbp,
-                chiefcomplaint) %>% 
-    distinct(hadm_id,.keep_all = T)
-  
-}
 triagekey <- triage %>% keymaker()
 vitalskey <- vitalsign %>% mutate(chiefcomplaint=NA) %>% keymaker()
 ed_obskey <- tibble(rbind(triagekey,vitalskey))
@@ -1372,735 +2073,57 @@ combos_ref <- abx_ref %>% mutate(startdate=as.Date(starttime)) %>%
   arrange(subject_id,starttime) %>% 
   distinct(subject_id,ab_name,startdate,.keep_all = T)
 
-###Check for stoptime-starttime overlaps
-combocheck <- function(df) {
-  
-df %>%
-  arrange(subject_id, starttime) %>%
-  group_by(subject_id) %>%
-  mutate(combination_drug2 = case_when(
-    starttime < lag(stoptime) &
-      ab_name!=lag(ab_name)~ lag(ab_name),
-    TRUE~NA
-  ),
-  combination_drug3 = case_when(
-    starttime < lag(stoptime,n=2) &
-      ab_name!=lag(ab_name,n=2)~ lag(ab_name,n=2),
-    TRUE~NA
-  ),
-  combination_drug4 = case_when(
-    starttime < lag(stoptime,n=3) &
-      ab_name!=lag(ab_name,n=3)~ lag(ab_name,n=3),
-    TRUE~NA
-  ),
-  combination_drug5 = case_when(
-    starttime < lag(stoptime,n=4) &
-      ab_name!=lag(ab_name,n=4)~ lag(ab_name,n=4),
-    TRUE~NA
-  ),
-  combination_drug6 = case_when(
-    starttime < lag(stoptime,n=5) &
-      ab_name!=lag(ab_name,n=5)~ lag(ab_name,n=5),
-    TRUE~NA
-  ),
-  combination_drug7 = case_when(
-    starttime < lag(stoptime,n=6) &
-      ab_name!=lag(ab_name,n=6)~ lag(ab_name,n=6),
-    TRUE~NA
-  ),
-  combination_drug8 = case_when(
-    starttime < lag(stoptime,n=7) &
-      ab_name!=lag(ab_name,n=7)~ lag(ab_name,n=7),
-    TRUE~NA
-  ),
-  combination_drug9 = case_when(
-    starttime < lag(stoptime,n=8) &
-      ab_name!=lag(ab_name,n=8)~ lag(ab_name,n=8),
-    TRUE~NA
-  ),
-  combination_drug10 = case_when(
-    starttime < lag(stoptime,n=9) &
-      ab_name!=lag(ab_name,n=9)~ lag(ab_name,n=9),
-    TRUE~NA
-  ),
-  combination_drug11 = case_when(
-    starttime < lag(stoptime,n=10) &
-      ab_name!=lag(ab_name,n=10)~ lag(ab_name,n=10),
-    TRUE~NA
-  ),
-  combination_drug12 = case_when(
-    starttime < lag(stoptime,n=11) &
-      ab_name!=lag(ab_name,n=11)~ lag(ab_name,n=11),
-    TRUE~NA
-  ),
-  combination_drug13 = case_when(
-    starttime < lag(stoptime,n=12) &
-      ab_name!=lag(ab_name,n=12)~ lag(ab_name,n=12),
-    TRUE~NA
-  ),
-  combination_drug14 = case_when(
-    starttime < lag(stoptime,n=13) &
-      ab_name!=lag(ab_name,n=13)~ lag(ab_name,n=13),
-    TRUE~NA
-  ),
-  combination_drug15 = case_when(
-    starttime < lag(stoptime,n=14) &
-      ab_name!=lag(ab_name,n=14)~ lag(ab_name,n=14),
-    TRUE~NA
-  ),
-  combination_drug16 = case_when(
-    starttime < lag(stoptime,n=15) &
-      ab_name!=lag(ab_name,n=15)~ lag(ab_name,n=15),
-    TRUE~NA
-  ),
-  combination_drug17 = case_when(
-    starttime < lag(stoptime,n=16) &
-      ab_name!=lag(ab_name,n=16)~ lag(ab_name,n=16),
-    TRUE~NA
-  ),
-  combination_drug18 = case_when(
-    starttime < lag(stoptime,n=17) &
-      ab_name!=lag(ab_name,n=17)~ lag(ab_name,n=17),
-    TRUE~NA
-  ),
-  combination_drug19 = case_when(
-    starttime < lag(stoptime,n=18) &
-      ab_name!=lag(ab_name,n=18)~ lag(ab_name,n=18),
-    TRUE~NA
-  ),
-  combination_drug20 = case_when(
-    starttime < lag(stoptime,n=19) &
-      ab_name!=lag(ab_name,n=19)~ lag(ab_name,n=19),
-    TRUE~NA
-  ),
-  combination_drug21 = case_when(
-    starttime < lag(stoptime,n=20) &
-      ab_name!=lag(ab_name,n=20)~ lag(ab_name,n=20),
-    TRUE~NA
-  ),
-  combination_drug22 = case_when(
-    starttime < lag(stoptime,n=21) &
-      ab_name!=lag(ab_name,n=21)~ lag(ab_name,n=21),
-    TRUE~NA
-  ),
-  combination_drug23 = case_when(
-    starttime < lag(stoptime,n=22) &
-      ab_name!=lag(ab_name,n=22)~ lag(ab_name,n=22),
-    TRUE~NA
-  ),
-  combination_drug24 = case_when(
-    starttime < lag(stoptime,n=23) &
-      ab_name!=lag(ab_name,n=23)~ lag(ab_name,n=23),
-    TRUE~NA
-  ),
-  combination_drug25 = case_when(
-    starttime < lag(stoptime,n=24) &
-      ab_name!=lag(ab_name,n=24)~ lag(ab_name,n=24),
-    TRUE~NA
-  ),
-  combination_drug26 = case_when(
-    starttime < lag(stoptime,n=25) &
-      ab_name!=lag(ab_name,n=25)~ lag(ab_name,n=25),
-    TRUE~NA
-  ),
-  combination_drug27 = case_when(
-    starttime < lag(stoptime,n=26) &
-      ab_name!=lag(ab_name,n=26)~ lag(ab_name,n=26),
-    TRUE~NA
-  ),
-  combination_drug28 = case_when(
-    starttime < lag(stoptime,n=27) &
-      ab_name!=lag(ab_name,n=27)~ lag(ab_name,n=27),
-    TRUE~NA
-  ),
-  combination_drug29 = case_when(
-    starttime < lag(stoptime,n=28) &
-      ab_name!=lag(ab_name,n=28)~ lag(ab_name,n=28),
-    TRUE~NA
-  ),
-  combination_drug30 = case_when(
-    starttime < lag(stoptime,n=29) &
-      ab_name!=lag(ab_name,n=29)~ lag(ab_name,n=29),
-    TRUE~NA
-  ),
-  combination_drug31 = case_when(
-    starttime < lag(stoptime,n=30) &
-      ab_name!=lag(ab_name,n=30)~ lag(ab_name,n=30),
-    TRUE~NA
-  ),
-  combination_drug32 = case_when(
-    starttime < lag(stoptime,n=31) &
-      ab_name!=lag(ab_name,n=31)~ lag(ab_name,n=31),
-    TRUE~NA
-  ),
-  combination_drug33 = case_when(
-    starttime < lag(stoptime,n=32) &
-      ab_name!=lag(ab_name,n=32)~ lag(ab_name,n=32),
-    TRUE~NA
-  ),
-  combination_drug34 = case_when(
-    starttime < lag(stoptime,n=33) &
-      ab_name!=lag(ab_name,n=33)~ lag(ab_name,n=33),
-    TRUE~NA
-  ),
-  combination_drug35 = case_when(
-    starttime < lag(stoptime,n=34) &
-      ab_name!=lag(ab_name,n=34)~ lag(ab_name,n=34),
-    TRUE~NA
-  ),
-  combination_drug36 = case_when(
-    starttime < lag(stoptime,n=35) &
-      ab_name!=lag(ab_name,n=35)~ lag(ab_name,n=35),
-    TRUE~NA
-  ),
-  combination_drug37 = case_when(
-    starttime < lag(stoptime,n=36) &
-      ab_name!=lag(ab_name,n=36)~ lag(ab_name,n=36),
-    TRUE~NA
-  )) %>%
-  ungroup()
-  
-}
-
+###Check for combinations
 combos <- combocheck(combos)
 combos_ref <- combocheck(combos_ref)
-
-###Filter by combination agents, and overlapping single agents
-
-combodrugcheck <- function(df) {
-  
-  df %>% group_by(subject_id) %>% 
-    mutate(
-      combo_agent = case_when(
-        any(!is.na(combination_drug2))|
-          any(!is.na(combination_drug3))|
-          any(!is.na(combination_drug4))|
-          any(!is.na(combination_drug5))|
-          any(!is.na(combination_drug6))|
-          any(!is.na(combination_drug7))|
-          any(!is.na(combination_drug8))|
-          any(!is.na(combination_drug9))|
-          any(!is.na(combination_drug10))|
-          any(!is.na(combination_drug11))|
-          any(!is.na(combination_drug12))|
-          any(!is.na(combination_drug13))|
-          any(!is.na(combination_drug14))|
-          any(!is.na(combination_drug15))|
-          any(!is.na(combination_drug16))|
-          any(!is.na(combination_drug17))|
-          any(!is.na(combination_drug18))|
-          any(!is.na(combination_drug19))|
-          any(!is.na(combination_drug20))|
-          any(!is.na(combination_drug21))|
-          any(!is.na(combination_drug22))|
-          any(!is.na(combination_drug23))|
-          any(!is.na(combination_drug24))|
-          any(!is.na(combination_drug25))|
-          any(!is.na(combination_drug26))|
-          any(!is.na(combination_drug27))|
-          any(!is.na(combination_drug28))|
-          any(!is.na(combination_drug29))|
-          any(!is.na(combination_drug30))|
-          any(!is.na(combination_drug31))|
-          any(!is.na(combination_drug32))|
-          any(!is.na(combination_drug33))|
-          any(!is.na(combination_drug34))|
-          any(!is.na(combination_drug35))|
-          any(!is.na(combination_drug36))|
-          any(!is.na(combination_drug37))~ TRUE,
-        TRUE~FALSE
-      )
-    ) %>% ungroup()
-  
-}
-
 combos <- combodrugcheck(combos) %>% filter(combo_agent)
 combos_ref <- combodrugcheck(combos_ref) %>% filter(combo_agent)
-
 write_csv(combos,"combos.csv")
 
 ###Prior agent start and stop times
-prior_agent_stoptimes <- function(df) {
-  
-  df %>%
-    arrange(subject_id, starttime) %>%
-    group_by(subject_id) %>%
-    mutate(prioragent_stoptime2 = case_when(
-      !is.na(combination_drug2)~lag(stoptime),
-      TRUE~NA
-    ),
-    prioragent_stoptime3 = case_when(
-      !is.na(combination_drug3)~lag(stoptime,n=2),
-      TRUE~NA
-    ),
-    prioragent_stoptime4 = case_when(
-      !is.na(combination_drug4)~lag(stoptime,n=3),
-      TRUE~NA
-    ),
-    prioragent_stoptime5 = case_when(
-      !is.na(combination_drug5)~lag(stoptime,n=4),
-      TRUE~NA
-    ),
-    prioragent_stoptime6 = case_when(
-      !is.na(combination_drug6)~lag(stoptime,n=5),
-      TRUE~NA
-    ),
-    prioragent_stoptime7 = case_when(
-      !is.na(combination_drug7)~lag(stoptime,n=6),
-      TRUE~NA
-    ),
-    prioragent_stoptime8 = case_when(
-      !is.na(combination_drug8)~lag(stoptime,n=7),
-      TRUE~NA
-    ),
-    prioragent_stoptime9 = case_when(
-      !is.na(combination_drug9)~lag(stoptime,n=8),
-      TRUE~NA
-    ),
-    prioragent_stoptime10 = case_when(
-      !is.na(combination_drug10)~lag(stoptime,n=9),
-      TRUE~NA
-    ),
-    prioragent_stoptime11 = case_when(
-      !is.na(combination_drug11)~lag(stoptime,n=10),
-      TRUE~NA
-    ),
-    prioragent_stoptime12 = case_when(
-      !is.na(combination_drug12)~lag(stoptime,n=11),
-      TRUE~NA
-    ),
-    prioragent_stoptime13 = case_when(
-      !is.na(combination_drug13)~lag(stoptime,n=12),
-      TRUE~NA
-    ),
-    prioragent_stoptime14 = case_when(
-      !is.na(combination_drug14)~lag(stoptime,n=13),
-      TRUE~NA
-    ),
-    prioragent_stoptime15 = case_when(
-      !is.na(combination_drug15)~lag(stoptime,n=14),
-      TRUE~NA
-    ),
-    prioragent_stoptime16 = case_when(
-      !is.na(combination_drug16)~lag(stoptime,n=15),
-      TRUE~NA
-    ),
-    prioragent_stoptime17 = case_when(
-      !is.na(combination_drug17)~lag(stoptime,n=16),
-      TRUE~NA
-    ),
-    prioragent_stoptime18 = case_when(
-      !is.na(combination_drug18)~lag(stoptime,n=17),
-      TRUE~NA
-    ),
-    prioragent_stoptime19 = case_when(
-      !is.na(combination_drug19)~lag(stoptime,n=18),
-      TRUE~NA
-    ),
-    prioragent_stoptime20 = case_when(
-      !is.na(combination_drug20)~lag(stoptime,n=19),
-      TRUE~NA
-    ),
-    prioragent_stoptime21 = case_when(
-      !is.na(combination_drug21)~lag(stoptime,n=20),
-      TRUE~NA
-    ),
-    prioragent_stoptime22 = case_when(
-      !is.na(combination_drug22)~lag(stoptime,n=21),
-      TRUE~NA
-    ),
-    prioragent_stoptime23 = case_when(
-      !is.na(combination_drug23)~lag(stoptime,n=22),
-      TRUE~NA
-    ),
-    prioragent_stoptime24 = case_when(
-      !is.na(combination_drug24)~lag(stoptime,n=23),
-      TRUE~NA
-    ),
-    prioragent_stoptime25 = case_when(
-      !is.na(combination_drug25)~lag(stoptime,n=24),
-      TRUE~NA
-    ),
-    prioragent_stoptime26 = case_when(
-      !is.na(combination_drug26)~lag(stoptime,n=25),
-      TRUE~NA
-    ),
-    prioragent_stoptime27 = case_when(
-      !is.na(combination_drug27)~lag(stoptime,n=26),
-      TRUE~NA
-    ),
-    prioragent_stoptime28 = case_when(
-      !is.na(combination_drug28)~lag(stoptime,n=27),
-      TRUE~NA
-    ),
-    prioragent_stoptime29 = case_when(
-      !is.na(combination_drug29)~lag(stoptime,n=28),
-      TRUE~NA
-    ),
-    prioragent_stoptime30 = case_when(
-      !is.na(combination_drug30)~lag(stoptime,n=29),
-      TRUE~NA
-    ),
-    prioragent_stoptime31 = case_when(
-      !is.na(combination_drug31)~lag(stoptime,n=30),
-      TRUE~NA
-    ),
-    prioragent_stoptime32 = case_when(
-      !is.na(combination_drug32)~lag(stoptime,n=31),
-      TRUE~NA
-    ),
-    prioragent_stoptime33 = case_when(
-      !is.na(combination_drug33)~lag(stoptime,n=32),
-      TRUE~NA
-    ),
-    prioragent_stoptime34 = case_when(
-      !is.na(combination_drug34)~lag(stoptime,n=33),
-      TRUE~NA
-    ),
-    prioragent_stoptime35 = case_when(
-      !is.na(combination_drug35)~lag(stoptime,n=34),
-      TRUE~NA
-    ),
-    prioragent_stoptime36 = case_when(
-      !is.na(combination_drug36)~lag(stoptime,n=35),
-      TRUE~NA
-    ),
-    prioragent_stoptime37 = case_when(
-      !is.na(combination_drug37)~lag(stoptime,n=36),
-      TRUE~NA
-    )) %>%
-    ungroup()
-  
-}
-
 combos <- combos %>% prior_agent_stoptimes()
 combos_ref <- combos_ref %>% prior_agent_stoptimes()
-
-starttime_check <- function(df) {
-
-df %>%
-  mutate(combo_starttime = map_dbl(pmap(list(
-    starttime,prioragent_stoptime2,prioragent_stoptime3,
-    prioragent_stoptime4,prioragent_stoptime5,prioragent_stoptime6,
-    prioragent_stoptime7,prioragent_stoptime8,prioragent_stoptime9,
-    prioragent_stoptime10,prioragent_stoptime11,prioragent_stoptime12,
-    prioragent_stoptime13,prioragent_stoptime14,prioragent_stoptime15,
-    prioragent_stoptime16,prioragent_stoptime17,prioragent_stoptime18,
-    prioragent_stoptime19,prioragent_stoptime20,prioragent_stoptime21,
-    prioragent_stoptime22,prioragent_stoptime23,prioragent_stoptime24,
-    prioragent_stoptime25,prioragent_stoptime26,prioragent_stoptime27,
-    prioragent_stoptime28,prioragent_stoptime29,prioragent_stoptime30,
-    prioragent_stoptime31,prioragent_stoptime32,prioragent_stoptime33,
-    prioragent_stoptime34,prioragent_stoptime35,prioragent_stoptime36,
-    prioragent_stoptime37
-  ), ~ min(c(...), na.rm = TRUE)),as.POSIXct))
-}
 combos <- combos %>% starttime_check()
 combos <- combos %>% mutate(combo_starttime=as_datetime(combo_starttime))
 combos_ref <- combos_ref %>% starttime_check()
 combos_ref <- combos_ref %>% mutate(combo_starttime=as_datetime(combo_starttime))
 
 ###Stoptime of current regime
-
-curr_regime_stoptimes <- function(df) {
-  
-  df %>%
-    arrange(subject_id, starttime) %>%
-    group_by(subject_id) %>%
-    mutate(curr_regime_stoptime2 = case_when(
-      !is.na(lead(combination_drug2))~lead(starttime),
-      TRUE~NA
-    ),
-    curr_regime_stoptime3 = case_when(
-      !is.na(lead(combination_drug3))~lead(starttime,n=2),
-      TRUE~NA
-    ),
-    curr_regime_stoptime4 = case_when(
-      !is.na(lead(combination_drug4))~lead(starttime,n=3),
-      TRUE~NA
-    ),
-    curr_regime_stoptime5 = case_when(
-      !is.na(lead(combination_drug5))~lead(starttime,n=4),
-      TRUE~NA
-    ),
-    curr_regime_stoptime6 = case_when(
-      !is.na(lead(combination_drug6))~lead(starttime,n=5),
-      TRUE~NA
-    ),
-    curr_regime_stoptime7 = case_when(
-      !is.na(lead(combination_drug7))~lead(starttime,n=6),
-      TRUE~NA
-    ),
-    curr_regime_stoptime8 = case_when(
-      !is.na(lead(combination_drug8))~lead(starttime,n=7),
-      TRUE~NA
-    ),
-    curr_regime_stoptime9 = case_when(
-      !is.na(lead(combination_drug9))~lead(starttime,n=8),
-      TRUE~NA
-    ),
-    curr_regime_stoptime10 = case_when(
-      !is.na(lead(combination_drug10))~lead(starttime,n=9),
-      TRUE~NA
-    ),
-    curr_regime_stoptime11 = case_when(
-      !is.na(lead(combination_drug11))~lead(starttime,n=10),
-      TRUE~NA
-    ),
-    curr_regime_stoptime12 = case_when(
-      !is.na(lead(combination_drug12))~lead(starttime,n=11),
-      TRUE~NA
-    ),
-    curr_regime_stoptime13 = case_when(
-      !is.na(lead(combination_drug13))~lead(starttime,n=12),
-      TRUE~NA
-    ),
-    curr_regime_stoptime14 = case_when(
-      !is.na(lead(combination_drug14))~lead(starttime,n=13),
-      TRUE~NA
-    ),
-    curr_regime_stoptime15 = case_when(
-      !is.na(lead(combination_drug15))~lead(starttime,n=14),
-      TRUE~NA
-    ),
-    curr_regime_stoptime16 = case_when(
-      !is.na(lead(combination_drug16))~lead(starttime,n=15),
-      TRUE~NA
-    ),
-    curr_regime_stoptime17 = case_when(
-      !is.na(lead(combination_drug17))~lead(starttime,n=16),
-      TRUE~NA
-    ),
-    curr_regime_stoptime18 = case_when(
-      !is.na(lead(combination_drug18))~lead(starttime,n=17),
-      TRUE~NA
-    ),
-    curr_regime_stoptime19 = case_when(
-      !is.na(lead(combination_drug19))~lead(starttime,n=18),
-      TRUE~NA
-    ),
-    curr_regime_stoptime20 = case_when(
-      !is.na(lead(combination_drug20))~lead(starttime,n=19),
-      TRUE~NA
-    ),
-    curr_regime_stoptime21 = case_when(
-      !is.na(lead(combination_drug21))~lead(starttime,n=20),
-      TRUE~NA
-    ),
-    curr_regime_stoptime22 = case_when(
-      !is.na(lead(combination_drug22))~lead(starttime,n=21),
-      TRUE~NA
-    ),
-    curr_regime_stoptime23 = case_when(
-      !is.na(lead(combination_drug23))~lead(starttime,n=22),
-      TRUE~NA
-    ),
-    curr_regime_stoptime24 = case_when(
-      !is.na(lead(combination_drug24))~lead(starttime,n=23),
-      TRUE~NA
-    ),
-    curr_regime_stoptime25 = case_when(
-      !is.na(lead(combination_drug25))~lead(starttime,n=24),
-      TRUE~NA
-    ),
-    curr_regime_stoptime26 = case_when(
-      !is.na(lead(combination_drug26))~lead(starttime,n=25),
-      TRUE~NA
-    ),
-    curr_regime_stoptime27 = case_when(
-      !is.na(lead(combination_drug27))~lead(starttime,n=26),
-      TRUE~NA
-    ),
-    curr_regime_stoptime28 = case_when(
-      !is.na(lead(combination_drug28))~lead(starttime,n=27),
-      TRUE~NA
-    ),
-    curr_regime_stoptime29 = case_when(
-      !is.na(lead(combination_drug29))~lead(starttime,n=28),
-      TRUE~NA
-    ),
-    curr_regime_stoptime30 = case_when(
-      !is.na(lead(combination_drug30))~lead(starttime,n=29),
-      TRUE~NA
-    ),
-    curr_regime_stoptime31 = case_when(
-      !is.na(lead(combination_drug31))~lead(starttime,n=30),
-      TRUE~NA
-    ),
-    curr_regime_stoptime32 = case_when(
-      !is.na(lead(combination_drug32))~lead(starttime,n=31),
-      TRUE~NA
-    ),
-    curr_regime_stoptime33 = case_when(
-      !is.na(lead(combination_drug33))~lead(starttime,n=32),
-      TRUE~NA
-    ),
-    curr_regime_stoptime34 = case_when(
-      !is.na(lead(combination_drug34))~lead(starttime,n=33),
-      TRUE~NA
-    ),
-    curr_regime_stoptime35 = case_when(
-      !is.na(lead(combination_drug35))~lead(starttime,n=34),
-      TRUE~NA
-    ),
-    curr_regime_stoptime36 = case_when(
-      !is.na(lead(combination_drug36))~lead(starttime,n=35),
-      TRUE~NA
-    ),
-    curr_regime_stoptime37 = case_when(
-      !is.na(lead(combination_drug37))~lead(starttime,n=36),
-      TRUE~NA
-    )) %>%
-    ungroup()
-  
-}
-
 combos <- combos %>% curr_regime_stoptimes()
 combos_ref <- combos_ref %>% curr_regime_stoptimes()
-
-stoptime_check <- function(df) {
-df %>%
-  mutate(combo_stoptime = map_dbl(pmap(list(
-    stoptime,curr_regime_stoptime2,curr_regime_stoptime3,
-    curr_regime_stoptime4,curr_regime_stoptime5,curr_regime_stoptime6,
-    curr_regime_stoptime7,curr_regime_stoptime8,curr_regime_stoptime9,
-    curr_regime_stoptime10,curr_regime_stoptime11,curr_regime_stoptime12,
-    curr_regime_stoptime13,curr_regime_stoptime14,curr_regime_stoptime15,
-    curr_regime_stoptime16,curr_regime_stoptime17,curr_regime_stoptime18,
-    curr_regime_stoptime19,curr_regime_stoptime20,curr_regime_stoptime21,
-    curr_regime_stoptime22,curr_regime_stoptime23,curr_regime_stoptime24,
-    curr_regime_stoptime25,curr_regime_stoptime26,curr_regime_stoptime27,
-    curr_regime_stoptime28,curr_regime_stoptime29,curr_regime_stoptime30,
-    curr_regime_stoptime31,curr_regime_stoptime32,curr_regime_stoptime33,
-    curr_regime_stoptime34,curr_regime_stoptime35,curr_regime_stoptime36,
-    curr_regime_stoptime37
-  ), ~ min(c(...), na.rm = TRUE)),as.POSIXct))
-}
 combos <- combos %>% stoptime_check()
 combos <- combos %>% mutate(combo_stoptime=as_datetime(combo_stoptime))
 combos_ref <- combos_ref %>% stoptime_check()
 combos_ref <- combos_ref %>% mutate(combo_stoptime=as_datetime(combo_stoptime))
 
-combo_booleans <- function(df) {
-  
-  df <- df %>%
-    unite("all_combo_abs", ab_name,combination_drug2:combination_drug37, sep = "_", remove = FALSE,na.rm=TRUE)
-  
-  df <- df %>% mutate(
-    all_combo_abs = paste0(all_combo_abs,"_end")
-  )
-  
-  df %>% mutate(
-    Ampicillin = case_when(
-      grepl("Ampicillin_",all_combo_abs)|grepl("Ampicillin_end",all_combo_abs) ~ TRUE,
-      TRUE~FALSE),
-    `Ampicillin/sulbactam` = case_when(
-      grepl("Ampicillin/sulbactam",all_combo_abs) ~ TRUE,
-      TRUE~FALSE),
-    `Piperacillin/tazobactam` = case_when(
-      grepl("Piperacillin/tazobactam",all_combo_abs) ~ TRUE,
-      TRUE~FALSE),
-    Cefazolin = case_when(
-      grepl("Cefazolin",all_combo_abs) ~ TRUE,
-      TRUE~FALSE),
-    Ceftriaxone = case_when(
-      grepl("Ceftriaxone",all_combo_abs) ~ TRUE,
-      TRUE~FALSE),
-    Ceftazidime = case_when(
-      grepl("Ceftazidime",all_combo_abs) ~ TRUE,
-      TRUE~FALSE),
-    Cefepime = case_when(
-      grepl("Cefepime",all_combo_abs) ~ TRUE,
-      TRUE~FALSE),
-    Meropenem = case_when(
-      grepl("Meropenem",all_combo_abs) ~ TRUE,
-      TRUE~FALSE),
-    Ciprofloxacin = case_when(
-      grepl("Ciprofloxacin",all_combo_abs) ~ TRUE,
-      TRUE~FALSE),
-    Gentamicin = case_when(
-      grepl("Gentamicin",all_combo_abs) ~ TRUE,
-      TRUE~FALSE),
-    `Trimethoprim/sulfamethoxazole` = case_when(
-      grepl("Trimethoprim/sulfamethoxazole",all_combo_abs) ~ TRUE,
-      TRUE~FALSE),
-    Nitrofurantoin = case_when(
-      grepl("Nitrofurantoin",all_combo_abs) ~ TRUE,
-      TRUE~FALSE),
-    Vancomycin = case_when(
-      grepl("Vancomycin",all_combo_abs) ~ TRUE,
-      TRUE~FALSE)
-    )
-  
-}
-
+###Check if second agent of combination
 combos <- combos %>% combo_booleans()
 combos_ref <- combos_ref %>% combo_booleans()
 
-count_drugs <- function(df) {
-df %>% mutate(drug_count=Ampicillin+`Ampicillin/sulbactam`+
-                   `Piperacillin/tazobactam`+Cefazolin+Ceftriaxone+
-                   Ceftazidime+Cefepime+
-                   Meropenem+Ciprofloxacin+
-                   Gentamicin+`Trimethoprim/sulfamethoxazole`+
-                   Nitrofurantoin+Vancomycin)
-}
+###Count number of drugs in combination
 combos <- combos %>% count_drugs()
 combos_ref <- combos_ref %>% count_drugs()
-
 start_col <- "Ampicillin"
 end_col <- "Vancomycin"
 
-combo_mutate <- function(df) {
-df %>%
-  mutate(ab_combination = apply(select(., start_col:end_col), 1, function(row) {
-    true_names <- names(row)[row]
-    str_c(true_names, collapse = "_")
-  }))
-}
+###Replace name, starttimes, and stoptimes with combination values
 combos <- combos %>% combo_mutate()
 combos_ref <- combos_ref %>% combo_mutate()
 write_csv(combos,"combos.csv")
-
-###Amend ab_names, regime times
-times_amend <- function(df) {
-df %>% mutate(ab_name=ab_combination,abx_name=ab_combination,
-                            starttime=case_when(
-                              !is.na(combo_starttime)~as_datetime(combo_starttime),
-                              TRUE~as_datetime(starttime)
-                            ),
-                            stoptime=case_when(
-                              !is.na(combo_stoptime)~as_datetime(combo_stoptime),
-                              TRUE~as_datetime(stoptime)
-                            )) %>% 
-  select(-(startdate:ab_combination)) %>% select(-all_combo_abs)
-}
 combos <- combos %>% times_amend()
 combos_ref <- combos_ref %>% times_amend()
 
 ##Preprocessing for utility function
 
 ###Remove same-day antimicrobial startdate duplicates
-dup_remove <- function(df) {
-df %>% distinct(subject_id,ab_name,as.Date(starttime),.keep_all = T) %>% 
-    select(-`as.Date(starttime)`)
-}
 abx <- abx %>% dup_remove()
 abx_ref <- abx_ref %>% dup_remove()
 
 ###Amend abx dataframe to include combinations
-bind_combos <- function(abx_df,combo_df) {
-abx_df <- abx_df %>% anti_join(combo_df,by="poe_id")
-tibble(rbind(abx_df,combo_df)) %>% arrange(subject_id,starttime)
-}
 abx <- abx %>% bind_combos(combos)
 abx_ref <- abx_ref %>% bind_combos(combos_ref)
 
 ###Attach row ids
-rowids <- function(df) {
-df %>% mutate(row_id = seq(1,nrow(df))) %>% 
-  relocate(row_id,.before = "subject_id")
-}
 abx <- abx %>% rowids()
 abx_ref <- abx_ref %>% rowids()
 
