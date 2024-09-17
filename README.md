@@ -25,5 +25,5 @@ Before running the code, the data and *Python* files should be saved into a secu
    b. **UF_cleaning.R**  
    c. **UF_prediction&preprocessing.R**  
    d. **UF_utility_calculations.R**  
-   e. **UF_recommendations.R**
+   e. **UF_recommendations.R**  
    f. **UF_microsimulation.R**
