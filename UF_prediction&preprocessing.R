@@ -391,7 +391,7 @@ lft_check <- function(df) {
 toxicity_check <- function(df) {
   
   df %>% mutate(overall_tox = case_when(
-    AKI==TRUE|marrow_suppress==TRUE|deranged_lfts==TRUE ~TRUE, TRUE~FALSE
+    AKI==TRUE|marrow_suppress==TRUE|deranged_lfts==TRUE|abx_ae==TRUE ~TRUE, TRUE~FALSE
   ))
   
 }
@@ -1982,6 +1982,14 @@ ur_util <- ur_util %>% bil_proc_join()
 abx <- abx %>% lft_check()
 ur_util <- ur_util %>% lft_check()
 
+###Check for unspecified adverse reactions
+allerg_key <- d_icd_diagnoses %>% filter(grepl("antibiot",long_title,ignore.case=T)) %>%
+  filter(grepl("adverse",long_title,ignore.case=T)) %>% select(icd_code,icd_version)
+allerg_diags <- diagnoses %>% semi_join(allerg_key) %>% distinct(hadm_id) %>% 
+  mutate(abx_ae = TRUE)
+abx <- abx %>% left_join(allerg_diags) %>% mutate(abx_ae=case_when(abx_ae=TRUE~abx_ae,TRUE~FALSE))
+ur_util <- ur_util %>% left_join(allerg_diags) %>% mutate(abx_ae=case_when(abx_ae=TRUE~abx_ae,TRUE~FALSE))
+
 ##Check for overall toxicity
 
 abx <- abx %>% toxicity_check()
@@ -2140,7 +2148,7 @@ abx <- abx %>% filter(abx_name%in%common_combos)
 abx <- abx %>% mutate(combo_24h = case_when(as.numeric(stoptime-starttime) > 1~TRUE,
                       TRUE~FALSE)) %>% filter(combo_24h)
 
-###Re-engineer antimicrobial dummy variables##combo_24h#Re-engineer antimicrobial dummy variables
+###Re-engineer antimicrobial dummy variables#
 abx <- abx %>% select(-(abx_name_Ampicillin.sulbactam:abx_name_Ampicillin))
 recipethis <- recipe(~abx_name,data=abx)
 dummies <- recipethis %>% step_dummy(abx_name) %>% prep(training = abx)
