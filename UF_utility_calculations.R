@@ -1,4 +1,4 @@
-#RECOMMENDATION FUNCTION
+#UTILITY CALCULATIONS
 
 ##Functions
 
@@ -16,6 +16,8 @@ calculate_utilities <- function(df,formulary_list=NULL) {
                                      util_uti + util_access +
                                      util_oral + util_iv +
                                      util_reserve + util_highcost,
+                      R_penalty=(R*(prob_sepsisae - util_CDI -
+                                      util_tox)),
                 S_utility = S*overall_util,
                 ent_S_utility = ent_S*overall_util,
                 AMPR_utility = case_when(
@@ -91,8 +93,8 @@ calculate_utilities <- function(df,formulary_list=NULL) {
                   NITR_utility +
                   VANR_utility +
                   Formulary_utility)*single_agent,
-                Rx_utility = (overall_util * S) -
-                  (R*(prob_sepsisae-util_CDI + util_tox)),
+                Rx_utility = S_utility -
+                  R_penalty,
                 ent_AMPR_utility = case_when(
                   Antimicrobial=="Ampicillin" ~
                     AMP_R_value*ent_R, TRUE~0
@@ -167,7 +169,8 @@ calculate_utilities <- function(df,formulary_list=NULL) {
                                  ent_VANR_utility +
                                  ent_Formulary_utility)*single_agent,
                 ent_Rx_utility = (overall_util * ent_S) -
-                  (ent_R*prob_sepsisae))
+                  (ent_R*(prob_sepsisae - util_CDI -
+                     util_tox)))
   
   df %>% 
     mutate(
@@ -208,7 +211,7 @@ utility_plot <- function(df, variable,application,modification="") {
     
   } else if (application=="AST") {
     
-    df <- df %>% filter(AST_utility != min(AST_utility))
+    df <- df %>% filter(AST_utility != min(AST_utility) & single_agent)
     
   }
   
@@ -228,7 +231,8 @@ utility_plot <- function(df, variable,application,modification="") {
                                               summarise(Median_util=median(!!variable)) %>% 
                                               arrange(Median_util) %>% select(Antimicrobial) %>% unlist())), 
                      aes(x=!!variable,y=Antimicrobial,fill=Antimicrobial)) +
-    geom_boxplot() +
+    geom_boxplot(outlier.color = NULL,
+                 outlier.alpha = 0.3) +
     theme_minimal() +
     theme(legend.position = "None",axis.text.y = element_text(
       colour = axiscols))+
@@ -296,12 +300,15 @@ dens_sens <- function(df,probs_df,uf) {
     a <- 0.5
     b <- 18.5
     
+    probs_df_2 <- probs_df
+    probs_df_3 <- probs_df
+    
     for(i in 1:9) {
       
-      densy <- probs_df %>% dens_check(iterabs[j],R,a,b)
+      densy <- probs_df_2 %>% dens_check(iterabs[j],R,a,b)
       print(densy)
       
-      sens_df <- probs_df %>% dist_replace(df,iterabs[j],"R","S",a,b) %>%
+      sens_df <- probs_df_3 %>% dist_replace(df,iterabs[j],"R","S",a,b) %>%
         calculate_utilities()
       
       overall_median <- round(median(sens_df %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
@@ -333,7 +340,9 @@ dens_sens <- function(df,probs_df,uf) {
 }
 
 ###Data visualisation of resistance probability sensitivity analysis
-dens_sens_plot <- function(df,measure) {
+dens_sens_plot <- function(df,measure,uf) {
+  
+  uf <- enquo(uf)
   
   iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
   
@@ -349,6 +358,10 @@ dens_sens_plot <- function(df,measure) {
                                       lower_iqr=best_ut,
                                       upper_iqr=best_ut)
   df_spec_plot <- data.frame(rbind(df_spec_plot,med_plot,best_plot))
+  
+  df_spec_plot$Antimicrobial <- factor(df_spec_plot$Antimicrobial,
+                                       levels=c("All antimicrobials","Best antimicrobial",
+                                                iterabs[i]))
   
   df_plot <- ggplot(df_spec_plot, aes(x = r_prob)) +
     geom_line(aes(y = as.numeric(med_util), group = Antimicrobial, color = Antimicrobial)) +
@@ -377,28 +390,29 @@ uti_util_sens <- function(df,probs_df,uf) {
   
   uf <- enquo(uf)
   
-  util_cum <- data.frame(matrix(nrow = 0,ncol=6))
-  colnames(sens_cum) <- c("med_util","lower_iqr","upper_iqr","spec_value","overall_med","Antimicrobial")
+  util_cum <- data.frame(matrix(nrow = 0,ncol=7))
+  colnames(util_cum) <- c("med_util","best_ut","lower_iqr","upper_iqr","spec_value","overall_med","Antimicrobial")
   iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
   probs_df <- probs_df %>% filter(Antimicrobial %in% iterabs)
   
   for (j in seq_along(iterabs)) {
     
     a <- -1
+    probs_df_2 <- probs_df
     
     for(i in 1:9) {
       
-      cdi_util_probs <- predict(underlying_cdi, probs_df,type="response")
+      cdi_util_probs <- predict(underlying_cdi, probs_df_2,type="response")
       cdi_value <- scores[rownames(scores)=="CDI_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ###Toxicity risk utility
-      tox_util_probs <- predict(underlying_tox, probs_df,type="response")
+      tox_util_probs <- predict(underlying_tox, probs_df_2,type="response")
       tox_value <- scores[rownames(scores)=="Toxicity_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ####Sepsis adverse outcome risk utility
-      sepsis_util_probs <- predict(underlying_sepsis, probs_df,type="response")
+      sepsis_util_probs <- predict(underlying_sepsis, probs_df_2,type="response")
       
       ###UTI-specific utility
       uti_specifics <- c("Nitrofurantoin")
@@ -453,7 +467,7 @@ uti_util_sens <- function(df,probs_df,uf) {
         rename(ent_R = "R", ent_S = "S")
       
       ###Attach individual utilities to dataframe
-      probs_df <- probs_df %>% 
+      probs_df_2 <- probs_df_2 %>% 
         mutate(prob_CDI = cdi_util_probs,
                value_CDI = cdi_value,
                util_CDI = prob_CDI * value_CDI,
@@ -482,22 +496,27 @@ uti_util_sens <- function(df,probs_df,uf) {
                single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE))
       
       ###Calculate overall utility score
-      probs_df <- probs_df %>% calculate_utilities()
+      probs_df_2 <- probs_df_2 %>% calculate_utilities()
       
       ###Filter out combination predictions not present in training dataset
       abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
         str_replace_all("/","-")
-      probs_df <- probs_df %>% filter(Antimicrobial %in% abx_in_train)
+      probs_df_2 <- probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
       
       ###Dataframe for formulary agent sensitivity analysis
-      form_probs_df <- probs_df %>% calculate_utilities(
+      form_probs_df_2 <- probs_df_2 %>% calculate_utilities(
         formulary_list = c("Ceftriaxone","Ciprofloxacin"))
-      form_probs_df <- form_probs_df %>% filter(Antimicrobial %in% abx_in_train)
+      form_probs_df_2 <- form_probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
       
-      overall_median <- round(median(probs_df %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
+      overall_median <- round(median(probs_df_2 %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
       
-      util_row <- probs_df %>% filter(Antimicrobial==iterabs[j]) %>% 
+      best_util <- probs_df_2 %>% group_by(Antimicrobial) %>% summarise(
+        abmeds = median(!!uf)) %>% ungroup() %>% 
+        summarise(bestab = max(abmeds)) %>% unlist()
+      
+      util_row <- probs_df_2 %>% filter(Antimicrobial==iterabs[j]) %>% 
         summarise(med_util=median(!!uf),
+                  best_ut=best_util,
                   lower_iqr=quantile(!!uf)[2],
                   upper_iqr=quantile(!!uf)[4],
                   spec_value=a,
@@ -519,28 +538,29 @@ access_util_sens <- function(df,probs_df,uf) {
   
   uf <- enquo(uf)
   
-  util_cum <- data.frame(matrix(nrow = 0,ncol=6))
-  colnames(sens_cum) <- c("med_util","lower_iqr","upper_iqr","spec_value","overall_med","Antimicrobial")
+  util_cum <- data.frame(matrix(nrow = 0,ncol=7))
+  colnames(util_cum) <- c("med_util","best_ut","lower_iqr","upper_iqr","spec_value","overall_med","Antimicrobial")
   iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
   probs_df <- probs_df %>% filter(Antimicrobial %in% iterabs)
   
   for (j in seq_along(iterabs)) {
     
     a <- -1
+    probs_df_2 <- probs_df
     
     for(i in 1:9) {
       
-      cdi_util_probs <- predict(underlying_cdi, probs_df,type="response")
+      cdi_util_probs <- predict(underlying_cdi, probs_df_2,type="response")
       cdi_value <- scores[rownames(scores)=="CDI_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ###Toxicity risk utility
-      tox_util_probs <- predict(underlying_tox, probs_df,type="response")
+      tox_util_probs <- predict(underlying_tox, probs_df_2,type="response")
       tox_value <- scores[rownames(scores)=="Toxicity_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ####Sepsis adverse outcome risk utility
-      sepsis_util_probs <- predict(underlying_sepsis, probs_df,type="response")
+      sepsis_util_probs <- predict(underlying_sepsis, probs_df_2,type="response")
       
       ###UTI-specific utility
       uti_specifics <- c("Nitrofurantoin")
@@ -595,7 +615,7 @@ access_util_sens <- function(df,probs_df,uf) {
         rename(ent_R = "R", ent_S = "S")
       
       ###Attach individual utilities to dataframe
-      probs_df <- probs_df %>% 
+      probs_df_2 <- probs_df_2 %>% 
         mutate(prob_CDI = cdi_util_probs,
                value_CDI = cdi_value,
                util_CDI = prob_CDI * value_CDI,
@@ -624,22 +644,27 @@ access_util_sens <- function(df,probs_df,uf) {
                single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE))
       
       ###Calculate overall utility score
-      probs_df <- probs_df %>% calculate_utilities()
+      probs_df_2 <- probs_df_2 %>% calculate_utilities()
       
       ###Filter out combination predictions not present in training dataset
       abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
         str_replace_all("/","-")
-      probs_df <- probs_df %>% filter(Antimicrobial %in% abx_in_train)
+      probs_df_2 <- probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
       
       ###Dataframe for formulary agent sensitivity analysis
-      form_probs_df <- probs_df %>% calculate_utilities(
+      form_probs_df_2 <- probs_df_2 %>% calculate_utilities(
         formulary_list = c("Ceftriaxone","Ciprofloxacin"))
-      form_probs_df <- form_probs_df %>% filter(Antimicrobial %in% abx_in_train)
+      form_probs_df_2 <- form_probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
       
-      overall_median <- round(median(probs_df %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
+      overall_median <- round(median(probs_df_2 %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
       
-      util_row <- probs_df %>% filter(Antimicrobial==iterabs[j]) %>% 
+      best_util <- probs_df_2 %>% group_by(Antimicrobial) %>% summarise(
+        abmeds = median(!!uf)) %>% ungroup() %>% 
+        summarise(bestab = max(abmeds)) %>% unlist()
+      
+      util_row <- probs_df_2 %>% filter(Antimicrobial==iterabs[j]) %>% 
         summarise(med_util=median(!!uf),
+                  best_ut=best_util,
                   lower_iqr=quantile(!!uf)[2],
                   upper_iqr=quantile(!!uf)[4],
                   spec_value=a,
@@ -661,28 +686,29 @@ oral_util_sens <- function(df,probs_df,uf) {
   
   uf <- enquo(uf)
   
-  util_cum <- data.frame(matrix(nrow = 0,ncol=6))
-  colnames(sens_cum) <- c("med_util","lower_iqr","upper_iqr","spec_value","overall_med","Antimicrobial")
+  util_cum <- data.frame(matrix(nrow = 0,ncol=7))
+  colnames(util_cum) <- c("med_util","best_ut","lower_iqr","upper_iqr","spec_value","overall_med","Antimicrobial")
   iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
   probs_df <- probs_df %>% filter(Antimicrobial %in% iterabs)
   
   for (j in seq_along(iterabs)) {
     
     a <- -1
+    probs_df_2 <- probs_df
     
     for(i in 1:9) {
       
-      cdi_util_probs <- predict(underlying_cdi, probs_df,type="response")
+      cdi_util_probs <- predict(underlying_cdi, probs_df_2,type="response")
       cdi_value <- scores[rownames(scores)=="CDI_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ###Toxicity risk utility
-      tox_util_probs <- predict(underlying_tox, probs_df,type="response")
+      tox_util_probs <- predict(underlying_tox, probs_df_2,type="response")
       tox_value <- scores[rownames(scores)=="Toxicity_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ####Sepsis adverse outcome risk utility
-      sepsis_util_probs <- predict(underlying_sepsis, probs_df,type="response")
+      sepsis_util_probs <- predict(underlying_sepsis, probs_df_2,type="response")
       
       ###UTI-specific utility
       uti_specifics <- c("Nitrofurantoin")
@@ -737,7 +763,7 @@ oral_util_sens <- function(df,probs_df,uf) {
         rename(ent_R = "R", ent_S = "S")
       
       ###Attach individual utilities to dataframe
-      probs_df <- probs_df %>% 
+      probs_df_2 <- probs_df_2 %>% 
         mutate(prob_CDI = cdi_util_probs,
                value_CDI = cdi_value,
                util_CDI = prob_CDI * value_CDI,
@@ -766,22 +792,27 @@ oral_util_sens <- function(df,probs_df,uf) {
                single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE))
       
       ###Calculate overall utility score
-      probs_df <- probs_df %>% calculate_utilities()
+      probs_df_2 <- probs_df_2 %>% calculate_utilities()
       
       ###Filter out combination predictions not present in training dataset
       abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
         str_replace_all("/","-")
-      probs_df <- probs_df %>% filter(Antimicrobial %in% abx_in_train)
+      probs_df_2 <- probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
       
       ###Dataframe for formulary agent sensitivity analysis
-      form_probs_df <- probs_df %>% calculate_utilities(
+      form_probs_df_2 <- probs_df_2 %>% calculate_utilities(
         formulary_list = c("Ceftriaxone","Ciprofloxacin"))
-      form_probs_df <- form_probs_df %>% filter(Antimicrobial %in% abx_in_train)
+      form_probs_df_2 <- form_probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
       
-      overall_median <- round(median(probs_df %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
+      overall_median <- round(median(probs_df_2 %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
       
-      util_row <- probs_df %>% filter(Antimicrobial==iterabs[j]) %>% 
+      best_util <- probs_df_2 %>% group_by(Antimicrobial) %>% summarise(
+        abmeds = median(!!uf)) %>% ungroup() %>% 
+        summarise(bestab = max(abmeds)) %>% unlist()
+      
+      util_row <- probs_df_2 %>% filter(Antimicrobial==iterabs[j]) %>% 
         summarise(med_util=median(!!uf),
+                  best_ut=best_util,
                   lower_iqr=quantile(!!uf)[2],
                   upper_iqr=quantile(!!uf)[4],
                   spec_value=a,
@@ -803,28 +834,29 @@ iv_util_sens <- function(df,probs_df,uf) {
   
   uf <- enquo(uf)
   
-  util_cum <- data.frame(matrix(nrow = 0,ncol=6))
-  colnames(sens_cum) <- c("med_util","lower_iqr","upper_iqr","spec_value","overall_med","Antimicrobial")
+  util_cum <- data.frame(matrix(nrow = 0,ncol=7))
+  colnames(util_cum) <- c("med_util","best_ut","lower_iqr","upper_iqr","spec_value","overall_med","Antimicrobial")
   iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
   probs_df <- probs_df %>% filter(Antimicrobial %in% iterabs)
   
   for (j in seq_along(iterabs)) {
     
     a <- -1
+    probs_df_2 <- probs_df
     
     for(i in 1:9) {
       
-      cdi_util_probs <- predict(underlying_cdi, probs_df,type="response")
+      cdi_util_probs <- predict(underlying_cdi, probs_df_2,type="response")
       cdi_value <- scores[rownames(scores)=="CDI_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ###Toxicity risk utility
-      tox_util_probs <- predict(underlying_tox, probs_df,type="response")
+      tox_util_probs <- predict(underlying_tox, probs_df_2,type="response")
       tox_value <- scores[rownames(scores)=="Toxicity_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ####Sepsis adverse outcome risk utility
-      sepsis_util_probs <- predict(underlying_sepsis, probs_df,type="response")
+      sepsis_util_probs <- predict(underlying_sepsis, probs_df_2,type="response")
       
       ###UTI-specific utility
       uti_specifics <- c("Nitrofurantoin")
@@ -879,7 +911,7 @@ iv_util_sens <- function(df,probs_df,uf) {
         rename(ent_R = "R", ent_S = "S")
       
       ###Attach individual utilities to dataframe
-      probs_df <- probs_df %>% 
+      probs_df_2 <- probs_df_2 %>% 
         mutate(prob_CDI = cdi_util_probs,
                value_CDI = cdi_value,
                util_CDI = prob_CDI * value_CDI,
@@ -908,22 +940,27 @@ iv_util_sens <- function(df,probs_df,uf) {
                single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE))
       
       ###Calculate overall utility score
-      probs_df <- probs_df %>% calculate_utilities()
+      probs_df_2 <- probs_df_2 %>% calculate_utilities()
       
       ###Filter out combination predictions not present in training dataset
       abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
         str_replace_all("/","-")
-      probs_df <- probs_df %>% filter(Antimicrobial %in% abx_in_train)
+      probs_df_2 <- probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
       
       ###Dataframe for formulary agent sensitivity analysis
-      form_probs_df <- probs_df %>% calculate_utilities(
+      form_probs_df_2 <- probs_df_2 %>% calculate_utilities(
         formulary_list = c("Ceftriaxone","Ciprofloxacin"))
-      form_probs_df <- form_probs_df %>% filter(Antimicrobial %in% abx_in_train)
+      form_probs_df_2 <- form_probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
       
-      overall_median <- round(median(probs_df %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
+      overall_median <- round(median(probs_df_2 %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
       
-      util_row <- probs_df %>% filter(Antimicrobial==iterabs[j]) %>% 
+      best_util <- probs_df_2 %>% group_by(Antimicrobial) %>% summarise(
+        abmeds = median(!!uf)) %>% ungroup() %>% 
+        summarise(bestab = max(abmeds)) %>% unlist()
+      
+      util_row <- probs_df_2 %>% filter(Antimicrobial==iterabs[j]) %>% 
         summarise(med_util=median(!!uf),
+                  best_ut=best_util,
                   lower_iqr=quantile(!!uf)[2],
                   upper_iqr=quantile(!!uf)[4],
                   spec_value=a,
@@ -945,28 +982,29 @@ cdi_util_sens <- function(df,probs_df,uf) {
   
   uf <- enquo(uf)
   
-  util_cum <- data.frame(matrix(nrow = 0,ncol=6))
-  colnames(sens_cum) <- c("med_util","lower_iqr","upper_iqr","spec_value","overall_med","Antimicrobial")
+  util_cum <- data.frame(matrix(nrow = 0,ncol=7))
+  colnames(util_cum) <- c("med_util","best_ut","lower_iqr","upper_iqr","spec_value","overall_med","Antimicrobial")
   iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
   probs_df <- probs_df %>% filter(Antimicrobial %in% iterabs)
   
   for (j in seq_along(iterabs)) {
     
     a <- -1
+    probs_df_2 <- probs_df
     
     for(i in 1:9) {
       
-      cdi_util_probs <- predict(underlying_cdi, probs_df,type="response")
+      cdi_util_probs <- predict(underlying_cdi, probs_df_2,type="response")
       cdi_value <- scores[rownames(scores)=="CDI_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ###Toxicity risk utility
-      tox_util_probs <- predict(underlying_tox, probs_df,type="response")
+      tox_util_probs <- predict(underlying_tox, probs_df_2,type="response")
       tox_value <- scores[rownames(scores)=="Toxicity_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ####Sepsis adverse outcome risk utility
-      sepsis_util_probs <- predict(underlying_sepsis, probs_df,type="response")
+      sepsis_util_probs <- predict(underlying_sepsis, probs_df_2,type="response")
       
       ###UTI-specific utility
       uti_specifics <- c("Nitrofurantoin")
@@ -1021,7 +1059,7 @@ cdi_util_sens <- function(df,probs_df,uf) {
         rename(ent_R = "R", ent_S = "S")
       
       ###Attach individual utilities to dataframe
-      probs_df <- probs_df %>% 
+      probs_df_2 <- probs_df_2 %>% 
         mutate(prob_CDI = cdi_util_probs,
                value_CDI = a,
                util_CDI = prob_CDI * value_CDI,
@@ -1050,22 +1088,27 @@ cdi_util_sens <- function(df,probs_df,uf) {
                single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE))
       
       ###Calculate overall utility score
-      probs_df <- probs_df %>% calculate_utilities()
+      probs_df_2 <- probs_df_2 %>% calculate_utilities()
       
       ###Filter out combination predictions not present in training dataset
       abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
         str_replace_all("/","-")
-      probs_df <- probs_df %>% filter(Antimicrobial %in% abx_in_train)
+      probs_df_2 <- probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
       
       ###Dataframe for formulary agent sensitivity analysis
-      form_probs_df <- probs_df %>% calculate_utilities(
+      form_probs_df_2 <- probs_df_2 %>% calculate_utilities(
         formulary_list = c("Ceftriaxone","Ciprofloxacin"))
-      form_probs_df <- form_probs_df %>% filter(Antimicrobial %in% abx_in_train)
+      form_probs_df_2 <- form_probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
       
-      overall_median <- round(median(probs_df %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
+      overall_median <- round(median(probs_df_2 %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
       
-      util_row <- probs_df %>% filter(Antimicrobial==iterabs[j]) %>% 
+      best_util <- probs_df_2 %>% group_by(Antimicrobial) %>% summarise(
+        abmeds = median(!!uf)) %>% ungroup() %>% 
+        summarise(bestab = max(abmeds)) %>% unlist()
+      
+      util_row <- probs_df_2 %>% filter(Antimicrobial==iterabs[j]) %>% 
         summarise(med_util=median(!!uf),
+                  best_ut=best_util,
                   lower_iqr=quantile(!!uf)[2],
                   upper_iqr=quantile(!!uf)[4],
                   spec_value=a,
@@ -1087,28 +1130,29 @@ tox_util_sens <- function(df,probs_df,uf) {
   
   uf <- enquo(uf)
   
-  util_cum <- data.frame(matrix(nrow = 0,ncol=6))
-  colnames(sens_cum) <- c("med_util","lower_iqr","upper_iqr","spec_value","overall_med","Antimicrobial")
+  util_cum <- data.frame(matrix(nrow = 0,ncol=7))
+  colnames(util_cum) <- c("med_util","lower_iqr","upper_iqr","spec_value","overall_med","Antimicrobial")
   iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
   probs_df <- probs_df %>% filter(Antimicrobial %in% iterabs)
   
   for (j in seq_along(iterabs)) {
     
     a <- -1
+    probs_df_2 <- probs_df
     
     for(i in 1:9) {
       
-      cdi_util_probs <- predict(underlying_cdi, probs_df,type="response")
+      cdi_util_probs <- predict(underlying_cdi, probs_df_2,type="response")
       cdi_value <- scores[rownames(scores)=="CDI_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ###Toxicity risk utility
-      tox_util_probs <- predict(underlying_tox, probs_df,type="response")
+      tox_util_probs <- predict(underlying_tox, probs_df_2,type="response")
       tox_value <- scores[rownames(scores)=="Toxicity_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ####Sepsis adverse outcome risk utility
-      sepsis_util_probs <- predict(underlying_sepsis, probs_df,type="response")
+      sepsis_util_probs <- predict(underlying_sepsis, probs_df_2,type="response")
       
       ###UTI-specific utility
       uti_specifics <- c("Nitrofurantoin")
@@ -1163,7 +1207,7 @@ tox_util_sens <- function(df,probs_df,uf) {
         rename(ent_R = "R", ent_S = "S")
       
       ###Attach individual utilities to dataframe
-      probs_df <- probs_df %>% 
+      probs_df_2 <- probs_df_2 %>% 
         mutate(prob_CDI = cdi_util_probs,
                value_CDI = cdi_value,
                util_CDI = prob_CDI * value_CDI,
@@ -1192,22 +1236,27 @@ tox_util_sens <- function(df,probs_df,uf) {
                single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE))
       
       ###Calculate overall utility score
-      probs_df <- probs_df %>% calculate_utilities()
+      probs_df_2 <- probs_df_2 %>% calculate_utilities()
       
       ###Filter out combination predictions not present in training dataset
       abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
         str_replace_all("/","-")
-      probs_df <- probs_df %>% filter(Antimicrobial %in% abx_in_train)
+      probs_df_2 <- probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
       
       ###Dataframe for formulary agent sensitivity analysis
-      form_probs_df <- probs_df %>% calculate_utilities(
+      form_probs_df_2 <- probs_df_2 %>% calculate_utilities(
         formulary_list = c("Ceftriaxone","Ciprofloxacin"))
-      form_probs_df <- form_probs_df %>% filter(Antimicrobial %in% abx_in_train)
+      form_probs_df_2 <- form_probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
       
-      overall_median <- round(median(probs_df %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
+      overall_median <- round(median(probs_df_2 %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
       
-      util_row <- probs_df %>% filter(Antimicrobial==iterabs[j]) %>% 
+      best_util <- probs_df_2 %>% group_by(Antimicrobial) %>% summarise(
+        abmeds = median(!!uf)) %>% ungroup() %>% 
+        summarise(bestab = max(abmeds)) %>% unlist()
+      
+      util_row <- probs_df_2 %>% filter(Antimicrobial==iterabs[j]) %>% 
         summarise(med_util=median(!!uf),
+                  best_ut=best_util,
                   lower_iqr=quantile(!!uf)[2],
                   upper_iqr=quantile(!!uf)[4],
                   spec_value=a,
@@ -1238,7 +1287,15 @@ util_sens_plot <- function(df,measure,value) {
                                         med_util=overall_med,
                                         lower_iqr=overall_med,
                                         upper_iqr=overall_med)
-    df_spec_plot <- data.frame(rbind(df_spec_plot,med_plot))
+    best_plot <- df_spec_plot %>% mutate(Antimicrobial="Best antimicrobial",
+                                         med_util=best_ut,
+                                         lower_iqr=best_ut,
+                                         upper_iqr=best_ut)
+    df_spec_plot <- data.frame(rbind(df_spec_plot,med_plot,best_plot))
+    
+    df_spec_plot$Antimicrobial <- factor(df_spec_plot$Antimicrobial,
+                                         levels=c("All antimicrobials","Best antimicrobial",
+                                                  iterabs[i]))
     
     df_plot <- ggplot(df_spec_plot, aes(x = spec_value)) +
       geom_line(aes(y = as.numeric(med_util), group = Antimicrobial, color = Antimicrobial)) +
@@ -1307,8 +1364,8 @@ cdi_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
   char_col <- enquo(char_col)
   char_col2 <- enquo(char_col2)
   
-  sens_cum <- data.frame(matrix(nrow = 0,ncol=6))
-  colnames(sens_cum) <- c("med_util","lower_iqr","upper_iqr",characteristic,"overall_med","Antimicrobial")
+  sens_cum <- data.frame(matrix(nrow = 0,ncol=7))
+  colnames(sens_cum) <- c("med_util","best_util","lower_iqr","upper_iqr",characteristic,"overall_med","Antimicrobial")
   iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
   probs_df <- probs_df %>% filter(Antimicrobial %in% iterabs)
   
@@ -1318,6 +1375,7 @@ cdi_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
     b <- 1850
     
     probs_df_2 <- probs_df
+    probs_df_3 <- probs_df
     
     for(i in 1:9) {
       
@@ -1327,17 +1385,17 @@ cdi_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
       ##Utility score calculation
       
       ###CDI risk utility
-      cdi_util_probs <- predict(underlying_cdi, probs_df,type="response")
+      cdi_util_probs <- predict(underlying_cdi, probs_df_3,type="response")
       cdi_value <- scores[rownames(scores)=="CDI_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ###Toxicity risk utility
-      tox_util_probs <- predict(underlying_tox, probs_df,type="response")
+      tox_util_probs <- predict(underlying_tox, probs_df_3,type="response")
       tox_value <- scores[rownames(scores)=="Toxicity_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ####Sepsis adverse outcome risk utility
-      sepsis_util_probs <- predict(underlying_sepsis, probs_df,type="response")
+      sepsis_util_probs <- predict(underlying_sepsis, probs_df_3,type="response")
       
       ###UTI-specific utility
       uti_specifics <- c("Nitrofurantoin")
@@ -1391,11 +1449,11 @@ cdi_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
       ent_sens_key <- ent_probs_df %>% select(micro_specimen_id,Antimicrobial,S,R) %>% 
         rename(ent_R = "R", ent_S = "S")
       
-      prob_vector <- probs_df %>% dist_replace_2(df,iterabs[j],characteristic_col,a,b) %>% 
+      prob_vector <- probs_df_3 %>% dist_replace_2(df,iterabs[j],characteristic_col,a,b) %>% 
         pull(!!char_col2)
       
       ###Attach individual utilities to dataframe
-      probs_df <- probs_df %>% 
+      probs_df_3 <- probs_df_3 %>% 
         mutate(prob_CDI = prob_vector,
                value_CDI = cdi_value,
                util_CDI = prob_CDI * value_CDI,
@@ -1424,22 +1482,27 @@ cdi_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
                single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE))
       
       ###Calculate overall utility score
-      probs_df <- probs_df %>% calculate_utilities()
+      probs_df_3 <- probs_df_3 %>% calculate_utilities()
       
       ###Filter out combination predictions not present in training dataset
       abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
         str_replace_all("/","-")
-      probs_df <- probs_df %>% filter(Antimicrobial %in% abx_in_train)
+      probs_df_3 <- probs_df_3 %>% filter(Antimicrobial %in% abx_in_train)
       
       ###Dataframe for formulary agent sensitivity analysis
-      form_probs_df <- probs_df %>% calculate_utilities(
+      form_probs_df_3 <- probs_df_3 %>% calculate_utilities(
         formulary_list = c("Ceftriaxone","Ciprofloxacin"))
-      form_probs_df <- form_probs_df %>% filter(Antimicrobial %in% abx_in_train)
+      form_probs_df_3 <- form_probs_df_3 %>% filter(Antimicrobial %in% abx_in_train)
       
-      overall_median <- round(median(probs_df %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
+      overall_median <- round(median(probs_df_3 %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
       
-      sens_row <- probs_df %>% filter(Antimicrobial==iterabs[j]) %>% 
+      best_util <- probs_df_3 %>% group_by(Antimicrobial) %>% summarise(
+        abmeds = median(!!uf)) %>% ungroup() %>% 
+        summarise(bestab = max(abmeds)) %>% unlist()
+      
+      sens_row <- probs_df_3 %>% filter(Antimicrobial==iterabs[j]) %>% 
         summarise(med_util=median(!!uf),
+                  best_ut=best_util,
                   lower_iqr=quantile(!!uf)[2],
                   upper_iqr=quantile(!!uf)[4],
                   !!char_col:=median(!!char_col2),
@@ -1464,8 +1527,8 @@ tox_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
   char_col <- enquo(char_col)
   char_col2 <- enquo(char_col2)
   
-  sens_cum <- data.frame(matrix(nrow = 0,ncol=6))
-  colnames(sens_cum) <- c("med_util","lower_iqr","upper_iqr",characteristic,"overall_med","Antimicrobial")
+  sens_cum <- data.frame(matrix(nrow = 0,ncol=7))
+  colnames(sens_cum) <- c("med_util","best_ut","lower_iqr","upper_iqr",characteristic,"overall_med","Antimicrobial")
   iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
   probs_df <- probs_df %>% filter(Antimicrobial %in% iterabs)
   
@@ -1475,6 +1538,7 @@ tox_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
     b <- 1850
     
     probs_df_2 <- probs_df
+    probs_df_3 <- probs_df
     
     for(i in 1:9) {
       
@@ -1484,17 +1548,17 @@ tox_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
       ##Utility score calculation
       
       ###CDI risk utility
-      cdi_util_probs <- predict(underlying_cdi, probs_df,type="response")
+      cdi_util_probs <- predict(underlying_cdi, probs_df_3,type="response")
       cdi_value <- scores[rownames(scores)=="CDI_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ###Toxicity risk utility
-      tox_util_probs <- predict(underlying_tox, probs_df,type="response")
+      tox_util_probs <- predict(underlying_tox, probs_df_3,type="response")
       tox_value <- scores[rownames(scores)=="Toxicity_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ####Sepsis adverse outcome risk utility
-      sepsis_util_probs <- predict(underlying_sepsis, probs_df,type="response")
+      sepsis_util_probs <- predict(underlying_sepsis, probs_df_3,type="response")
       
       ###UTI-specific utility
       uti_specifics <- c("Nitrofurantoin")
@@ -1548,11 +1612,11 @@ tox_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
       ent_sens_key <- ent_probs_df %>% select(micro_specimen_id,Antimicrobial,S,R) %>% 
         rename(ent_R = "R", ent_S = "S")
       
-      prob_vector <- probs_df %>% dist_replace_2(df,iterabs[j],characteristic_col,a,b) %>% 
+      prob_vector <- probs_df_3 %>% dist_replace_2(df,iterabs[j],characteristic_col,a,b) %>% 
         pull(!!char_col2)
       
       ###Attach individual utilities to dataframe
-      probs_df <- probs_df %>% 
+      probs_df_3 <- probs_df_3 %>% 
         mutate(prob_CDI = cdi_util_probs,
                value_CDI = cdi_value,
                util_CDI = prob_CDI * value_CDI,
@@ -1581,22 +1645,27 @@ tox_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
                single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE))
       
       ###Calculate overall utility score
-      probs_df <- probs_df %>% calculate_utilities()
+      probs_df_3 <- probs_df_3 %>% calculate_utilities()
       
       ###Filter out combination predictions not present in training dataset
       abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
         str_replace_all("/","-")
-      probs_df <- probs_df %>% filter(Antimicrobial %in% abx_in_train)
+      probs_df_3 <- probs_df_3 %>% filter(Antimicrobial %in% abx_in_train)
       
       ###Dataframe for formulary agent sensitivity analysis
-      form_probs_df <- probs_df %>% calculate_utilities(
+      form_probs_df_3 <- probs_df_3 %>% calculate_utilities(
         formulary_list = c("Ceftriaxone","Ciprofloxacin"))
-      form_probs_df <- form_probs_df %>% filter(Antimicrobial %in% abx_in_train)
+      form_probs_df_3 <- form_probs_df_3 %>% filter(Antimicrobial %in% abx_in_train)
       
-      overall_median <- round(median(probs_df %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
+      overall_median <- round(median(probs_df_3 %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
       
-      sens_row <- probs_df %>% filter(Antimicrobial==iterabs[j]) %>% 
+      best_util <- probs_df_3 %>% group_by(Antimicrobial) %>% summarise(
+        abmeds = median(!!uf)) %>% ungroup() %>% 
+        summarise(bestab = max(abmeds)) %>% unlist()
+      
+      sens_row <- probs_df_3 %>% filter(Antimicrobial==iterabs[j]) %>% 
         summarise(med_util=median(!!uf),
+                  best_ut=best_util,
                   lower_iqr=quantile(!!uf)[2],
                   upper_iqr=quantile(!!uf)[4],
                   !!char_col:=median(!!char_col2),
@@ -1621,8 +1690,8 @@ sepsisae_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,
   char_col <- enquo(char_col)
   char_col2 <- enquo(char_col2)
   
-  sens_cum <- data.frame(matrix(nrow = 0,ncol=6))
-  colnames(sens_cum) <- c("med_util","lower_iqr","upper_iqr",characteristic,"overall_med","Antimicrobial")
+  sens_cum <- data.frame(matrix(nrow = 0,ncol=7))
+  colnames(sens_cum) <- c("med_util","best_ut","lower_iqr","upper_iqr",characteristic,"overall_med","Antimicrobial")
   iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
   probs_df <- probs_df %>% filter(Antimicrobial %in% iterabs)
   
@@ -1632,6 +1701,7 @@ sepsisae_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,
     b <- 1850
     
     probs_df_2 <- probs_df
+    probs_df_3 <- probs_df
     
     for(i in 1:9) {
       
@@ -1641,17 +1711,17 @@ sepsisae_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,
       ##Utility score calculation
       
       ###CDI risk utility
-      cdi_util_probs <- predict(underlying_cdi, probs_df,type="response")
+      cdi_util_probs <- predict(underlying_cdi, probs_df_3,type="response")
       cdi_value <- scores[rownames(scores)=="CDI_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ###Toxicity risk utility
-      tox_util_probs <- predict(underlying_tox, probs_df,type="response")
+      tox_util_probs <- predict(underlying_tox, probs_df_3,type="response")
       tox_value <- scores[rownames(scores)=="Toxicity_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ####Sepsis adverse outcome risk utility
-      sepsis_util_probs <- predict(underlying_sepsis, probs_df,type="response")
+      sepsis_util_probs <- predict(underlying_sepsis, probs_df_3,type="response")
       
       ###UTI-specific utility
       uti_specifics <- c("Nitrofurantoin")
@@ -1705,11 +1775,11 @@ sepsisae_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,
       ent_sens_key <- ent_probs_df %>% select(micro_specimen_id,Antimicrobial,S,R) %>% 
         rename(ent_R = "R", ent_S = "S")
       
-      prob_vector <- probs_df %>% dist_replace_2(df,iterabs[j],characteristic_col,a,b) %>% 
+      prob_vector <- probs_df_3 %>% dist_replace_2(df,iterabs[j],characteristic_col,a,b) %>% 
         pull(!!char_col2)
       
       ###Attach individual utilities to dataframe
-      probs_df <- probs_df %>% 
+      probs_df_3 <- probs_df_3 %>% 
         mutate(prob_CDI = cdi_util_probs,
                value_CDI = cdi_value,
                util_CDI = prob_CDI * value_CDI,
@@ -1738,22 +1808,32 @@ sepsisae_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,
                single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE))
       
       ###Calculate overall utility score
-      probs_df <- probs_df %>% calculate_utilities()
+      probs_df_3 <- probs_df_3 %>% calculate_utilities()
+      
+      print(iterabs[j])
+      probs_df_3 %>% 
+        group_by(Antimicrobial) %>% summarise(meds=median(Rx_utility)) %>% 
+        print()
       
       ###Filter out combination predictions not present in training dataset
       abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
         str_replace_all("/","-")
-      probs_df <- probs_df %>% filter(Antimicrobial %in% abx_in_train)
+      probs_df_3 <- probs_df_3 %>% filter(Antimicrobial %in% abx_in_train)
       
       ###Dataframe for formulary agent sensitivity analysis
-      form_probs_df <- probs_df %>% calculate_utilities(
+      form_probs_df_3 <- probs_df_3 %>% calculate_utilities(
         formulary_list = c("Ceftriaxone","Ciprofloxacin"))
-      form_probs_df <- form_probs_df %>% filter(Antimicrobial %in% abx_in_train)
+      form_probs_df_3 <- form_probs_df_3 %>% filter(Antimicrobial %in% abx_in_train)
       
-      overall_median <- round(median(probs_df %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
+      overall_median <- round(median(probs_df_3 %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
       
-      sens_row <- probs_df %>% filter(Antimicrobial==iterabs[j]) %>% 
+      best_util <- probs_df_3 %>% group_by(Antimicrobial) %>% summarise(
+        abmeds = median(!!uf)) %>% ungroup() %>% 
+        summarise(bestab = max(abmeds)) %>% unlist()
+      
+      sens_row <- probs_df_3 %>% filter(Antimicrobial==iterabs[j]) %>% 
         summarise(med_util=median(!!uf),
+                  best_ut=best_util,
                   lower_iqr=quantile(!!uf)[2],
                   upper_iqr=quantile(!!uf)[4],
                   !!char_col:=median(!!char_col2),
@@ -1787,7 +1867,15 @@ dens_sens_plot_2 <- function(df,characteristic,measure,char_col) {
                                         med_util=overall_med,
                                         lower_iqr=overall_med,
                                         upper_iqr=overall_med)
-    df_spec_plot <- data.frame(rbind(df_spec_plot,med_plot))
+    best_plot <- df_spec_plot %>% mutate(Antimicrobial="Best antimicrobial",
+                                         med_util=best_ut,
+                                         lower_iqr=best_ut,
+                                         upper_iqr=best_ut)
+    df_spec_plot <- data.frame(rbind(df_spec_plot,med_plot,best_plot))
+    
+    df_spec_plot$Antimicrobial <- factor(df_spec_plot$Antimicrobial,
+                                         levels=c("All antimicrobials","Best antimicrobial",
+                                                  iterabs[i]))
     
     df_plot <- ggplot(df_spec_plot, aes(x = !!char_col)) +
       geom_line(aes(y = as.numeric(med_util), group = Antimicrobial, color = Antimicrobial)) +
@@ -2202,6 +2290,8 @@ for (i in seq_along(long_allabs)) {
 }
 
 ###Sensitivity analysis varying resistance probabilities
+all_singles <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP","MEM","CIP","GEN","SXT","NIT","VAN") %>% ab_name() %>% 
+  str_replace("/","-")
 rx_dens_sens <- ur_util %>% dens_sens(util_probs_df,Rx_utility)
 ast_dens_sens <- ur_util %>% dens_sens(util_probs_df,AST_utility)
 
