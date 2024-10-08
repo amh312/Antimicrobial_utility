@@ -294,7 +294,10 @@ iv_s_access <<- iv_s_access
 po_s_access <<- po_s_access
 overall_s_access <<- overall_s_access
 
+print(df %>% count(Intravenous_1) %>% arrange(desc(n)))
+print(df %>% count(Oral_1) %>% arrange(desc(n)))
 print(df %>% count(PDRx_1) %>% arrange(desc(n)))
+
 
 }
 
@@ -457,6 +460,276 @@ res_sens_analysis_2 <- function(df,probs_df,R_variable=1,access_weight=1) {
   overall_s_access <<- overall_s_access
   
   print(df %>% count(PDRx_1) %>% arrange(desc(n)))
+  
+}
+
+###Resistance weighting sensitivity analysis (resistance rates increased)
+res_sens_analysis_3 <- function(df,probs_df,abx,abcol,a_val,b_val) { 
+  
+  abcol <- enquo(abcol)
+  
+  probs_df <- probs_df %>% dist_replace(df,abx,"R","S",a_val,b_val) %>%
+    calculate_utilities_orig()
+  
+  abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+    str_replace_all("/","-")
+  probs_df <- probs_df %>% filter(Antimicrobial %in% abx_in_train)
+  senskey <- df %>% select(micro_specimen_id,AMP:VAN,AMP_SAM:NIT_VAN)
+  antimicrobial_map <- c(
+    "Ampicillin" = "AMP",
+    "Ampicillin-sulbactam" = "SAM",
+    "Piperacillin-tazobactam" = "TZP",
+    "Cefazolin" = "CZO",
+    "Ceftriaxone" = "CRO",
+    "Ceftazidime" = "CAZ",
+    "Cefepime" = "FEP",
+    "Meropenem" = "MEM",
+    "Ciprofloxacin" = "CIP",
+    "Gentamicin" = "GEN",
+    "Trimethoprim-sulfamethoxazole" = "SXT",
+    "Nitrofurantoin" = "NIT",
+    "Vancomycin" = "VAN"
+  )
+  
+  map_combinations <- combn(names(antimicrobial_map), 2, simplify = FALSE)
+  combined_antimicrobial_map <- c(
+    antimicrobial_map,
+    setNames(
+      lapply(map_combinations, function(x) paste(antimicrobial_map[x], collapse = "_")),
+      sapply(map_combinations, function(x) paste(x, collapse = "_"))
+    )
+  )
+  abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+    str_replace_all("/","-")
+  combined_antimicrobial_map <- combined_antimicrobial_map[names(combined_antimicrobial_map) %in% abx_in_train]
+  iv_abs <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
+              "GEN","SXT","VAN") %>% ab_name() %>% 
+    str_replace("/","-") 
+  iv_combos <- combn(iv_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+  iv_abs <- c(iv_abs, iv_combos)
+  oral_abs <- c("AMP","SAM","CIP",
+                "SXT","NIT") %>% ab_name() %>% 
+    str_replace("/","-")
+  oral_combos <- combn(oral_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+  oral_abs <- c(oral_abs, oral_combos)
+  iv_combined_antimicrobial_map <- combined_antimicrobial_map[names(combined_antimicrobial_map) %in% iv_abs]
+  oral_combined_antimicrobial_map <- combined_antimicrobial_map[names(combined_antimicrobial_map) %in% oral_abs]
+  ast_combined_antimicrobial_map <- combined_antimicrobial_map[!grepl("_",names(combined_antimicrobial_map))]
+  ###Individual treatment recommendations
+  all_abs <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
+               "MEM","CIP","GEN","SXT","NIT","VAN")
+  long_allabs <- all_abs %>% ab_name() %>% str_replace("/","-")
+  all_combos <- combn(all_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+  replace_values <- function(column, map) {
+    column %>%
+      as.character() %>%
+      sapply(function(x) if (x %in% names(map)) map[[x]] else x)
+  }
+  
+  df <- df %>% mutate(!!abcol:=rbern(nrow(df),prob=rbeta(nrow(df),a_val,b_val))) %>% 
+    mutate(!!abcol:=case_when(!!abcol==1~"R",TRUE~"S"))
+  
+  df <- df %>% assign_PDRx(probs_df,"PDRx_") %>% 
+    mutate(across(starts_with("PDRx_"), ~ replace_values(., combined_antimicrobial_map)))
+  
+  ###Intravenous treatment recommendations
+  df <- df %>% assign_Intravenous(probs_df,"Intravenous_") %>% 
+    mutate(across(starts_with("Intravenous_"), ~ replace_values(., combined_antimicrobial_map)))
+  
+  ###Oral treatment recommendations
+  df <- df %>% assign_Oral(probs_df,"Oral_") %>% 
+    mutate(across(starts_with("Oral_"), ~ replace_values(., combined_antimicrobial_map)))
+  
+  ###Individual AST recommendations
+  df <- df %>% assign_PDAST(probs_df,"PDAST_") %>%
+    mutate(across(starts_with("PDAST_"), ~ replace_values(., combined_antimicrobial_map)))
+  
+  ###Standard panel treatment & AST recommendations
+  df <- df %>% assign_standard_AST("NIT","SXT","CIP","TZP","GEN","CRO")
+  df <- df %>% assign_standard_IV("CRO","TZP","GEN")
+  df <- df %>% assign_standard_oral("NIT","SXT","CIP")
+  
+  urines_abx <- df
+  
+  ###Reference lists
+  all_singles <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
+                   "MEM","CIP","GEN","SXT","NIT","VAN")
+  all_combos <- combn(all_singles, 2, FUN = function(x) paste(x, collapse = "_"))
+  all_abs <- c(all_singles,all_combos)
+  iv_singles <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
+                  "GEN","SXT","VAN")
+  iv_combos <- combn(iv_singles, 2, FUN = function(x) paste(x, collapse = "_"))
+  all_ivs <- c(iv_singles, iv_combos)
+  oral_singles <- c("AMP","SAM","CIP",
+                    "SXT","NIT")
+  oral_combos <- combn(oral_singles, 2, FUN = function(x) paste(x, collapse = "_"))
+  all_orals <- c(oral_singles, oral_combos)
+  access_singles <- c("AMP","SAM","GEN",
+                      "SXT","NIT","CZO")
+  access_combos <- combn(access_singles, 2, FUN = function(x) paste(x, collapse = "_"))
+  all_access <- c(access_singles, access_combos)
+  watch_singles <- c("CRO","CAZ","FEP","MEM","TZP","CIP","VAN")
+  watch_combos <- combn(watch_singles, 2, FUN = function(x) paste(x, collapse = "_"))
+  all_watch <- c(watch_singles, watch_combos)
+  
+  df <- df %>%
+    rowwise() %>%
+    mutate(PDIVRx_1_result = get(Intravenous_1),
+           PDIVRx_2_result = get(Intravenous_2),
+           PDPORx_1_result = get(Oral_1),
+           PDPORx_2_result = get(Oral_2),
+           PDRx_1_result = get(PDRx_1),
+           PDRx_2_result = get(PDRx_2),
+           STIVRx_1_result = get(STANDARD_IV_1),
+           STIVRx_2_result = get(STANDARD_IV_2),
+           STPORx_1_result = get(STANDARD_PO_1),
+           STPORx_2_result = get(STANDARD_PO_2)) %>%
+    ungroup()
+  
+  iv_res <- nrow(df %>% filter(PDIVRx_1_result=='R'))
+  po_res <- nrow(df %>% filter(PDPORx_1_result=='R'))
+  overall_res <- nrow(df %>% filter(PDRx_1_result=='R'))
+  
+  iv_perc <- iv_res/nrow(df)*100
+  po_perc <- po_res/nrow(df)*100
+  overall_perc <- overall_res/nrow(df)*100
+  
+  iv_s_access <- (nrow(df %>% filter(PDIVRx_1_result=='S' &
+                                       Intravenous_1 %in% access_singles))/
+                    nrow(df)) * 100
+  po_s_access <- (nrow(df %>% filter(PDPORx_1_result=='S' &
+                                       Oral_1 %in% access_singles))/
+                    nrow(df))*100
+  overall_s_access <- (nrow(df %>% filter(PDRx_1_result=='S' &
+                                            PDRx_1 %in% access_singles))/
+                         nrow(df))*100
+  
+  
+  glue("Where an IV agent was required, the personalised approach recommended a switch from a
+     prescribed Watch category agent to an effective Access category agent in 
+     {round((sum(urines_abx$Wa_Ac_S_IV)/nrow(urines_abx))*100,1)}% (n={sum(urines_abx$Wa_Ac_S_IV)}) of prescriptions.
+     
+     Where an oral agent was required, the personalised approach recommended a switch from a
+     prescribed Watch category agent to an effective Access category agent in 
+     {round((sum(urines_abx$Wa_Ac_S_PO)/nrow(urines_abx))*100,1)}% (n={sum(urines_abx$Wa_Ac_S_PO)}) of prescriptions.
+     
+     Where an IV agent was required, the personalised approach recommended an agent with a subsequent resistant result in
+     {round(iv_res/nrow(df)*100,1)}% (n={iv_res}) of cases where urine culture was sent.
+     
+     Where an oral agent was required, the personalised approach recommended an agent with a subsequent resistant result in
+     {round(po_res/nrow(df)*100,1)}% (n={po_res}) of cases where urine culture was sent.
+     
+     ") %>% print()
+  
+  iv_perc <<- iv_perc
+  po_perc <<- po_perc
+  overall_perc <<- overall_perc
+  iv_s_access <<- iv_s_access
+  po_s_access <<- po_s_access
+  overall_s_access <<- overall_s_access
+  
+  print(df %>% count(Intravenous_1) %>% arrange(desc(n)))
+  print(df %>% count(Oral_1) %>% arrange(desc(n)))
+  print(df %>% count(PDRx_1) %>% arrange(desc(n)))
+  
+  
+}
+
+###Susceptibility plots
+susc_plotter <- function(df,subset="",measure,suffix="",agent_col1,agent_name1,agent_col2,agent_name2,variable="Resistance importance weighting") {
+  
+  agent_col1 <- enquo(agent_col1)
+  agent_col2 <- enquo(agent_col2)
+  
+  df$Metric <- factor(df$Metric, levels=c("All agents","Access agents"))
+  
+  susplot <- ggplot(df,aes(x=Weight,y=Percentage,group=Metric,color=Metric,fill=Metric)) +
+    geom_line()+
+    geom_hline(linetype="dashed",yintercept=(nrow(ur_util %>% filter(!!agent_col1=="S"|!!agent_col1=="I"))/nrow(ur_util))*100,color="darkgrey") +
+    geom_area(position = "identity", alpha = 0.4) +
+    geom_hline(linetype="dashed",yintercept=70,color="darkgreen") +
+    ylim(0,100)+
+    theme_minimal()+
+    ggtitle(glue("Urine isolate susceptibility to {subset}antimicrobial recommended\n{suffix}"))+
+    xlab(glue("{variable}"))+
+    ylab("Percentage of isolates susceptible to recommendation")+
+    annotate("text", x = Inf, y = (nrow(ur_util %>% filter(!!agent_col1=="S"|!!agent_col1=="I"))/nrow(ur_util))*100+2, label = glue(agent_name1), hjust = 1.1, color = "darkgrey")+
+    annotate("text", x = Inf, y = 72, label = "UN Access target", hjust = 1.1, color = "darkgreen")
+  
+  ggsave(glue("{subset}_{measure}_{suffix}_susplot.pdf"), plot = susplot, device = "pdf", width = 10, height = 6,
+         path="/Users/alexhoward/Documents/Projects/UDAST_code")
+  
+  print(susplot)
+  
+}
+susc_plotter_iv <- function(df,subset="",measure,suffix="",agent_col1,agent_name1,agent_col2,agent_name2,variable="Resistance importance weighting") {
+  
+  agent_col1 <- enquo(agent_col1)
+  agent_col2 <- enquo(agent_col2)
+  
+  df$Metric <- factor(df$Metric, levels=c("All agents","Access agents"))
+  
+  susplot <- ggplot(df,aes(x=Weight,y=Percentage,group=Metric,color=Metric,fill=Metric)) +
+    geom_line()+
+    geom_hline(linetype="dashed",yintercept=(nrow(ur_util %>% filter(!!agent_col1=="S"|!!agent_col1=="I"))/nrow(ur_util))*100,color="darkgrey") +
+    geom_hline(linetype="dashed",yintercept=(nrow(ur_util %>% filter(!!agent_col2=="S"|!!agent_col2=="I"))/nrow(ur_util))*100,color="darkgrey") +
+    geom_area(position = "identity", alpha = 0.4) +
+    geom_hline(linetype="dashed",yintercept=70,color="darkgreen") +
+    ylim(0,100)+
+    theme_minimal()+
+    ggtitle(glue("Urine isolate susceptibility to {subset}antimicrobial recommended\n{suffix}"))+
+    xlab(glue("{variable}"))+
+    ylab("Percentage of isolates susceptible to recommendation")+
+    annotate("text", x = Inf, y = (nrow(ur_util %>% filter(!!agent_col1=="S"|!!agent_col1=="I"))/nrow(ur_util))*100+2, label = glue(agent_name1), hjust = 1.1, color = "darkgrey")+
+    annotate("text", x = Inf, y = (nrow(ur_util %>% filter(!!agent_col2=="S"|!!agent_col2=="I"))/nrow(ur_util))*100+2, label = glue(agent_name2), hjust = 1.1, color = "darkgrey")+
+    annotate("text", x = Inf, y = 72, label = "UN Access target", hjust = 1.1, color = "darkgreen")
+  
+  ggsave(glue("{subset}_{measure}_{suffix}_susplot.pdf"), plot = susplot, device = "pdf", width = 10, height = 6,
+         path="/Users/alexhoward/Documents/Projects/UDAST_code")
+  
+  print(susplot)
+  
+}
+
+###Replacing resistance probability distribution with simulated distribution
+dist_replace <- function(df,df2,abx_agent,result,result2,alpha,beta) {
+  
+  replacement <- rbeta(nrow(df2),alpha,beta)
+  
+  dfrows <- which(df$Antimicrobial== abx_agent)
+  dfcols <- which(colnames(df)==result)
+  
+  dfrows2 <- which(df$Antimicrobial== abx_agent)
+  dfcols2 <- which(colnames(df)==result2)
+  
+  df[dfrows,dfcols] <- replacement
+  df[dfrows2,dfcols2] <- 1-replacement
+  
+  df
+  
+}
+
+###Sensitivity analysis probability distribution check
+dens_check <- function(df,abx_agent,result,alpha,beta) {
+  
+  result <- enquo(result)
+  
+  test_dist <- tibble(Probability=rbeta(nrow(ur_util),alpha,beta),Distribution="Test")
+  actual_dist <- tibble(
+    Probability=df %>% filter(Antimicrobial==abx_agent) %>% pull(!!result),
+    Distribution="Actual")
+  dist_df <- tibble(rbind(test_dist,actual_dist))
+  
+  thisplot <- ggplot(dist_df,
+                     aes(x=Probability,color=Distribution)) + 
+    geom_density()+
+    ggtitle(glue("{abx_agent} resistance probability"))+
+    xlim(0,1)+
+    ylab("") +
+    theme(axis.ticks.y = element_blank(),
+          axis.text.y = element_blank())
+  
+  print(thisplot)
   
 }
 
@@ -673,8 +946,6 @@ assign_PDRx <- function(df,probab_df,method_used,ab_list1=ab_singles %>% ab_name
     
     test_recs <- cbind(test_recs,rec)
     
-    print(glue("{round((i/nrow(df)) * 100,0)}%"))
-    
   }
   
   test_recs <- data.frame(t(test_recs))
@@ -706,8 +977,6 @@ assign_PDAST <- function(df,probab_df,method_used,ab_list1=ab_singles %>% ab_nam
       select(1)
     
     test_recs <- cbind(test_recs,rec)
-    
-    print(glue("{round((i/nrow(df)) * 100,0)}%"))
     
   }
   
@@ -743,8 +1012,6 @@ assign_Intravenous <- function(df,probab_df,method_used,ab_list1=iv_ab_singles %
     
     test_recs <- cbind(test_recs,rec)
     
-    print(glue("{round((i/nrow(df)) * 100,0)}%"))
-    
   }
   
   test_recs <- data.frame(t(test_recs))
@@ -778,8 +1045,6 @@ assign_Oral <- function(df,probab_df,method_used,ab_list1=oral_ab_singles %>% ab
     
     test_recs <- cbind(test_recs,rec)
     
-    print(glue("{round((i/nrow(df)) * 100,0)}%"))
-    
   }
   
   test_recs <- data.frame(t(test_recs))
@@ -811,7 +1076,7 @@ calculate_utilities <- function(df,formulary_list=NULL,R_weight=1,ac_weight=1) {
                       overall_iv_util = util_uti + util_access*ac_weight +
                         util_iv +
                         util_reserve + util_highcost,
-                      R_penalty=(((R*100)^R_weight)/100)*(prob_sepsisae),
+                      R_penalty=R*R_weight,
                       S_utility = S*overall_util,
                       S_PO_utility = S*overall_oral_util,
                       S_IV_utility=S*overall_iv_util,
@@ -1001,6 +1266,195 @@ calculate_utilities_2 <- function(df,formulary_list=NULL,R_weight=1,ac_weight=1)
                         util_iv +
                         util_reserve + util_highcost,
                       R_penalty=(((better_R*100)^R_weight)/100)*(prob_sepsisae),
+                      S_utility = S*overall_util,
+                      S_PO_utility = S*overall_oral_util,
+                      S_IV_utility=S*overall_iv_util,
+                      ent_S_utility = ent_S*overall_util,
+                      AMPR_utility = case_when(
+                        Antimicrobial=="Ampicillin" ~
+                          AMP_R_value*R, TRUE~0
+                      ),
+                      SAMR_utility = case_when(
+                        Antimicrobial=="Ampicillin-sulbactam" ~
+                          SAM_R_value*R, TRUE~0
+                      ),
+                      TZPR_utility = case_when(
+                        Antimicrobial=="Piperacillin-tazobactam" ~
+                          TZP_R_value*R, TRUE~0
+                      ),
+                      CZOR_utility = case_when(
+                        Antimicrobial=="Cefazolin" ~
+                          CZO_R_value*R, TRUE~0
+                      ),
+                      CROR_utility = case_when(
+                        Antimicrobial=="Ceftriaxone" ~
+                          CRO_R_value*R, TRUE~0
+                      ),
+                      CAZR_utility = case_when(
+                        Antimicrobial=="Ceftazidime" ~
+                          CAZ_R_value*R, TRUE~0
+                      ),
+                      FEPR_utility = case_when(
+                        Antimicrobial=="Cefepime" ~
+                          FEP_R_value*R, TRUE~0
+                      ),
+                      MEMR_utility = case_when(
+                        Antimicrobial=="Meropenem" ~
+                          MEM_R_value*R, TRUE~0
+                      ),
+                      CIPR_utility = case_when(
+                        Antimicrobial=="Ciprofloxacin" ~
+                          CIP_R_value*R, TRUE~0
+                      ),
+                      GENR_utility = case_when(
+                        Antimicrobial=="Gentamicin" ~
+                          GEN_R_value*R, TRUE~0
+                      ),
+                      SXTR_utility = case_when(
+                        Antimicrobial=="Trimethoprim-sulfamethoxazole" ~
+                          SXT_R_value*R, TRUE~0
+                      ),
+                      NITR_utility = case_when(
+                        Antimicrobial=="Nitrofurantoin" ~
+                          NIT_R_value*R, TRUE~0
+                      ),
+                      VANR_utility = case_when(
+                        Antimicrobial=="Vancomycin" ~
+                          VAN_R_value*R, TRUE~0
+                      ),
+                      Formulary_agent = case_when(
+                        Antimicrobial%in%formulary_list ~
+                          TRUE, TRUE~FALSE
+                      ),
+                      Formulary_utility = 
+                        Formulary_agent*R,
+                      AST_utility = (S_utility+
+                                       AMPR_utility +
+                                       SAMR_utility +
+                                       TZPR_utility +
+                                       CZOR_utility +
+                                       CROR_utility +
+                                       CAZR_utility +
+                                       FEPR_utility +
+                                       MEMR_utility +
+                                       CIPR_utility +
+                                       GENR_utility +
+                                       SXTR_utility +
+                                       NITR_utility +
+                                       VANR_utility +
+                                       Formulary_utility)*single_agent,
+                      Rx_utility = S_utility -
+                        R_penalty,
+                      ent_AMPR_utility = case_when(
+                        Antimicrobial=="Ampicillin" ~
+                          AMP_R_value*ent_R, TRUE~0
+                      ),
+                      ent_SAMR_utility = case_when(
+                        Antimicrobial=="Ampicillin-sulbactam" ~
+                          SAM_R_value*ent_R, TRUE~0
+                      ),
+                      ent_TZPR_utility = case_when(
+                        Antimicrobial=="Piperacillin-tazobactam" ~
+                          TZP_R_value*ent_R, TRUE~0
+                      ),
+                      ent_CZOR_utility = case_when(
+                        Antimicrobial=="Cefazolin" ~
+                          CZO_R_value*ent_R, TRUE~0
+                      ),
+                      ent_CROR_utility = case_when(
+                        Antimicrobial=="Ceftriaxone" ~
+                          CRO_R_value*ent_R, TRUE~0
+                      ),
+                      ent_CAZR_utility = case_when(
+                        Antimicrobial=="Ceftazidime" ~
+                          CAZ_R_value*ent_R, TRUE~0
+                      ),
+                      ent_FEPR_utility = case_when(
+                        Antimicrobial=="Cefepime" ~
+                          FEP_R_value*ent_R, TRUE~0
+                      ),
+                      ent_MEMR_utility = case_when(
+                        Antimicrobial=="Meropenem" ~
+                          MEM_R_value*ent_R, TRUE~0
+                      ),
+                      ent_CIPR_utility = case_when(
+                        Antimicrobial=="Ciprofloxacin" ~
+                          CIP_R_value*ent_R, TRUE~0
+                      ),
+                      ent_GENR_utility = case_when(
+                        Antimicrobial=="Gentamicin" ~
+                          GEN_R_value*ent_R, TRUE~0
+                      ),
+                      ent_SXTR_utility = case_when(
+                        Antimicrobial=="Trimethoprim-sulfamethoxazole" ~
+                          SXT_R_value*ent_R, TRUE~0
+                      ),
+                      ent_NITR_utility = case_when(
+                        Antimicrobial=="Nitrofurantoin" ~
+                          NIT_R_value*ent_R, TRUE~0
+                      ),
+                      ent_VANR_utility = case_when(
+                        Antimicrobial=="Vancomycin" ~
+                          VAN_R_value*ent_R, TRUE~0
+                      ),
+                      ent_Formulary_agent = case_when(
+                        Antimicrobial%in%formulary_list ~
+                          TRUE, TRUE~FALSE
+                      ),
+                      ent_Formulary_utility = 
+                        Formulary_agent*ent_R,
+                      ent_AST_utility = (ent_S_utility+
+                                           ent_AMPR_utility +
+                                           ent_SAMR_utility +
+                                           ent_TZPR_utility +
+                                           ent_CZOR_utility +
+                                           ent_CROR_utility +
+                                           ent_CAZR_utility +
+                                           ent_FEPR_utility +
+                                           ent_MEMR_utility +
+                                           ent_CIPR_utility +
+                                           ent_GENR_utility +
+                                           ent_SXTR_utility +
+                                           ent_NITR_utility +
+                                           ent_VANR_utility +
+                                           ent_Formulary_utility)*single_agent,
+                      ent_Rx_utility = (overall_util * ent_S) -
+                        (ent_R*(prob_sepsisae - util_CDI -
+                                  util_tox)))
+  
+  df %>% 
+    mutate(
+      Urosepsis_Rx_utility = case_when(
+        util_iv ==0 ~min(df$Rx_utility)-0.01,
+        TRUE~S_IV_utility - R_penalty),
+      Outpatient_Rx_utility = case_when(
+        util_oral ==0 ~min(df$Rx_utility)-0.01,
+        TRUE~S_PO_utility -  R_penalty),
+      ent_Urosepsis_Rx_utility = case_when(
+        util_iv ==0 ~min(df$Rx_utility)-0.01,
+        TRUE~(overall_iv_util*ent_S)-(ent_R*(prob_sepsisae - util_CDI -
+                                               util_tox))),
+      ent_Outpatient_Rx_utility = case_when(
+        util_oral ==0 ~min(df$Rx_utility)-0.01,
+        TRUE~(overall_oral_util*ent_S)-(ent_R*(prob_sepsisae - util_CDI -
+                                                 util_tox)))
+    )
+  
+}
+
+###Original utility score calculator
+calculate_utilities_orig <- function(df,formulary_list=NULL) {
+  
+  df <- df %>% mutate(overall_util = util_uti + util_access +
+                        util_oral + util_iv +
+                        util_reserve + util_highcost,
+                      overall_oral_util = util_uti + util_access +
+                        util_oral +
+                        util_reserve + util_highcost,
+                      overall_iv_util = util_uti + util_access +
+                        util_iv +
+                        util_reserve + util_highcost,
+                      R_penalty=R*prob_sepsisae,
                       S_utility = S*overall_util,
                       S_PO_utility = S*overall_oral_util,
                       S_IV_utility=S*overall_iv_util,
@@ -1822,15 +2276,14 @@ assign_standard_oral <- function(df,choice_1=NA,choice_2=NA,choice_3=NA,
   
 }
 
-
 ###Reference lists
 all_singles <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
-                 "MEM","CIP","GEN","SXT","NIT","VAN")
+                 "MEM","CIP","GEN","SXT","NIT")
 ab_singles <- all_singles
 all_combos <- combn(all_singles, 2, FUN = function(x) paste(x, collapse = "_"))
 all_abs <- c(all_singles,all_combos)
 iv_singles <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
-                "GEN","SXT","VAN")
+                "GEN","SXT")
 iv_ab_singles <- iv_singles
 iv_combos <- combn(iv_singles, 2, FUN = function(x) paste(x, collapse = "_"))
 all_ivs <- c(iv_singles, iv_combos)
@@ -1872,7 +2325,7 @@ write_csv(form_abs_df_r,"form_r_uf_sourcedata_abs_cleveplot.csv")
 form_r_results_by_ab <- form_abs_df_r %>% cleveland_ab_plot("resistant"," (Ciprofloxacin & Ceftriaxone added to formulary)")
 
 ###R weight sensitivity analysis
-weightseq <- seq(0,5,1)
+weightseq <- seq(0,30,5)
 iv_perclist <- c()
 po_perclist <- c()
 overall_perclist <- c()
@@ -1929,40 +2382,102 @@ write_csv(iv_plot_df,"iv_plot_df.csv")
 write_csv(po_plot_df,"po_plot_df.csv")
 write_csv(overall_plot_df,"overall_plot_df.csv")
 
-susc_plotter <- function(df,subset="",measure,suffix="",agent_col1,agent_name1,agent_col2,agent_name2) {
-  
-  agent_col1 <- enquo(agent_col1)
-  agent_col2 <- enquo(agent_col2)
-  
-  df2 <- df %>% filter(Metric=="All agents") %>% mutate(Metric="UNGA target",
-                                                   Percentage=0.7*Percentage)
-  df <- data.frame(rbind(df,df2))
-  df$Metric <- factor(df$Metric, levels=c("All agents","Access agents","UNGA target"))
-  
-susplot <- ggplot(df,aes(x=Weight,y=Percentage,group=Metric,color=Metric,fill=Metric)) +
-  geom_line()+
-  geom_hline(linetype="dashed",yintercept=(nrow(ur_util %>% filter(!!agent_col1=="S"|!!agent_col1=="I"))/nrow(ur_util))*100,color="darkgrey") +
-    geom_area(position = "identity", alpha = 0.4) +
-  ylim(0,100)+
-    theme_minimal()+
-    ggtitle(glue("Urine isolate susceptibility to {subset}antimicrobial recommended\n{suffix}"))+
-    xlab(glue("{measure} importance weighting"))+
-    ylab("Percentage of isolates susceptible to recommendation")+
-annotate("text", x = Inf, y = (nrow(ur_util %>% filter(!!agent_col1=="S"|!!agent_col1=="I"))/nrow(ur_util))*100+2, label = glue(agent_name1), hjust = 1.1, color = "darkgrey")
+iv_plot_df %>% susc_plotter_iv("IV ","Resistance",agent_col1=GEN,agent_name1="Gentamicin",agent_col2=TZP,agent_name2="Piperacillin-tazobactam")
+po_plot_df %>% susc_plotter("oral ","Resistance",agent_col1=NIT,agent_name1="Nitrofurantoin")
+overall_plot_df %>% susc_plotter_iv("overall ", "Resistance",agent_col1=NIT,agent_name1="Nitrofurantoin",
+                                    agent_col2=TZP,agent_name2="Piperacillin-tazobactam")
 
-ggsave(glue("{subset}_{measure}_{suffix}_susplot.pdf"), plot = susplot, device = "pdf", width = 10, height = 6,
-       path="/Users/alexhoward/Documents/Projects/UDAST_code")
+###Nitro Resistance sensitivity analysis
+weightseq <- c()
+iv_perclist_nit <- c()
+po_perclist_nit <- c()
+overall_perclist_nit <- c()
+ivac_list_nit <- c()
+poac_list_nit <- c()
+ovac_list_nit <- c()
+a <- 0.5
+b <- 18.5
 
-print(susplot)
-
+for(i in 1:9) {
+  
+  densy <- util_probs_df %>% dens_check("Nitrofurantoin",R,a,b)
+  print(densy)
+  
+  res_sens_analysis_3(ur_util,util_probs_df,abx="Nitrofurantoin",NIT,a_val=a,b_val=b)
+  
+  weightseq[i] <- util_probs_df %>% dist_replace(ur_util,"Nitrofurantoin","R","S",a,b) %>%
+    filter(Antimicrobial=="Nitrofurantoin") %>% summarize(medR=median(R)) %>% unlist()
+  iv_perclist_nit <- c(iv_perclist_nit,iv_perc)
+  po_perclist_nit <- c(po_perclist_nit,po_perc)
+  overall_perclist_nit <- c(overall_perclist_nit,overall_perc)
+  ivac_list_nit <- c(ivac_list_nit,iv_s_access)
+  poac_list_nit <- c(poac_list_nit,po_s_access)
+  ovac_list_nit <- c(ovac_list_nit,overall_s_access)
+  
+  a <- a+i
+  b <- b-(i/2)
+  
 }
 
-iv_plot_df %>% susc_plotter("IV ","Resistance",agent_col1=TZP,agent_name1="Piperacillin-tazobactam")
-po_plot_df %>% susc_plotter("oral ","Resistance",agent_col1=NIT,agent_name1="Nitrofurantoin")
-overall_plot_df %>% susc_plotter("overall ", "Resistance",agent_col1=NIT,agent_name1="Nitrofurantoin")
+iv_perclist_nit <- iv_perclist_nit %>% label_binder("All agents")
+po_perclist_nit <- po_perclist_nit %>% label_binder("All agents")
+overall_perclist_nit <- overall_perclist_nit %>% label_binder("All agents")
+ivac_list_nit <- ivac_list_nit %>% label_binder("Access agents")
+poac_list_nit <- poac_list_nit %>% label_binder("Access agents")
+ovac_list_nit <- ovac_list_nit %>% label_binder("Access agents")
+iv_perclist_nit <- iv_perclist_nit %>% rename(Percentage = "vec")
+po_perclist_nit <- po_perclist_nit %>% rename(Percentage = "vec")
+overall_perclist_nit <- overall_perclist_nit %>% rename(Percentage = "vec")
+ivac_list_nit <- ivac_list_nit %>% rename(Percentage = "vec")
+poac_list_nit <- poac_list_nit %>% rename(Percentage = "vec")
+ovac_list_nit <- ovac_list_nit %>% rename(Percentage = "vec")
+iv_perclist_nit <- iv_perclist_nit %>% mutate(Percentage=100-Percentage)
+po_perclist_nit <- po_perclist_nit %>% mutate(Percentage=100-Percentage)
+overall_perclist_nit <- overall_perclist_nit %>% mutate(Percentage=100-Percentage)
+
+iv_plot_df_nit <- data.frame(rbind(
+  iv_perclist_nit,ivac_list_nit
+))
+po_plot_df_nit <- data.frame(rbind(
+  po_perclist_nit,poac_list_nit
+))
+overall_plot_df_nit <- data.frame(rbind(
+  overall_perclist_nit,ovac_list_nit
+))
+
+write_csv(iv_plot_df_nit,"iv_plot_df_nit.csv")
+write_csv(po_plot_df_nit,"po_plot_df_nit.csv")
+write_csv(overall_plot_df_nit,"overall_plot_df_nit.csv")
+
+iv_plot_df_nit %>% susc_plotter_iv("IV ","Resistance",agent_col1=GEN,agent_name1="Gentamicin",agent_col2=TZP,agent_name2="Piperacillin-tazobactam")
+po_plot_df_nit %>% susc_plotter("oral ","Resistance",agent_col1=TZP,agent_name1="Piperacillin-tazobactam",variable="Nitrofurantoin resistance rate")
+overall_plot_df_nit %>% susc_plotter("overall ", "Resistance",agent_col1=TZP,agent_name1="Piperacillin-tazobactam",variable="Nitrofurantoin resistance rate")
 
 ###Combination R weighting sensitivity analysis
-weightseq <- seq(-0.5,0.5,0.5)
+all_singles <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
+                 "MEM","CIP","GEN","SXT","NIT","VAN")
+ab_singles <- all_singles
+all_combos <- combn(all_singles, 2, FUN = function(x) paste(x, collapse = "_"))
+all_abs <- c(all_singles,all_combos)
+iv_singles <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
+                "GEN","SXT","VAN")
+iv_ab_singles <- iv_singles
+iv_combos <- combn(iv_singles, 2, FUN = function(x) paste(x, collapse = "_"))
+all_ivs <- c(iv_singles, iv_combos)
+oral_singles <- c("AMP","SAM","CIP",
+                  "SXT","NIT")
+oral_ab_singles <- oral_singles
+oral_combos <- combn(oral_singles, 2, FUN = function(x) paste(x, collapse = "_"))
+all_orals <- c(oral_singles, oral_combos)
+access_singles <- c("AMP","SAM","GEN",
+                    "SXT","NIT","CZO")
+access_combos <- combn(access_singles, 2, FUN = function(x) paste(x, collapse = "_"))
+all_access <- c(access_singles, access_combos)
+watch_singles <- c("CRO","CAZ","FEP","MEM","TZP","CIP","VAN")
+watch_combos <- combn(watch_singles, 2, FUN = function(x) paste(x, collapse = "_"))
+all_watch <- c(watch_singles, watch_combos)
+
+weightseq <- seq(0,30,5)
 iv_perclist_combo <- c()
 po_perclist_combo <- c()
 overall_perclist_combo <- c()
@@ -1970,9 +2485,10 @@ ivac_list_combo <- c()
 poac_list_combo <- c()
 ovac_list_combo <- c()
 
+
 for(weight in seq_along(weightseq)) {
   
-  combo_res_sens_analysis(ur_util,util_probs_df,weightseq[weight])
+  combo_res_sens_analysis(ur_util,util_probs_df,R_variable=weightseq[weight])
   
   iv_perclist_combo <- c(iv_perclist_combo,iv_perc)
   po_perclist_combo <- c(po_perclist_combo,po_perc)
@@ -2013,8 +2529,9 @@ write_csv(iv_plot_df_combo,"iv_plot_df_combo.csv")
 write_csv(po_plot_df_combo,"po_plot_df_combo.csv")
 write_csv(overall_plot_df_combo,"overall_plot_df_combo.csv")
 
-iv_plot_df_combo %>% susc_plotter("IV ","Resistance","(including combinations)",
-                                  agent_col1=TZP,agent_name1="Tazocin")
+iv_plot_df_combo %>% susc_plotter_iv("IV ","Resistance","(including combinations)",
+                                  agent_col1=GEN,agent_name1="Gentamicin",
+                                  agent_col2=TZP,agent_name2="Piperacillin-tazobactam")
 po_plot_df_combo %>% susc_plotter("oral ","Resistance","(including combinations)",
                                   agent_col1=NIT,agent_name1="Nitrofurantoin")
 overall_plot_df_combo %>% susc_plotter("overall ","Resistance","(including combinations)",
@@ -2051,24 +2568,24 @@ util_probs_df <- util_probs_df %>% mutate(better_R=case_when(Antimicrobial=="Amp
                                             Antimicrobial=="Vancomycin"&VAN=="R"~(R+1)/2,
                                             TRUE~NA))
 
-weightseq <- seq(0,4,1)
-iv_perclist <- c()
-po_perclist <- c()
-overall_perclist <- c()
-ivac_list <- c()
-poac_list <- c()
-ovac_list <- c()
+weightseq <- seq(0,30,5)
+iv_perclist_imp <- c()
+po_perclist_imp <- c()
+overall_perclist_imp <- c()
+ivac_list_imp <- c()
+poac_list_imp <- c()
+ovac_list_imp <- c()
 
 for(weight in seq_along(weightseq)) {
   
   res_sens_analysis_2(ur_util,util_probs_df,weightseq[weight])
   
-  iv_perclist <- c(iv_perclist,iv_perc)
-  po_perclist <- c(po_perclist,po_perc)
-  overall_perclist <- c(overall_perclist,overall_perc)
-  ivac_list <- c(ivac_list,iv_s_access)
-  poac_list <- c(poac_list,po_s_access)
-  ovac_list <- c(ovac_list,overall_s_access)
+  iv_perclist_imp <- c(iv_perclist_imp,iv_perc)
+  po_perclist_imp <- c(po_perclist_imp,po_perc)
+  overall_perclist_imp <- c(overall_perclist_imp,overall_perc)
+  ivac_list_imp <- c(ivac_list_imp,iv_s_access)
+  poac_list_imp <- c(poac_list_imp,po_s_access)
+  ovac_list_imp <- c(ovac_list_imp,overall_s_access)
   
 }
 
@@ -2078,131 +2595,115 @@ label_binder <- function(vec,label) {
   
 }
 
-iv_perclist <- iv_perclist %>% label_binder("All agents")
-po_perclist <- po_perclist %>% label_binder("All agents")
-overall_perclist <- overall_perclist %>% label_binder("All agents")
-ivac_list <- ivac_list %>% label_binder("Access agents")
-poac_list <- poac_list %>% label_binder("Access agents")
-ovac_list <- ovac_list %>% label_binder("Access agents")
-iv_perclist <- iv_perclist %>% rename(Percentage = "vec")
-po_perclist <- po_perclist %>% rename(Percentage = "vec")
-overall_perclist <- overall_perclist %>% rename(Percentage = "vec")
-ivac_list <- ivac_list %>% rename(Percentage = "vec")
-poac_list <- poac_list %>% rename(Percentage = "vec")
-ovac_list <- ovac_list %>% rename(Percentage = "vec")
-iv_perclist <- iv_perclist %>% mutate(Percentage=100-Percentage)
-po_perclist <- po_perclist %>% mutate(Percentage=100-Percentage)
-overall_perclist <- overall_perclist %>% mutate(Percentage=100-Percentage)
+iv_perclist_imp <- iv_perclist_imp %>% label_binder("All agents")
+po_perclist_imp <- po_perclist_imp %>% label_binder("All agents")
+overall_perclist_imp <- overall_perclist_imp %>% label_binder("All agents")
+ivac_list_imp <- ivac_list_imp %>% label_binder("Access agents")
+poac_list_imp <- poac_list_imp %>% label_binder("Access agents")
+ovac_list_imp <- ovac_list_imp %>% label_binder("Access agents")
+iv_perclist_imp <- iv_perclist_imp %>% rename(Percentage = "vec")
+po_perclist_imp <- po_perclist_imp %>% rename(Percentage = "vec")
+overall_perclist_imp <- overall_perclist_imp %>% rename(Percentage = "vec")
+ivac_list_imp <- ivac_list_imp %>% rename(Percentage = "vec")
+poac_list_imp <- poac_list_imp %>% rename(Percentage = "vec")
+ovac_list_imp <- ovac_list_imp %>% rename(Percentage = "vec")
+iv_perclist_imp <- iv_perclist_imp %>% mutate(Percentage=100-Percentage)
+po_perclist_imp <- po_perclist_imp %>% mutate(Percentage=100-Percentage)
+overall_perclist_imp <- overall_perclist_imp %>% mutate(Percentage=100-Percentage)
 
-iv_plot_df <- data.frame(rbind(
-  iv_perclist,ivac_list
+iv_plot_df_imp <- data.frame(rbind(
+  iv_perclist_imp,ivac_list_imp
 ))
-po_plot_df <- data.frame(rbind(
-  po_perclist,poac_list
+po_plot_df_imp <- data.frame(rbind(
+  po_perclist_imp,poac_list_imp
 ))
-overall_plot_df <- data.frame(rbind(
-  overall_perclist,ovac_list
+overall_plot_df_imp <- data.frame(rbind(
+  overall_perclist_imp,ovac_list_imp
 ))
 
-write_csv(iv_plot_df,"iv_plot_df.csv")
-write_csv(po_plot_df,"po_plot_df.csv")
-write_csv(overall_plot_df,"overall_plot_df.csv")
+write_csv(iv_plot_df_imp,"iv_plot_df_imp.csv")
+write_csv(po_plot_df_imp,"po_plot_df_imp.csv")
+write_csv(overall_plot_df_imp,"overall_plot_df_imp.csv")
 
-susc_plotter <- function(df,subset="",measure,suffix="",agent_col1,agent_name1,agent_col2,agent_name2) {
-  
-  agent_col1 <- enquo(agent_col1)
-  agent_col2 <- enquo(agent_col2)
-  
-  df2 <- df %>% filter(Metric=="All agents") %>% mutate(Metric="UNGA target",
-                                                        Percentage=0.7*Percentage)
-  df <- data.frame(rbind(df,df2))
-  df$Metric <- factor(df$Metric, levels=c("All agents","Access agents","UNGA target"))
-  
-  susplot <- ggplot(df,aes(x=Weight,y=Percentage,group=Metric,color=Metric,fill=Metric)) +
-    geom_line()+
-    geom_hline(linetype="dashed",yintercept=(nrow(ur_util %>% filter(!!agent_col1=="S"|!!agent_col1=="I"))/nrow(ur_util))*100,color="darkgrey") +
-    geom_area(position = "identity", alpha = 0.4) +
-    ylim(0,100)+
-    theme_minimal()+
-    ggtitle(glue("Urine isolate susceptibility to {subset}antimicrobial recommended\n{suffix}"))+
-    xlab(glue("{measure} importance weighting"))+
-    ylab("Percentage of isolates susceptible to recommendation")+
-    annotate("text", x = Inf, y = (nrow(ur_util %>% filter(!!agent_col1=="S"|!!agent_col1=="I"))/nrow(ur_util))*100+2, label = glue(agent_name1), hjust = 1.1, color = "darkgrey")
-  
-  ggsave(glue("{subset}_{measure}_{suffix}_susplot.pdf"), plot = susplot, device = "pdf", width = 10, height = 6,
-         path="/Users/alexhoward/Documents/Projects/UDAST_code")
-  
-  print(susplot)
-  
-}
+iv_plot_df_imp %>% susc_plotter_iv("IV ","Resistance","(prediction accuracy improved)",agent_col1=GEN,agent_name1="Gentamicin",
+                                agent_col2=TZP,agent_name2="Piperacillin-tazobactam")
+po_plot_df_imp %>% susc_plotter("oral ","Resistance","(prediction accuracy improved)",agent_col1=NIT,agent_name1="Nitrofurantoin")
+overall_plot_df_imp %>% susc_plotter("overall ", "Resistance","(prediction accuracy improved)",agent_col1=NIT,agent_name1="Nitrofurantoin")
 
-iv_plot_df %>% susc_plotter("IV ","Resistance","(prediction accuracy improved)",agent_col1=GEN,agent_name1="Gentamicin")
-po_plot_df %>% susc_plotter("oral ","Resistance",agent_col1=NIT,agent_name1="Nitrofurantoin")
-overall_plot_df %>% susc_plotter("overall ", "Resistance",agent_col1=NIT,agent_name1="Nitrofurantoin")
+###2nd-line oral R weight sensitivity analysis
+all_singles <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
+                 "MEM","CIP","GEN","SXT")
+ab_singles <- all_singles
+all_combos <- combn(all_singles, 2, FUN = function(x) paste(x, collapse = "_"))
+all_abs <- c(all_singles,all_combos)
+iv_singles <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
+                "GEN","SXT")
+iv_ab_singles <- iv_singles
+iv_combos <- combn(iv_singles, 2, FUN = function(x) paste(x, collapse = "_"))
+all_ivs <- c(iv_singles, iv_combos)
+oral_singles <- c("AMP","SAM","CIP",
+                  "SXT")
+oral_ab_singles <- oral_singles
+oral_combos <- combn(oral_singles, 2, FUN = function(x) paste(x, collapse = "_"))
+all_orals <- c(oral_singles, oral_combos)
+access_singles <- c("AMP","SAM","GEN",
+                    "SXT","CZO")
+access_combos <- combn(access_singles, 2, FUN = function(x) paste(x, collapse = "_"))
+all_access <- c(access_singles, access_combos)
+watch_singles <- c("CRO","CAZ","FEP","MEM","TZP","CIP","VAN")
+watch_combos <- combn(watch_singles, 2, FUN = function(x) paste(x, collapse = "_"))
+all_watch <- c(watch_singles, watch_combos)
 
-###Access weighting sensitivity analysis
-weightseq <- seq(0,100,3)
-iv_perclist_a <- c()
-po_perclist_a <- c()
-overall_perclist_a <- c()
-ivaclist_a <- c()
-poaclist_a <- c()
-ovaclist_a <- c()
+weightseq <- seq(0,30,5)
+iv_perclist_2nd <- c()
+po_perclist_2nd <- c()
+overall_perclist_2nd <- c()
+ivac_list_2nd <- c()
+poac_list_2nd <- c()
+ovac_list_2nd <- c()
 
 for(weight in seq_along(weightseq)) {
   
-  res_sens_analysis(ur_util,util_probs_df,access_weight=weightseq[weight])
+  res_sens_analysis(ur_util,util_probs_df,weightseq[weight])
   
-  iv_perclist_a <- c(iv_perclist_a,iv_perc)
-  po_perclist_a <- c(po_perclist_a,po_perc)
-  overall_perclist_a <- c(overall_perclist_a,overall_perc)
-  ivaclist_a <- c(ivaclist_a,iv_s_access)
-  poaclist_a <- c(poaclist_a,po_s_access)
-  ovaclist_a <- c(ovaclist_a,overall_s_access)
+  iv_perclist_2nd <- c(iv_perclist_2nd,iv_perc)
+  po_perclist_2nd <- c(po_perclist_2nd,po_perc)
+  overall_perclist_2nd <- c(overall_perclist_2nd,overall_perc)
+  ivac_list_2nd <- c(ivac_list_2nd,iv_s_access)
+  poac_list_2nd <- c(poac_list_2nd,po_s_access)
+  ovac_list_2nd <- c(ovac_list_2nd,overall_s_access)
   
 }
 
-iv_perclist_a <- iv_perclist_a %>% label_binder("All agents")
-po_perclist_a <- po_perclist_a %>% label_binder("All agents")
-overall_perclist_a <- overall_perclist_a %>% label_binder("All agents")
-ivaclist_a <- ivaclist_a %>% label_binder("Access agents")
-poaclist_a <- poaclist_a %>% label_binder("Access agents")
-ovaclist_a <- ovaclist_a %>% label_binder("Access agents")
-iv_perclist_a <- iv_perclist_a %>% rename(Percentage = "vec")
-po_perclist_a <- po_perclist_a %>% rename(Percentage = "vec")
-overall_perclist_a <- overall_perclist_a %>% rename(Percentage = "vec")
-ivaclist_a <- ivaclist_a %>% rename(Percentage = "vec")
-poaclist_a <- poaclist_a %>% rename(Percentage = "vec")
-ovaclist_a <- ovaclist_a %>% rename(Percentage = "vec")
-iv_perclist_a <- iv_perclist_a %>% mutate(Percentage=100-Percentage)
-po_perclist_a <- po_perclist_a %>% mutate(Percentage=100-Percentage)
-overall_perclist_a <- overall_perclist_a %>% mutate(Percentage=100-Percentage)
+iv_perclist_2nd <- iv_perclist_2nd %>% label_binder("All agents")
+po_perclist_2nd <- po_perclist_2nd %>% label_binder("All agents")
+overall_perclist_2nd <- overall_perclist_2nd %>% label_binder("All agents")
+ivac_list_2nd <- ivac_list_2nd %>% label_binder("Access agents")
+poac_list_2nd <- poac_list_2nd %>% label_binder("Access agents")
+ovac_list_2nd <- ovac_list_2nd %>% label_binder("Access agents")
+iv_perclist_2nd <- iv_perclist_2nd %>% rename(Percentage = "vec")
+po_perclist_2nd <- po_perclist_2nd %>% rename(Percentage = "vec")
+overall_perclist_2nd <- overall_perclist_2nd %>% rename(Percentage = "vec")
+ivac_list_2nd <- ivac_list_2nd %>% rename(Percentage = "vec")
+poac_list_2nd <- poac_list_2nd %>% rename(Percentage = "vec")
+ovac_list_2nd <- ovac_list_2nd %>% rename(Percentage = "vec")
+iv_perclist_2nd <- iv_perclist_2nd %>% mutate(Percentage=100-Percentage)
+po_perclist_2nd <- po_perclist_2nd %>% mutate(Percentage=100-Percentage)
+overall_perclist_2nd <- overall_perclist_2nd %>% mutate(Percentage=100-Percentage)
 
-iv_plot_df_a <- data.frame(rbind(
-  iv_perclist_a,ivaclist_a
+iv_plot_df_2nd <- data.frame(rbind(
+  iv_perclist_2nd,ivac_list_2nd
 ))
-po_plot_df_a <- data.frame(rbind(
-  po_perclist_a,poaclist_a
+po_plot_df_2nd <- data.frame(rbind(
+  po_perclist_2nd,poac_list_2nd
 ))
-overall_plot_df_a <- data.frame(rbind(
-  overall_perclist_a,ovaclist_a
+overall_plot_df_2nd <- data.frame(rbind(
+  overall_perclist_2nd,ovac_list_2nd
 ))
 
-write_csv(iv_plot_df_a,"iv_plot_df_a.csv")
-write_csv(po_plot_df_a,"po_plot_df_a.csv")
-write_csv(overall_plot_df_a,"overall_plot_df_a.csv")
+write_csv(iv_plot_df_2nd,"iv_plot_df_2nd.csv")
+write_csv(po_plot_df_2nd,"po_plot_df_2nd.csv")
+write_csv(overall_plot_df_2nd,"overall_plot_df_2nd.csv")
 
-iv_plot_df_a %>% susc_plotter("IV ","Access",
-                              agent_col1=GEN,agent_name1="Gentamicin")
-po_plot_df_a %>% susc_plotter("oral ","Access",
-                              agent_col1=NIT,agent_name1="Nitrofurantoin")
-overall_plot_df_a %>% susc_plotter("overall ","Access",
-                                   agent_col1=NIT,agent_name1="Nitrofurantoin")
-
-
-
-
-
-
-
+po_plot_df_2nd %>% susc_plotter("oral ","Resistance"," (Second-line)",agent_col1=SAM,agent_name1="Ampicillin-sulbactam")
 
