@@ -27,6 +27,73 @@ prev_event_assign <- function(df,B_var,event_df,event_var,no_days,no_events) {
   
 }
 
+###Dummy variables for main presenting complains
+pc_dummies <- function(df) {
+  
+  df %>% mutate(
+    pc_dyspnea = case_when(grepl("Dyspnea",chiefcomplaint,ignore.case=T)|
+                             grepl("shortness",chiefcomplaint,ignore.case=T)|
+                             grepl("sob",chiefcomplaint,ignore.case=T)|
+                             grepl("hypoxia",chiefcomplaint,ignore.case=T)~ TRUE,
+                           TRUE~FALSE),
+    pc_abdopain = case_when(grepl("abd",chiefcomplaint,ignore.case=T)&
+                              grepl("pain",chiefcomplaint,ignore.case=T)~ TRUE,
+                            TRUE~FALSE),
+    pc_confusion = case_when((grepl("altered",chiefcomplaint,ignore.case=T)&
+                                grepl("mental",chiefcomplaint,ignore.case=T)|
+                                grepl("confus",chiefcomplaint,ignore.case=T))~ TRUE,
+                             TRUE~FALSE),
+    pc_chestpain = case_when(grepl("chest",chiefcomplaint,ignore.case=T)&
+                               grepl("pain",chiefcomplaint,ignore.case=T)~ TRUE,
+                             TRUE~FALSE),
+    pc_weakness = case_when(grepl("weakness",chiefcomplaint,ignore.case=T)~ TRUE,
+                            TRUE~FALSE),
+    pc_dyspnea = case_when(grepl("fever",chiefcomplaint,ignore.case=T)~ TRUE,
+                           TRUE~FALSE),
+    pc_wound = case_when(grepl("wound",chiefcomplaint,ignore.case=T)~ TRUE,
+                         TRUE~FALSE),
+    pc_fall = case_when(grepl("fall",chiefcomplaint,ignore.case=T)~ TRUE,
+                        TRUE~FALSE),
+    pc_prbleed = case_when(grepl("brbpr",chiefcomplaint,ignore.case=T)~ TRUE,
+                           TRUE~FALSE),
+    pc_vomiting = case_when(grepl("N/V",chiefcomplaint,ignore.case=T)~ TRUE,
+                            TRUE~FALSE),
+    pc_backpain = case_when(grepl("back",chiefcomplaint,ignore.case=T)&
+                              grepl("pain",chiefcomplaint,ignore.case=T)~ TRUE,
+                            TRUE~FALSE),
+    pc_lethargy = case_when(grepl("lethargy",chiefcomplaint,ignore.case=T)~ TRUE,
+                            TRUE~FALSE),
+    pc_diarvom = case_when(grepl("N/V/D",chiefcomplaint,ignore.case=T)~ TRUE,
+                           TRUE~FALSE),
+    pc_diarrhea = case_when(grepl("diarrhea",chiefcomplaint,ignore.case=T)~ TRUE,
+                            TRUE~FALSE),
+    pc_headache = case_when(grepl("headache",chiefcomplaint,ignore.case=T)~ TRUE,
+                            TRUE~FALSE),
+    pc_syncope = case_when(grepl("syncope",chiefcomplaint,ignore.case=T)~ TRUE,
+                           TRUE~FALSE),
+    pc_seizure = case_when(grepl("seizure",chiefcomplaint,ignore.case=T)~ TRUE,
+                           TRUE~FALSE),
+    pc_flankpain = case_when(grepl("flank",chiefcomplaint,ignore.case=T)~ TRUE,
+                             TRUE~FALSE),
+    pc_lowbp = case_when(grepl("hypotension",chiefcomplaint,ignore.case=T)~ TRUE,
+                         TRUE~FALSE),
+    pc_anemia = case_when(grepl("anemia",chiefcomplaint,ignore.case=T)~ TRUE,
+                          TRUE~FALSE),
+    pc_pain = case_when(grepl("pain",chiefcomplaint,ignore.case=T)~ TRUE,
+                        TRUE~FALSE),
+    pc_swelling = case_when(grepl("swelling",chiefcomplaint,ignore.case=T)~ TRUE,
+                            TRUE~FALSE),
+    pc_cough = case_when(grepl("cough",chiefcomplaint,ignore.case=T)~ TRUE,
+                         TRUE~FALSE),
+    pc_sepsis = case_when(grepl("cough",chiefcomplaint,ignore.case=T)~ TRUE,
+                          TRUE~FALSE),
+    pc_fever = case_when(grepl("fever",chiefcomplaint,ignore.case=T)|
+                           grepl("pyrexia",chiefcomplaint,ignore.case=T)~ TRUE,
+                         TRUE~FALSE)
+  )
+  
+}
+
 ###Assigning previous event type feature variable
 prev_event_type_assign <- function(df,B_var,event_df,event_var,event_type,no_days,no_events) {
   
@@ -208,7 +275,7 @@ CDI_label <- function(df,filter_term) {
   
   df <- df %>% mutate(spec_type_desc="URINE") %>% 
     prev_event_type_assign(CDI,cdi_ref,org_fullname,"Clostridioides difficile",
-                           28,1) %>% ungroup()  %>% 
+                           28*3,1) %>% ungroup()  %>% 
     filter(!is.na(!!filter_term))
   df$CDI <- factor(df$CDI)
   
@@ -1552,6 +1619,211 @@ recipethis <- recipe(~org_fullname,data=pos_urines)
 dummies <- recipethis %>% step_dummy(org_fullname) %>% prep(training = pos_urines)
 dummy_data <- bake(dummies,new_data = NULL)
 pos_urines <- pos_urines %>% cbind(dummy_data) %>% tibble()
+
+##Standardised observations
+
+###Observation key from ED datasets
+staykey <- edstays %>% select(hadm_id,stay_id) %>% 
+  distinct(hadm_id,.keep_all = T) %>% filter(!is.na(hadm_id))
+triage <- triage %>% left_join(staykey)
+triagekey <- triage %>% select(hadm_id,temperature,heartrate,
+                               resprate,o2sat,sbp,dbp,acuity,
+                               chiefcomplaint) %>% 
+  distinct(hadm_id,.keep_all = T)
+pos_urines <- pos_urines %>% left_join(triagekey)
+pos_urines <- pos_urines %>% mutate(o2sat = case_when(o2sat>100 ~ 100,
+                                                      TRUE~o2sat))
+pos_urines <- pos_urines %>% mutate(dbp = case_when(dbp==775 ~ 75,
+                                                      TRUE~dbp))
+
+pos_urines <- pos_urines %>% mutate(heartrate=case_when(is.na(heartrate)~mean(pos_urines$heartrate,na.rm=T),
+                                                      TRUE~heartrate),
+                      resprate=case_when(is.na(resprate)~mean(pos_urines$resprate,na.rm=T),
+                                          TRUE~resprate),
+                      sbp=case_when(is.na(sbp)~mean(pos_urines$sbp,na.rm=T),
+                                          TRUE~sbp),
+                      dbp=case_when(is.na(dbp)~mean(pos_urines$dbp,na.rm=T),
+                                          TRUE~dbp),
+                      acuity=case_when(is.na(acuity)~mean(pos_urines$acuity,na.rm=T),
+                                          TRUE~acuity),
+                      o2sat=case_when(is.na(o2sat)~mean(pos_urines$o2sat,na.rm=T),
+                                          TRUE~o2sat),
+                      temperature=case_when(is.na(temperature)~mean(pos_urines$temperature,na.rm=T),
+                                      TRUE~temperature),
+                      )
+pos_urines <- pos_urines %>% mutate(heartrate=standardize(heartrate),
+                                    resprate=standardize(heartrate),
+                                    sbp=standardize(heartrate),
+                                    dbp=standardize(heartrate),
+                                    acuity=standardize(heartrate),
+                                    o2sat=standardize(heartrate),
+                                    temperature=standardize(temperature))
+
+
+###Adding presenting complaint variables
+pos_urines %>% count(chiefcomplaint) %>% arrange(desc(n)) %>% print(n=200)
+pos_urines <- pos_urines %>% pc_dummies() %>% select(-chiefcomplaint)
+
+###Add admission blood tests
+labevents_urine <- labevents %>% semi_join(pos_urines,by="hadm_id")
+alt <- labitems %>% filter(grepl("Alanine Aminotransferase",label))
+alb <- labitems %>% filter(grepl("Albumin",label))
+alp <- labitems %>% filter(grepl("Alkaline Phosphatase",label))
+bic <- labitems %>% filter(grepl("Bicarbonate",label))
+bil <- labitems %>% filter(grepl("Bilirubin, Total",label))
+cre <- labitems %>% filter(grepl("^Creatinine$",label))
+pot <- labitems %>% filter(grepl("Potassium",label))
+sod <- labitems %>% filter(grepl("Sodium",label))
+hct <- labitems %>% filter(grepl("Hematocrit",label))
+hb <- labitems %>% filter(grepl("Hemoglobin",label))
+lym <- labitems %>% filter(grepl("Lymphocytes",label))
+mon <- labitems %>% filter(grepl("Monocytes",label))
+neu <- labitems %>% filter(grepl("Neutrophils",label))
+plt <- labitems %>% filter(grepl("Platelet Count",label))
+pt <- labitems %>% filter(grepl("^PT$",label))
+ptt <- labitems %>% filter(grepl("PTT",label))
+rdw <- labitems %>% filter(grepl("^RDW$",label))
+rbc <- labitems %>% filter(grepl("Red Blood Cells",label))
+wbc <- labitems %>% filter(grepl("White Blood Cells",label))
+lac <- labitems %>% filter(grepl("^Lactate$",label))
+ldh <- labitems %>% filter(grepl("Lactate Dehydrogenase",label))
+labevents_alt <- labevents_urine %>% semi_join(alt,by="itemid")
+labevents_alb <- labevents_urine %>% semi_join(alb,by="itemid")
+labevents_alp <- labevents_urine %>% semi_join(alp,by="itemid")
+labevents_bic <- labevents_urine %>% semi_join(bic,by="itemid")
+labevents_bil <- labevents_urine %>% semi_join(bil,by="itemid")
+labevents_cre <- labevents_urine %>% semi_join(cre,by="itemid")
+labevents_pot <- labevents_urine %>% semi_join(pot,by="itemid")
+labevents_sod <- labevents_urine %>% semi_join(sod,by="itemid")
+labevents_hct <- labevents_urine %>% semi_join(hct,by="itemid")
+labevents_hb <- labevents_urine %>% semi_join(hb,by="itemid")
+labevents_lym <- labevents_urine %>% semi_join(lym,by="itemid")
+labevents_mon <- labevents_urine %>% semi_join(mon,by="itemid")
+labevents_neu <- labevents_urine %>% semi_join(neu,by="itemid")
+labevents_plt <- labevents_urine %>% semi_join(plt,by="itemid")
+labevents_pt <- labevents_urine %>% semi_join(pt,by="itemid")
+labevents_ptt <- labevents_urine %>% semi_join(ptt,by="itemid")
+labevents_rdw <- labevents_urine %>% semi_join(rdw,by="itemid")
+labevents_rbc <- labevents_urine %>% semi_join(rbc,by="itemid")
+labevents_wbc <- labevents_urine %>% semi_join(wbc,by="itemid")
+labevents_lac <- labevents_urine %>% semi_join(lac,by="itemid")
+labevents_ldh <- labevents_urine %>% semi_join(ldh,by="itemid")
+blood_binder <- function(df,df2,test_name) {
+  
+  test_name <- enquo(test_name)
+  
+  df %>% 
+    bind_rows(df2) %>%
+    group_by(subject_id) %>% 
+    arrange(charttime) %>% 
+    mutate(!!test_name := case_when(is.na(lag(micro_specimen_id))~lag(valuenum),
+                                    !is.na(lag(micro_specimen_id))&is.na(lag(micro_specimen_id,n=2))~lag(valuenum,n=2),
+                                    !is.na(lag(micro_specimen_id))&!is.na(lag(micro_specimen_id,n=2))&is.na(lag(micro_specimen_id,n=3))~lag(valuenum,n=3),
+                                    !is.na(lag(micro_specimen_id))&!is.na(lag(micro_specimen_id,n=2))&!is.na(lag(micro_specimen_id,n=3))&is.na(lag(micro_specimen_id,n=4))~lag(valuenum,n=4),
+                                    !is.na(lag(micro_specimen_id))&!is.na(lag(micro_specimen_id,n=2))&!is.na(lag(micro_specimen_id,n=3))&!is.na(lag(micro_specimen_id,n=4))&is.na(lag(micro_specimen_id,n=5))~lag(valuenum,n=5),
+                                    TRUE~NA
+                                                )) %>%
+    ungroup() %>%                   
+    filter(!is.na(micro_specimen_id)) %>% 
+    select(-(labevent_id:priority))
+  
+}
+pos_urines <- pos_urines %>% 
+  blood_binder(labevents_alt,`Alanine Aminotransferase`)%>% 
+  blood_binder(labevents_alb,Albumin) %>% 
+  blood_binder(labevents_alp,`Alkaline Phosphatase`) %>% 
+  blood_binder(labevents_bic,Bicarbonate) %>% 
+  blood_binder(labevents_bil,`Bilirubin, Total`) %>% 
+  blood_binder(labevents_cre,Creatinine) %>% 
+  blood_binder(labevents_pot,Potassium) %>% 
+  blood_binder(labevents_sod,Sodium) %>% 
+  blood_binder(labevents_hct,Hematocrit) %>% 
+  blood_binder(labevents_hb,Hemoglobin) %>% 
+  blood_binder(labevents_lym,Lymphocytes) %>% 
+  blood_binder(labevents_mon,Monocytes) %>% 
+  blood_binder(labevents_neu,Neutrophils) %>% 
+  blood_binder(labevents_plt,`Platelet Count`) %>% 
+  blood_binder(labevents_pt,PT) %>% 
+  blood_binder(labevents_ptt,PTT) %>% 
+  blood_binder(labevents_rdw,RDW) %>% 
+  blood_binder(labevents_rbc,`Red blood Cells`) %>% 
+  blood_binder(labevents_wbc,`White Blood Cells`) %>% 
+  blood_binder(labevents_lac,Lactate) %>% 
+  blood_binder(labevents_ldh,`Lactate Dehydrogenase`) 
+
+pos_urines <- pos_urines %>% select(-PT)
+pos_urines <- pos_urines %>% 
+  mutate(
+    Lactate = case_when(is.na(Lactate) ~ mean(as.numeric(Lactate), na.rm = TRUE), TRUE ~ as.numeric(Lactate)),
+    Hematocrit = case_when(is.na(Hematocrit) ~ mean(as.numeric(Hematocrit), na.rm = TRUE), TRUE ~ as.numeric(Hematocrit)),
+    PTT = case_when(is.na(PTT) ~ mean(as.numeric(PTT), na.rm = TRUE), TRUE ~ as.numeric(PTT)),
+    Hemoglobin = case_when(is.na(Hemoglobin) ~ mean(as.numeric(Hemoglobin), na.rm = TRUE), TRUE ~ as.numeric(Hemoglobin)),
+    Lymphocytes = case_when(is.na(Lymphocytes) ~ mean(as.numeric(Lymphocytes), na.rm = TRUE), TRUE ~ as.numeric(Lymphocytes)),
+    Monocytes = case_when(is.na(Monocytes) ~ mean(as.numeric(Monocytes), na.rm = TRUE), TRUE ~ as.numeric(Monocytes)),
+    Neutrophils = case_when(is.na(Neutrophils) ~ mean(as.numeric(Neutrophils), na.rm = TRUE), TRUE ~ as.numeric(Neutrophils)),
+    `Platelet Count` = case_when(is.na(`Platelet Count`) ~ mean(as.numeric(`Platelet Count`), na.rm = TRUE), TRUE ~ as.numeric(`Platelet Count`)),
+    RDW = case_when(is.na(RDW) ~ mean(as.numeric(RDW), na.rm = TRUE), TRUE ~ as.numeric(RDW)),
+    `Red blood Cells` = case_when(is.na(`Red blood Cells`) ~ mean(as.numeric(`Red blood Cells`), na.rm = TRUE), TRUE ~ as.numeric(`Red blood Cells`)),
+    `White Blood Cells` = case_when(is.na(`White Blood Cells`) ~ mean(as.numeric(`White Blood Cells`), na.rm = TRUE), TRUE ~ as.numeric(`White Blood Cells`)),
+    Bicarbonate = case_when(is.na(Bicarbonate) ~ mean(as.numeric(Bicarbonate), na.rm = TRUE), TRUE ~ as.numeric(Bicarbonate)),
+    Creatinine = case_when(is.na(Creatinine) ~ mean(as.numeric(Creatinine), na.rm = TRUE), TRUE ~ as.numeric(Creatinine)),
+    Sodium = case_when(is.na(Sodium) ~ mean(as.numeric(Sodium), na.rm = TRUE), TRUE ~ as.numeric(Sodium)),
+    Albumin = case_when(is.na(Albumin) ~ mean(as.numeric(Albumin), na.rm = TRUE), TRUE ~ as.numeric(Albumin)),
+    `Alkaline Phosphatase` = case_when(is.na(`Alkaline Phosphatase`) ~ mean(as.numeric(`Alkaline Phosphatase`), na.rm = TRUE), TRUE ~ as.numeric(`Alkaline Phosphatase`)),
+    `Bilirubin, Total` = case_when(is.na(`Bilirubin, Total`) ~ mean(as.numeric(`Bilirubin, Total`), na.rm = TRUE), TRUE ~ as.numeric(`Bilirubin, Total`)),
+    Potassium = case_when(is.na(Potassium) ~ mean(as.numeric(Potassium), na.rm = TRUE), TRUE ~ as.numeric(Potassium)),
+    `Lactate Dehydrogenase` = case_when(is.na(`Lactate Dehydrogenase`) ~ mean(as.numeric(`Lactate Dehydrogenase`), na.rm = TRUE), TRUE ~ as.numeric(`Lactate Dehydrogenase`)),
+    `Alanine Aminotransferase` = case_when(is.na(`Alanine Aminotransferase`) ~ mean(as.numeric(`Alanine Aminotransferase`), na.rm = TRUE), TRUE ~ as.numeric(`Alanine Aminotransferase`))
+  )
+
+pos_urines <- pos_urines %>% mutate(Lactate = standardize(Lactate),
+                                    Hematocrit = standardize(Hematocrit),
+                                    PTT = standardize(PTT),
+                                    Hemoglobin = standardize(Hemoglobin),
+                                    Lymphocytes = standardize(Lymphocytes),
+                                    Monocytes = standardize(Monocytes),
+                                    Neutrophils = standardize(Neutrophils),
+                                    `Platelet Count` = standardize(`Platelet Count`),
+                                    RDW = standardize(RDW),
+                                    `Red blood Cells` = standardize(`Red blood Cells`),
+                                    `White Blood Cells` = standardize(`White Blood Cells`),
+                                    Bicarbonate = standardize(Bicarbonate),
+                                    Creatinine = standardize(Creatinine),
+                                    Sodium = standardize(Sodium),
+                                    Albumin = standardize(Albumin),
+                                    `Alkaline Phosphatase` = standardize(`Alkaline Phosphatase`),
+                                    `Bilirubin, Total` = standardize(`Bilirubin, Total`),
+                                    Potassium = standardize(Potassium),
+                                    `Lactate Dehydrogenase` = standardize(`Lactate Dehydrogenase`),
+                                    `Alanine Aminotransferase` = standardize(`Alanine Aminotransferase`))
+
+###Arrival transport and disposition (from edstays)
+transp_key <- edstays %>% filter(!is.na(hadm_id)&!is.na(stay_id)) %>% 
+  select(hadm_id,stay_id,arrival_transport,disposition) %>% distinct(hadm_id,.keep_all = T)
+pos_urines <- pos_urines %>% left_join(transp_key,by="hadm_id")
+pos_urines <- pos_urines %>% mutate(arrival_transport=case_when(is.na(arrival_transport)~"UNKNOWN",
+                                                                TRUE~arrival_transport),
+                                    disposition=case_when(is.na(disposition)~"UNKNOWN",
+                                                                TRUE~disposition))
+
+###Admission medications
+medrecon <- read_csv("medrecon.csv")
+medkey <- medrecon %>% count(etcdescription) %>% arrange(desc(n)) %>% filter(n>1000)
+medrecon <- medrecon %>% semi_join(medkey,by="etcdescription")
+medrecon <- medrecon %>% distinct(stay_id,etcdescription)
+medrecon <- medrecon %>% mutate(value = TRUE) %>%
+  pivot_wider(
+    id_cols = stay_id,                    
+    names_from = etcdescription,          
+    values_from = value,                  
+    values_fill = list(value = FALSE)     
+  )
+pos_urines <- pos_urines %>% left_join(medrecon,by="stay_id")
+pos_urines <- pos_urines %>% select(-stay_id)
+pos_urines <- pos_urines %>% mutate(across(`Asthma/COPD Therapy - Beta 2-Adrenergic Agents, Inhaled, Short Acting`:
+                               `Hepatitis B Treatment- Nucleoside Analogs (Antiviral)`,
+                      ~replace_na(.x,FALSE))) 
+
 write_csv(pos_urines,"pos_urines_w_features.csv")
 
 ##Preprocessing for prediction model
@@ -1580,14 +1852,14 @@ urines_assess <- urines_assess %>% AmpC_variable()
 ###Assign and save reference datasets
 ur_util <- urines_assess
 urines_ref <- urines
-urines <- tibble(urines %>% ungroup() %>% select(AMP:VAN,pAMPr:org_fullname_Staphylococcus.aureus,AmpC))
+urines <- tibble(urines %>% ungroup() %>% select(AMP:VAN,pAMPr:`Hepatitis B Treatment- Nucleoside Analogs (Antiviral)`,AmpC))
 write_csv(urines, "urines.csv")
 write_csv(urines_ref,"urines_ref.csv")
 write_csv(urines_assess,"urines_assess.csv")
 
 ###Dataset for enterococcal sensitivity analysis
 urines_ref2 <- urines_ref %>% filter(!grepl("Enterococcus",org_fullname))
-urines5_ent <- tibble(urines_ref2 %>% ungroup() %>% select(AMP:VAN,pAMPr:org_fullname_Staphylococcus.aureus,AmpC))
+urines5_ent <- tibble(urines_ref2 %>% ungroup() %>% select(AMP:VAN,pAMPr:`Hepatitis B Treatment- Nucleoside Analogs (Antiviral)`,AmpC))
 
 ##Main binomial analysis model development dataset
 
@@ -1595,8 +1867,8 @@ urines5_ent <- tibble(urines_ref2 %>% ungroup() %>% select(AMP:VAN,pAMPr:org_ful
 urines5 <- urines
 
 ###Select only variables to be used for model development
-urines5 <- urines5 %>% select(1:pTPN,AmpC)
-urines5_ent <- urines5_ent %>% select(1:pTPN,AmpC)
+urines5 <- urines5 %>% select(1:pTPN,temperature:AmpC)
+urines5_ent <- urines5_ent %>% select(1:pTPN,temperature:AmpC)
 
 ###Binarise AST results
 urines5 <- urines5 %>% binarise_full_df("R","S")
@@ -1614,10 +1886,20 @@ ur_util <- ur_util %>% AmpC_converter()
 urines5 <- urines5 %>% AmpC_converter() %>% select(-AmpC)
 urines5_ent <- urines5_ent %>% AmpC_converter() %>% select(-AmpC)
 
+
+
 ###Save to file
 write_csv(urines5,"urines5.csv")
 write_csv(urines5_ent,"urines5_ent.csv")
 write_csv(ur_util,"ur_util.csv")
+
+abn <- ab_singles %>% ab_name() %>% str_replace("/","-")
+for (i in 1:length(abn)) {
+  
+  glue("{abn[i]} = {util_probs_df %>% filter(Antimicrobial==abn[i]) %>% select(R) %>% 
+    summarise(medR=median(R)) %>% unlist()}") %>% print()
+  
+}
 
 ##Training and testing prediction model
 
@@ -1653,7 +1935,7 @@ abx <- abx1 %>% anti_join(ur_util,by="subject_id")
 micro <- read_csv("micro_clean2.csv")
 cdi_ref <- micro %>% filter(org_fullname=="Clostridioides difficile")
 cdi <- cdi_ref %>% group_by(subject_id) %>% arrange(chartdate) %>% summarise_all(last)
-cdi_ref <- cdi_ref %>% mutate(admittime = charttime-(60*60*24*28))
+cdi_ref <- cdi_ref %>% mutate(admittime = charttime-(60*60*24*28*3))
 
 ###Attach CDI in following 28d labels to abx dfs
 abx <- abx %>% CDI_label(abx_name)
