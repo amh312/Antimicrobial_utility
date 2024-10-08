@@ -3,8 +3,9 @@
 ##Functions
 
 ###Prioritisation by treatment utility
-util_mk1 = function(df,spec_id,panel_size) {
+util_mk1 = function(df,spec_id,panel_size,ab_list=names(combined_antimicrobial_map)) {
   df %>% filter(micro_specimen_id==spec_id) %>%
+    filter(Antimicrobial%in%ab_list) %>%
     arrange(desc(Rx_utility)) %>% select(Antimicrobial,Rx_utility) %>% 
     mutate(Rx_utility = round(Rx_utility,1)) %>% slice(1:panel_size) %>% 
     rename(`Antimicrobial ranking` = "Antimicrobial",`Rx Utility` = "Rx_utility")
@@ -12,8 +13,9 @@ util_mk1 = function(df,spec_id,panel_size) {
 }
 
 ###Prioritisation by AST utility
-util_mk2 = function(df,spec_id,panel_size) {
+util_mk2 = function(df,spec_id,panel_size,ab_list=names(combined_antimicrobial_map)) {
   df %>% filter(micro_specimen_id==spec_id) %>%
+    filter(Antimicrobial%in%ab_list) %>%
     arrange(desc(AST_utility)) %>% select(Antimicrobial,AST_utility) %>% 
     mutate(AST_utility = round(AST_utility,1)) %>% slice(1:panel_size) %>% 
     rename(`Antimicrobial ranking` = "Antimicrobial",`AST Utility` = "AST_utility")
@@ -21,8 +23,9 @@ util_mk2 = function(df,spec_id,panel_size) {
 }
 
 ###Prioritisation by Intravenous utility
-util_mk3 = function(df,spec_id,panel_size) {
+util_mk3 = function(df,spec_id,panel_size,ab_list=names(combined_antimicrobial_map)) {
   df %>% filter(micro_specimen_id==spec_id) %>%
+    filter(Antimicrobial%in%ab_list) %>% 
     arrange(desc(Urosepsis_Rx_utility)) %>% select(Antimicrobial,Urosepsis_Rx_utility) %>% 
     mutate(Urosepsis_Rx_utility = round(Urosepsis_Rx_utility,1)) %>% slice(1:panel_size) %>% 
     rename(`Antimicrobial ranking` = "Antimicrobial",`Intravenous Rx Utility` = "Urosepsis_Rx_utility")
@@ -30,8 +33,9 @@ util_mk3 = function(df,spec_id,panel_size) {
 }
 
 ###Prioritisation by Oral utility
-util_mk4 = function(df,spec_id,panel_size) {
+util_mk4 = function(df,spec_id,panel_size,ab_list=names(combined_antimicrobial_map)) {
   df %>% filter(micro_specimen_id==spec_id) %>%
+    filter(Antimicrobial%in%ab_list) %>%
     arrange(desc(Outpatient_Rx_utility)) %>% select(Antimicrobial,Outpatient_Rx_utility) %>% 
     mutate(Outpatient_Rx_utility = round(Outpatient_Rx_utility,1)) %>% slice(1:panel_size) %>% 
     rename(`Antimicrobial ranking` = "Antimicrobial",`Oral Rx Utility` = "Outpatient_Rx_utility")
@@ -39,13 +43,14 @@ util_mk4 = function(df,spec_id,panel_size) {
 }
 
 ###Assigning treatment recommendations
-assign_PDRx <- function(df,probab_df,method_used) {
+assign_PDRx <- function(df,probab_df,method_used,ab_list1=ab_singles) {
   
-  test_recs <-  data.frame(matrix(nrow=length(combined_antimicrobial_map),ncol=0))
+  test_recs <-  data.frame(matrix(nrow=length(ab_list1),ncol=0))
   
   for (i in 1:nrow(df)) {
     
-    rec <- probab_df %>% util_mk1(spec_id = df$micro_specimen_id[i], panel_size = length(combined_antimicrobial_map)) %>% 
+    rec <- probab_df %>% util_mk1(spec_id = df$micro_specimen_id[i], panel_size = length(ab_list1),
+                                  ab_list=ab_list1) %>% 
       select(1)
     
     test_recs <- cbind(test_recs,rec)
@@ -58,7 +63,7 @@ assign_PDRx <- function(df,probab_df,method_used) {
   test_recs <- data.frame(cbind(df$micro_specimen_id,test_recs))
   testrec_cols <- c("micro_specimen_id")
   
-  for(i in 1:length(combined_antimicrobial_map)) {
+  for(i in 1:length(ab_list1)) {
     
     testrec_cols[i+1] <- paste0(method_used,i)
     
@@ -72,13 +77,14 @@ assign_PDRx <- function(df,probab_df,method_used) {
 }
 
 ###Assigning AST recommendations
-assign_PDAST <- function(df,probab_df,method_used) {
+assign_PDAST <- function(df,probab_df,method_used,ab_list1=ab_singles) {
   
-  test_recs <-  data.frame(matrix(nrow=length(ast_combined_antimicrobial_map),ncol=0))
+  test_recs <-  data.frame(matrix(nrow=length(ab_list1),ncol=0))
   
   for (i in 1:nrow(df)) {
     
-    rec <- probab_df %>% util_mk2(spec_id = df$micro_specimen_id[i], panel_size = length(ast_combined_antimicrobial_map)) %>% 
+    rec <- probab_df %>% util_mk2(spec_id = df$micro_specimen_id[i], panel_size = length(ab_list1),
+                                  ab_list=ab_list1) %>% 
       select(1)
     
     test_recs <- cbind(test_recs,rec)
@@ -91,7 +97,7 @@ assign_PDAST <- function(df,probab_df,method_used) {
   test_recs <- data.frame(cbind(df$micro_specimen_id,test_recs))
   testrec_cols <- c("micro_specimen_id")
   
-  for(i in 1:length(ast_combined_antimicrobial_map)) {
+  for(i in 1:length(ab_list1)) {
     
     testrec_cols[i+1] <- paste0(method_used,i)
     
@@ -105,15 +111,15 @@ assign_PDAST <- function(df,probab_df,method_used) {
 }
 
 ###Assigning Intravenous treatment recommendations
-assign_Intravenous <- function(df,probab_df,method_used) {
+assign_Intravenous <- function(df,probab_df,method_used,ab_list1=iv_ab_singles) {
   
   
   
-  test_recs <-  data.frame(matrix(nrow=length(iv_combined_antimicrobial_map),ncol=0))
+  test_recs <-  data.frame(matrix(nrow=length(ab_list1),ncol=0))
   
   for (i in 1:nrow(df)) {
     
-    rec <- probab_df %>% util_mk3(spec_id = df$micro_specimen_id[i], panel_size = length(iv_combined_antimicrobial_map)) %>% 
+    rec <- probab_df %>% util_mk3(spec_id = df$micro_specimen_id[i], panel_size = length(ab_list1),ab_list=ab_list1) %>% 
       select(1)
     
     test_recs <- cbind(test_recs,rec)
@@ -126,7 +132,7 @@ assign_Intravenous <- function(df,probab_df,method_used) {
   test_recs <- data.frame(cbind(df$micro_specimen_id,test_recs))
   testrec_cols <- c("micro_specimen_id")
   
-  for(i in 1:length(iv_combined_antimicrobial_map)) {
+  for(i in 1:length(ab_list1)) {
     
     testrec_cols[i+1] <- paste0(method_used,i)
     
@@ -140,14 +146,14 @@ assign_Intravenous <- function(df,probab_df,method_used) {
 }
 
 ###Assigning Oral treatment recommendations
-assign_Oral <- function(df,probab_df,method_used) {
+assign_Oral <- function(df,probab_df,method_used,ab_list1=oral_ab_singles) {
   
   
-  test_recs <-  data.frame(matrix(nrow=length(oral_combined_antimicrobial_map),ncol=0))
+  test_recs <-  data.frame(matrix(nrow=length(ab_list1),ncol=0))
   
   for (i in 1:nrow(df)) {
     
-    rec <- probab_df %>% util_mk4(spec_id = df$micro_specimen_id[i], panel_size = length(oral_combined_antimicrobial_map)) %>% 
+    rec <- probab_df %>% util_mk4(spec_id = df$micro_specimen_id[i], panel_size = length(ab_list1),ab_list=ab_list1) %>% 
       select(1)
     
     test_recs <- cbind(test_recs,rec)
@@ -160,7 +166,7 @@ assign_Oral <- function(df,probab_df,method_used) {
   test_recs <- data.frame(cbind(df$micro_specimen_id,test_recs))
   testrec_cols <- c("micro_specimen_id")
   
-  for(i in 1:length(oral_combined_antimicrobial_map)) {
+  for(i in 1:length(ab_list1)) {
     
     testrec_cols[i+1] <- paste0(method_used,i)
     
@@ -174,136 +180,51 @@ assign_Oral <- function(df,probab_df,method_used) {
 }
 
 ###Assigning standard recommendations
-assign_standard <- function(df,probab_df,micro_df,method_used) {
+assign_standard_AST <- function(df,choice_1=NA,choice_2=NA,choice_3=NA,
+                                choice_4=NA,choice_5=NA,choice_6=NA) {
   
-  ab_vector <- probab_df %>% mutate(Antimicrobial=as.ab(Antimicrobial)) %>% 
-    distinct(Antimicrobial) %>% pull(Antimicrobial)
-  standard_panel <- micro_df %>% filter(!is.na(org_name) & test_name == "URINE CULTURE") %>%
-    count(ab_name) %>% arrange(desc(n)) %>% mutate(ab_name=as.ab(ab_name)) %>% pull(ab_name) %>% 
-    intersect(ab_vector)
-  print(standard_panel)
-  standard_columns <- paste0(method_used, seq_along(standard_panel))
-  df <- df %>%
-    bind_cols(setNames(as.data.frame(matrix(NA, nrow = nrow(df), ncol = length(standard_columns))), standard_columns))
-  for (i in seq_along(standard_panel)) {
-    df[[standard_columns[i]]] <- standard_panel[i]
-  }
-  
-  df
+  df %>% mutate(
+    STANDARD_AST_1 = choice_1,
+    STANDARD_AST_2 = choice_2,
+    STANDARD_AST_3 = choice_3,
+    STANDARD_AST_4 = choice_4,
+    STANDARD_AST_5 = choice_5,
+    STANDARD_AST_6 = choice_6
+  )
   
 }
-
-###Counting the number of S results per antimicrobial provided by the personalised approach
-number_abs_pdast <- function(df) {
+assign_standard_IV <- function(df,choice_1=NA,choice_2=NA,choice_3=NA,
+                                choice_4=NA,choice_5=NA,choice_6=NA) {
   
-  all_si <- c()
-  
-  for(i in 1:nrow(df)) {
-    
-    all_s <- df %>%
-      select(all_of(intersect(df %>% select(PDAST_1:PDAST_6) %>%slice(i) %>% unlist(),all_abs))) %>% 
-      slice(i) %>% t() %>% data.frame() %>% filter(. =="S") %>% rownames()
-    
-    all_i <- df %>%
-      select(all_of(intersect(df %>% select(PDAST_1:PDAST_6) %>%slice(i) %>% unlist(),all_abs))) %>% 
-      slice(i) %>% t() %>% data.frame() %>% filter(. =="I") %>% rownames()
-    
-    ac_si <- all_s %>% append(all_i)
-    
-    all_si <- all_si %>% append(ac_si)
-    
-  }
-  
-  all_si %>% table() %>% stack()
+  df %>% mutate(
+    STANDARD_IV_1 = choice_1,
+    STANDARD_IV_2 = choice_2,
+    STANDARD_IV_3 = choice_3,
+    STANDARD_IV_4 = choice_4,
+    STANDARD_IV_5 = choice_5,
+    STANDARD_IV_6 = choice_6
+  )
   
 }
-
-###Counting the number of S results per antimicrobial provided by the personalised approach
-number_abs_pdrx <- function(df) {
+assign_standard_oral <- function(df,choice_1=NA,choice_2=NA,choice_3=NA,
+                               choice_4=NA,choice_5=NA,choice_6=NA) {
   
-  all_si <- c()
-  
-  for(i in 1:nrow(df)) {
-    
-    all_s <- df %>%
-      select(all_of(intersect(df %>% select(PDRx_1:PDRx_6) %>%slice(i) %>% unlist(),all_abs))) %>% 
-      slice(i) %>% t() %>% data.frame() %>% filter(. =="S") %>% rownames()
-    
-    all_i <- df %>%
-      select(all_of(intersect(df %>% select(PDRx_1:PDRx_6) %>%slice(i) %>% unlist(),all_abs))) %>% 
-      slice(i) %>% t() %>% data.frame() %>% filter(. =="I") %>% rownames()
-    
-    ac_si <- all_s %>% append(all_i)
-    
-    all_si <- all_si %>% append(ac_si)
-    
-  }
-  
-  all_si %>% table() %>% stack()
-  
-}
-
-###Counting the number of S results per antimicrobial provided by the personalised approach
-number_abs_standard <- function(df) {
-  
-  all_si <- c()
-  
-  for(i in 1:nrow(df)) {
-    
-    all_s <- df %>%
-      select(all_of(intersect(df %>% select(STANDARD_1,STANDARD_2,STANDARD_3,
-                                            STANDARD_7,STANDARD_8,STANDARD_11) %>%slice(i) %>% unlist(),all_abs))) %>% 
-      slice(i) %>% t() %>% data.frame() %>% filter(. =="S") %>% rownames()
-    
-    all_i <- df %>%
-      select(all_of(intersect(df %>% select(STANDARD_1,STANDARD_2,STANDARD_3,
-                                            STANDARD_7,STANDARD_8,STANDARD_11) %>%slice(i) %>% unlist(),all_abs))) %>% 
-      slice(i) %>% t() %>% data.frame() %>% filter(. =="I") %>% rownames()
-    
-    
-    ac_si <- all_s %>% append(all_i)
-    
-    all_si <- all_si %>% append(ac_si)
-    
-  }
-  
-  all_si %>% table() %>% stack()
-  
-}
-
-###Comparison of differences between number of results per antimicrobial with each approach
-minuser <- function(df,abx) {
-  
-  df %>% filter(ind==ab_name(abx)) %>% arrange(Approach) %>% select(values)
-  
-  if(nrow(abs_df %>% filter(ind==ab_name(abx)) %>% select(1)) ==2 &
-     abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% slice(1) =="PDAST") {
-    
-    abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(1) -
-      abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(2)
-    
-  } else if (nrow(abs_df %>% filter(ind==ab_name(abx)) %>% select(1)) ==2 &
-             abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% slice(1) =="Standard"){
-    
-    -(abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(1) -
-        abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(2))
-    
-  } else if (nrow(abs_df %>% filter(ind==ab_name(abx)) %>% select(1)) ==1 &
-             abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% slice(1) =="PDAST") {
-    
-    abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(1)
-    
-  } else {
-    
-    -(abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(1))
-    
-  }
+  df %>% mutate(
+    STANDARD_PO_1 = choice_1,
+    STANDARD_PO_2 = choice_2,
+    STANDARD_PO_3 = choice_3,
+    STANDARD_PO_4 = choice_4,
+    STANDARD_PO_5 = choice_5,
+    STANDARD_PO_6 = choice_6
+  )
   
 }
 
 ##Read-in
 ur_util <- read_csv("interim_ur_util.csv")
+form_ur_util <- read_csv("interim_ur_util.csv")
 util_probs_df <- read_csv("utility_dataframe.csv")
+form_util_probs_df <- read_csv("form_utility_dataframe.csv")
 train_abx <- read_csv("train_abx.csv")
 
 ###Map combinations to abbreviations and filter
@@ -340,11 +261,20 @@ iv_abs <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
   str_replace("/","-") 
 iv_combos <- combn(iv_abs, 2, FUN = function(x) paste(x, collapse = "_"))
 iv_abs <- c(iv_abs, iv_combos)
+iv_ab_singles <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
+            "GEN","SXT","VAN") %>% ab_name() %>% 
+  str_replace("/","-") 
 oral_abs <- c("AMP","SAM","CIP",
               "SXT","NIT") %>% ab_name() %>% 
   str_replace("/","-")
 oral_combos <- combn(oral_abs, 2, FUN = function(x) paste(x, collapse = "_"))
 oral_abs <- c(oral_abs, oral_combos)
+oral_ab_singles <- c("AMP","SAM","CIP",
+              "SXT","NIT") %>% ab_name() %>% 
+  str_replace("/","-")
+ab_singles <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
+"GEN","SXT","NIT","VAN") %>% ab_name() %>% 
+  str_replace("/","-")
 iv_combined_antimicrobial_map <- combined_antimicrobial_map[names(combined_antimicrobial_map) %in% iv_abs]
 oral_combined_antimicrobial_map <- combined_antimicrobial_map[names(combined_antimicrobial_map) %in% oral_abs]
 ast_combined_antimicrobial_map <- combined_antimicrobial_map[!grepl("_",names(combined_antimicrobial_map))]
@@ -387,7 +317,10 @@ for (i in 1:length(form_recs_Oral)) {
 
 
 ###Individual treatment recommendations
-all_abs <- all_combos
+all_abs <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
+             "MEM","CIP","GEN","SXT","NIT","VAN")
+long_allabs <- all_abs %>% ab_name() %>% str_replace("/","-")
+all_combos <- combn(all_abs, 2, FUN = function(x) paste(x, collapse = "_"))
 replace_values <- function(column, map) {
   column %>%
     as.character() %>%
@@ -410,7 +343,19 @@ ur_util <- ur_util %>% assign_PDAST(util_probs_df,"PDAST_") %>%
   mutate(across(starts_with("PDAST_"), ~ replace_values(., combined_antimicrobial_map)))
 
 ###Standard panel treatment & AST recommendations
-micro_raw <- read_csv("microbiologyevents.csv")
-ur_util <- ur_util %>% assign_standard(util_probs_df,micro_raw,"STANDARD_")
+ur_util <- ur_util %>% assign_standard_AST("NIT","SXT","CIP","TZP","GEN","CRO")
+ur_util <- ur_util %>% assign_standard_IV("CRO","TZP","GEN")
+ur_util <- ur_util %>% assign_standard_oral("NIT","SXT","CIP")
+
+##Formulary agent AST recommendation sensitivity analysis
+replace_values <- function(column, map) {
+  column %>%
+    as.character() %>%
+    sapply(function(x) if (x %in% names(map)) map[[x]] else x)
+}
+form_ur_util <- form_ur_util %>% assign_PDAST(form_util_probs_df,"PDAST_") %>%
+  mutate(across(starts_with("PDAST_"), ~ replace_values(., combined_antimicrobial_map)))
+form_ur_util <- form_ur_util %>% assign_standard_AST("NIT","SXT","CIP","TZP","GEN","CRO")
 
 write_csv(ur_util,"ur_util_final.csv")
+write_csv(form_ur_util,"form_ur_util_final.csv")
