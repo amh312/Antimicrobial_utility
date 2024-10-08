@@ -37,6 +37,8 @@ library(ggsci)
 library(dendextend)
 library(TSP)
 library(ggrepel)
+library(progress)
+library(pROC)
 
 ##SETUP
 options(error=NULL)
