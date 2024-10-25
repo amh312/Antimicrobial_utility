@@ -18,15 +18,15 @@ calculate_utilities <- function(df,formulary_list=c(),R_weight=1) {
   df <- df %>% mutate(overall_util = util_uti + util_access +
                                        util_oral + util_iv +
                                        util_reserve + util_highcost 
-                      + util_tox + util_CDI + R_weight*prob_sepsisae,
+                      + util_tox + util_CDI + prob_sepsisae*R_weight,
                       overall_oral_util = util_uti + util_access +
                         util_oral +
                         util_reserve + util_highcost
-                      + util_tox + util_CDI + R_weight*prob_sepsisae,
+                      + util_tox + util_CDI + prob_sepsisae*R_weight,
                       overall_iv_util = util_uti + util_access +
                           util_iv +
                           util_reserve + util_highcost
-                      + util_tox + util_CDI+ + R_weight*prob_sepsisae,
+                      + util_tox + util_CDI+ + prob_sepsisae*R_weight,
                       R_penalty=R_weight*R*prob_sepsisae,
                 S_utility = S*overall_util,
                 S_PO_utility = S*overall_oral_util,
@@ -206,15 +206,15 @@ nonnorm_utilities <- function(df,formulary_list=c(),R_weight=1) {
   df <- df %>% mutate(overall_util=util_uti + util_access +
                         util_oral + util_iv +
                         util_reserve + util_highcost 
-                      + util_tox + util_CDI + R_weight*prob_sepsisae,
+                      + util_tox + util_CDI + prob_sepsisae*R_weight,
                       overall_oral_util = util_uti + util_access +
                         util_oral +
                         util_reserve + util_highcost
-                      + util_tox + util_CDI + R_weight*prob_sepsisae,
+                      + util_tox + util_CDI + prob_sepsisae*R_weight,
                       overall_iv_util = util_uti + util_access +
                         util_iv +
                         util_reserve + util_highcost
-                      + util_tox + util_CDI+ + R_weight*prob_sepsisae,
+                      + util_tox + util_CDI+ + prob_sepsisae*R_weight,
                       R_penalty=R_weight*R*prob_sepsisae,
                       S_utility = S*overall_util,
                       S_PO_utility = S*overall_oral_util,
@@ -722,17 +722,17 @@ R_util_sens <- function(df,probs_df,uf,min_val,max_val) {
       scores2 <- scores  
       R_wt_value <- weight_sq[i]
       
-      cdi_util_probs <- predict(underlying_cdi, probs_df_2,type="response")
+      cdi_util_probs <- 1-predict(underlying_cdi, probs_df_2,type="response")
       cdi_value <- scores2[rownames(scores2)=="CDI_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ###Toxicity risk utility
-      tox_util_probs <- predict(underlying_tox, probs_df_2,type="response")
+      tox_util_probs <- 1-predict(underlying_tox, probs_df_2,type="response")
       tox_value <- scores2[rownames(scores2)=="Toxicity_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ####Sepsis adverse outcome risk utility
-      sepsis_util_probs <- predict(underlying_sepsis, probs_df_2,type="response")
+      sepsis_util_probs <- 1-predict(underlying_sepsis, probs_df_2,type="response")
       
       ###UTI-specific utility
       uti_specifics <- c("Nitrofurantoin")
@@ -990,17 +990,17 @@ util_sens <- function(df,probs_df,uf,variable_criterion,min_val,max_val) {
       scores2 <- scores2 %>% mutate(Value=case_when(rownames(scores2)==variable_criterion~weight_sq[i],
                                                     TRUE~Value))
       
-      cdi_util_probs <- predict(underlying_cdi, probs_df_2,type="response")
+      cdi_util_probs <- 1-predict(underlying_cdi, probs_df_2,type="response")
       cdi_value <- scores2[rownames(scores2)=="CDI_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ###Toxicity risk utility
-      tox_util_probs <- predict(underlying_tox, probs_df_2,type="response")
+      tox_util_probs <- 1-predict(underlying_tox, probs_df_2,type="response")
       tox_value <- scores2[rownames(scores2)=="Toxicity_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ####Sepsis adverse outcome risk utility
-      sepsis_util_probs <- predict(underlying_sepsis, probs_df_2,type="response")
+      sepsis_util_probs <- 1-predict(underlying_sepsis, probs_df_2,type="response")
       
       ###UTI-specific utility
       uti_specifics <- c("Nitrofurantoin")
@@ -1190,8 +1190,8 @@ R_util_sens_plot <- function(df,measure,value) {
                       ymin = as.numeric(lower_iqr),
                       ymax = as.numeric(upper_iqr),
                       group = Antimicrobial, fill = Antimicrobial), alpha = 0.3) +
-      ggtitle(glue("Effect of varying {value} Desirability on {iterabs[i]} {measure} utility")) +
-      xlab(glue("Desirability of {value}")) +
+      ggtitle(glue("Effect of varying {value} weight on {iterabs[i]} {measure} utility")) +
+      xlab(glue("Weight of {value}")) +
       ylab(glue("{measure} utility (non-standardised)")) +
       theme_minimal()
     
@@ -1272,17 +1272,17 @@ cdi_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
       
       
       ###CDI risk utility
-      cdi_util_probs <- predict(underlying_cdi, probs_df_3,type="response")
+      cdi_util_probs <- 1-predict(underlying_cdi, probs_df_3,type="response")
       cdi_value <- scores[rownames(scores)=="CDI_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ###Toxicity risk utility
-      tox_util_probs <- predict(underlying_tox, probs_df_3,type="response")
+      tox_util_probs <- 1-predict(underlying_tox, probs_df_3,type="response")
       tox_value <- scores[rownames(scores)=="Toxicity_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ####Sepsis adverse outcome risk utility
-      sepsis_util_probs <- predict(underlying_sepsis, probs_df_3,type="response")
+      sepsis_util_probs <- 1-predict(underlying_sepsis, probs_df_3,type="response")
       
       ###UTI-specific utility
       uti_specifics <- c("Nitrofurantoin")
@@ -1435,17 +1435,17 @@ tox_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
       ##Utility score calculation
       
       ###CDI risk utility
-      cdi_util_probs <- predict(underlying_cdi, probs_df_3,type="response")
+      cdi_util_probs <- 1-predict(underlying_cdi, probs_df_3,type="response")
       cdi_value <- scores[rownames(scores)=="CDI_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ###Toxicity risk utility
-      tox_util_probs <- predict(underlying_tox, probs_df_3,type="response")
+      tox_util_probs <- 1-predict(underlying_tox, probs_df_3,type="response")
       tox_value <- scores[rownames(scores)=="Toxicity_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ####Sepsis adverse outcome risk utility
-      sepsis_util_probs <- predict(underlying_sepsis, probs_df_3,type="response")
+      sepsis_util_probs <- 1-predict(underlying_sepsis, probs_df_3,type="response")
       
       ###UTI-specific utility
       uti_specifics <- c("Nitrofurantoin")
@@ -1598,17 +1598,17 @@ sepsisae_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,
       ##Utility score calculation
       
       ###CDI risk utility
-      cdi_util_probs <- predict(underlying_cdi, probs_df_3,type="response")
+      cdi_util_probs <- 1-predict(underlying_cdi, probs_df_3,type="response")
       cdi_value <- scores[rownames(scores)=="CDI_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ###Toxicity risk utility
-      tox_util_probs <- predict(underlying_tox, probs_df_3,type="response")
+      tox_util_probs <- 1-predict(underlying_tox, probs_df_3,type="response")
       tox_value <- scores[rownames(scores)=="Toxicity_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ####Sepsis adverse outcome risk utility
-      sepsis_util_probs <- predict(underlying_sepsis, probs_df_3,type="response")
+      sepsis_util_probs <- 1-predict(underlying_sepsis, probs_df_3,type="response")
       
       ###UTI-specific utility
       uti_specifics <- c("Nitrofurantoin")
@@ -1815,17 +1815,17 @@ cdi_outbreak_sens <- function(df,probs_df,uf,characteristic,characteristic_col,c
                   relationship = "many-to-one")
       
       ###CDI risk utility
-      cdi_util_probs <- predict(underlying_cdi, probs_df_3,type="response")
+      cdi_util_probs <- 1-predict(underlying_cdi, probs_df_3,type="response")
       cdi_value <- scores[rownames(scores)=="CDI_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ###Toxicity risk utility
-      tox_util_probs <- predict(underlying_tox, probs_df_3,type="response")
+      tox_util_probs <- 1-predict(underlying_tox, probs_df_3,type="response")
       tox_value <- scores[rownames(scores)=="Toxicity_highrisk",] %>% 
         select(Value) %>% unlist()
       
       ####Sepsis adverse outcome risk utility
-      sepsis_util_probs <- predict(underlying_sepsis, probs_df_3,type="response")
+      sepsis_util_probs <- 1-predict(underlying_sepsis, probs_df_3,type="response")
       
       ###UTI-specific utility
       uti_specifics <- c("Nitrofurantoin")
@@ -2021,17 +2021,17 @@ tox_pop_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_c
       left_join(tox_util_key,by="micro_specimen_id")
     
     ###CDI risk utility
-    cdi_util_probs <- predict(underlying_cdi, probs_df_3,type="response")
+    cdi_util_probs <- 1-predict(underlying_cdi, probs_df_3,type="response")
     cdi_value <- scores[rownames(scores)=="CDI_highrisk",] %>% 
       select(Value) %>% unlist()
     
     ###Toxicity risk utility
-    tox_util_probs <- predict(underlying_tox, probs_df_3,type="response")
+    tox_util_probs <- 1-predict(underlying_tox, probs_df_3,type="response")
     tox_value <- scores[rownames(scores)=="Toxicity_highrisk",] %>% 
       select(Value) %>% unlist()
     
     ####Sepsis adverse outcome risk utility
-    sepsis_util_probs <- predict(underlying_sepsis, probs_df_3,type="response")
+    sepsis_util_probs <- 1-predict(underlying_sepsis, probs_df_3,type="response")
     
     ###UTI-specific utility
     uti_specifics <- c("Nitrofurantoin")
@@ -2179,7 +2179,7 @@ dens_sens_plot_2 <- function(df,characteristic,measure,char_col) {
                                          levels=c("All antimicrobials","Best antimicrobial",
                                                   iterabs[i]))
     
-    df_plot <- ggplot(df_spec_plot, aes(x = !!char_col)) +
+    df_plot <- ggplot(df_spec_plot, aes(x = 1-!!char_col)) +
       geom_line(aes(y = as.numeric(med_util), group = Antimicrobial, color = Antimicrobial)) +
       geom_ribbon(aes(y = as.numeric(med_util),
                       ymin = as.numeric(lower_iqr),
@@ -2434,17 +2434,17 @@ for (col in columns_to_add) {
 ##Utility score calculation
 
 ###CDI risk utility
-cdi_util_probs <- predict(underlying_cdi, df,type="response")
+cdi_util_probs <- 1-predict(underlying_cdi, df,type="response")
 cdi_value <- scores[rownames(scores)=="CDI_highrisk",] %>% 
   select(Value) %>% unlist()
 
 ###Toxicity risk utility
-tox_util_probs <- predict(underlying_tox, df,type="response")
+tox_util_probs <- 1-predict(underlying_tox, df,type="response")
 tox_value <- scores[rownames(scores)=="Toxicity_highrisk",] %>% 
   select(Value) %>% unlist()
 
 ####Sepsis adverse outcome risk utility
-sepsis_util_probs <- predict(underlying_sepsis, df,type="response")
+sepsis_util_probs <- 1-predict(underlying_sepsis, df,type="response")
 
 ###UTI-specific utility
 uti_specifics <- c("Nitrofurantoin")
@@ -2681,7 +2681,7 @@ scores$Coefficient <- c("High CDI risk","High toxicity risk","Oral option",
                         "Reserve category")
 
 scores$Coefficient <- factor(scores$Coefficient, levels= scores %>% arrange(Value) %>% select(Coefficient) %>% unlist())
-scores$Value <- scores$OR
+scores$Value <- abs(scores$Value)
 unstan_vals <- scores %>% select(Value) %>% mutate(Name=c("Wc","Wt","Wo","Wu","Wi","Wh","Wa","Wr"))
 write_csv(unstan_vals,"unstand_weights.csv")
 R_wt_value <- 1
@@ -2819,17 +2819,17 @@ for (col in columns_to_add) {
 ##Utility score calculation
 
 ###CDI risk utility
-cdi_util_probs <- predict(underlying_cdi, util_probs_df,type="response")
+cdi_util_probs <- 1-predict(underlying_cdi, util_probs_df,type="response")
 cdi_value <- scores[rownames(scores)=="CDI_highrisk",] %>% 
   select(Value) %>% unlist()
 
 ###Toxicity risk utility
-tox_util_probs <- predict(underlying_tox, util_probs_df,type="response")
+tox_util_probs <- 1-predict(underlying_tox, util_probs_df,type="response")
 tox_value <- scores[rownames(scores)=="Toxicity_highrisk",] %>% 
   select(Value) %>% unlist()
 
 ####Sepsis adverse outcome risk utility
-sepsis_util_probs <- predict(underlying_sepsis, util_probs_df,type="response")
+sepsis_util_probs <- 1-predict(underlying_sepsis, util_probs_df,type="response")
 
 ###UTI-specific utility
 uti_specifics <- c("Nitrofurantoin")
@@ -2987,25 +2987,25 @@ rx_dens_sens %>% dens_sens_plot("Treatment")
 ast_dens_sens %>% dens_sens_plot("Testing")
 
 ###Sensitivity analysis varying weighting values of different factors
-uti_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"UTI_specific",0,1)
-access_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"Access",0,1)
-oral_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"Oral_option",0,1)
-iv_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"IV_option",0,1)
-cdi_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"CDI_highrisk",0,1)
-tox_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"Toxicity_highrisk",0,1)
-highcost_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"High_cost",0,1)
-reserve_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"Reserve",0,1)
-R_sens_df <- ur_util %>% R_util_sens(util_probs_df,Rx_utility,0.1,1)
+uti_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"UTI_specific",0,2)
+access_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"Access",0,2)
+oral_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"Oral_option",0,2)
+iv_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"IV_option",0,2)
+cdi_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"CDI_highrisk",0,2)
+tox_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"Toxicity_highrisk",0,2)
+highcost_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"High_cost",0,2)
+reserve_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"Reserve",0,2)
+R_sens_df <- ur_util %>% R_util_sens(util_probs_df,Rx_utility,0,10)
 
 uti_sens_df %>% util_sens_plot("Treatment","UTI-specificity")
 access_sens_df %>% util_sens_plot("Treatment","Access category")
 oral_sens_df %>% util_sens_plot("Treatment","Oral option")
 iv_sens_df %>% util_sens_plot("Treatment","IV option")
-cdi_sens_df %>% util_sens_plot("Treatment","CDI")
-tox_sens_df %>% util_sens_plot("Treatment","Toxicity")
+cdi_sens_df %>% util_sens_plot("Treatment","CDI negative")
+tox_sens_df %>% util_sens_plot("Treatment","Toxicity negative")
 highcost_sens_df %>% util_sens_plot("Treatment","Cost")
 reserve_sens_df %>% util_sens_plot("Treatment","Reserve category")
-R_sens_df %>% R_util_sens_plot("Treatment","drug efficacy")
+R_sens_df %>% R_util_sens_plot("Treatment","sepsis adverse events")
 
 cdi_sens_df_ast <- ur_util %>% cdi_util_sens(util_probs_df,AST_utility)
 uti_sens_df_ast <- ur_util %>% uti_util_sens(util_probs_df,AST_utility)
@@ -3027,8 +3027,8 @@ cdi_prob_df <- ur_util %>% cdi_prob_sens(util_probs_df,Rx_utility,"cdi_prob","pr
 tox_prob_df <- ur_util %>% tox_prob_sens(util_probs_df,Rx_utility,"tox_prob","prob_tox",tox_prob,prob_tox,"toxicity")
 sepsisae_prob_df <- ur_util %>% sepsisae_prob_sens(util_probs_df,Rx_utility,"sepsisae_prob","prob_sepsisae",sepsisae_prob,prob_sepsisae,"sepsis adverse events")
 
-cdi_prob_df %>% dens_sens_plot_2("CDI","Treatment",cdi_prob)
-tox_prob_df %>% dens_sens_plot_2("toxicity","Treatment",tox_prob)
+cdi_prob_df %>% dens_sens_plot_2("CDI probability","Treatment",cdi_prob)
+tox_prob_df %>% dens_sens_plot_2("toxicity probability","Treatment",tox_prob)
 sepsisae_prob_df %>% dens_sens_plot_2("Sepsis adverse outcome probability","Treatment",sepsisae_prob)
 
 cdi_prob_df_ast <- ur_util %>% cdi_prob_sens(util_probs_df,AST_utility,"cdi_prob","prob_CDI",cdi_prob,prob_CDI,"CDI")
