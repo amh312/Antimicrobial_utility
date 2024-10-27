@@ -12,12 +12,12 @@ number_ab_results <- function(df,start_col,end_col,which_abs,result_1,result_2) 
   for(i in 1:nrow(df)) {
     
     all_s <- df %>%
-      select(all_of(intersect(df %>% select(!!start_col:!!end_col) %>%slice(i) %>% unlist(),all_abs))) %>% 
-      slice(i) %>% t() %>% data.frame() %>% filter(. ==result_1) %>% rownames()
+      select(all_of(intersect(df %>% select(!!start_col:!!end_col) %>%dplyr::slice(i) %>% unlist(),all_abs))) %>% 
+      dplyr::slice(i) %>% t() %>% data.frame() %>% filter(. ==result_1) %>% rownames()
     
     all_i <- df %>%
-      select(all_of(intersect(df %>% select(!!start_col:!!end_col) %>%slice(i) %>% unlist(),all_abs))) %>% 
-      slice(i) %>% t() %>% data.frame() %>% filter(. ==result_2) %>% rownames()
+      select(all_of(intersect(df %>% select(!!start_col:!!end_col) %>%dplyr::slice(i) %>% unlist(),all_abs))) %>% 
+      dplyr::slice(i) %>% t() %>% data.frame() %>% filter(. ==result_2) %>% rownames()
     
     ac_si <- all_s %>% append(all_i)
     
@@ -37,25 +37,25 @@ abs_df_assemble <- function(pd_df,standard_df) {
     df %>% filter(ind==ab_name(abx)) %>% arrange(Approach) %>% select(values)
     
     if(nrow(abs_df %>% filter(ind==ab_name(abx)) %>% select(1)) ==2 &
-       abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% slice(1) =="PDAST") {
+       abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% dplyr::slice(1) =="PDAST") {
       
-      abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(1) -
-        abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(2)
+      abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(1) -
+        abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(2)
       
     } else if (nrow(abs_df %>% filter(ind==ab_name(abx)) %>% select(1)) ==2 &
-               abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% slice(1) =="Standard"){
+               abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% dplyr::slice(1) =="Standard"){
       
-      -(abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(1) -
-          abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(2))
+      -(abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(1) -
+          abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(2))
       
     } else if (nrow(abs_df %>% filter(ind==ab_name(abx)) %>% select(1)) ==1 &
-               abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% slice(1) =="PDAST") {
+               abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% dplyr::slice(1) =="PDAST") {
       
-      abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(1)
+      abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(1)
       
     } else {
       
-      -(abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(1))
+      -(abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(1))
       
     }
     
@@ -137,9 +137,11 @@ cleveland_ab_plot <- function(ab_df,resulttype,addendum="") {
 }
 
 ###Resistance weighting sensitivity analysis
-res_sens_analysis <- function(df,probs_df,R_variable=1,access_weight=1) { 
+res_sens_analysis <- function(df,probs_df,R_variable=1,utility_of_interest) { 
   
-  probs_df <- probs_df %>% calculate_utilities(R_weight = R_variable,ac_weight = access_weight)
+  utility_of_interest <- enquo(utility_of_interest)
+  
+  probs_df <- probs_df %>% calculate_utilities(NEWS = R_variable)
 abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
   str_replace_all("/","-")
 probs_df <- probs_df %>% filter(Antimicrobial %in% abx_in_train)
@@ -269,6 +271,12 @@ po_s_access <- (nrow(df %>% filter(PDPORx_1_result=='S' &
 overall_s_access <- (nrow(df %>% filter(PDRx_1_result=='S' &
                                           PDRx_1 %in% access_singles))/
                   nrow(df))*100
+overall_s_oral <- (nrow(df %>% filter(PDRx_1_result=='S' &
+                                          PDRx_1 %in% oral_singles))/
+                       nrow(df))*100
+overall_s_iv <- (nrow(df %>% filter(PDRx_1_result=='S' &
+                                        PDRx_1 %in% iv_singles))/
+                     nrow(df))*100
 
 
 glue("Where an IV agent was required, the personalised approach recommended a switch from a
@@ -293,18 +301,22 @@ overall_perc <<- overall_perc
 iv_s_access <<- iv_s_access
 po_s_access <<- po_s_access
 overall_s_access <<- overall_s_access
+overall_s_oral <<- overall_s_oral
+overall_s_iv <<- overall_s_iv
 
 print(df %>% count(Intravenous_1) %>% arrange(desc(n)))
 print(df %>% count(Oral_1) %>% arrange(desc(n)))
 print(df %>% count(PDRx_1) %>% arrange(desc(n)))
-
+print(df %>% filter(PDRx_1%in%access_singles) %>% nrow())
+print(df %>% filter(PDRx_1%in%oral_singles) %>% nrow())
+print(df %>% filter(PDRx_1%in%iv_singles) %>% nrow())
 
 }
-
+      
 ###Resistance weighting sensitivity analysis (better predictions)
 res_sens_analysis_2 <- function(df,probs_df,R_variable=1,access_weight=1) { 
   
-  probs_df <- probs_df %>% calculate_utilities_2(R_weight = R_variable,ac_weight = access_weight)
+  probs_df <- probs_df %>% calculate_utilities_2(R_weight = R_variable)
   abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
     str_replace_all("/","-")
   probs_df <- probs_df %>% filter(Antimicrobial %in% abx_in_train)
@@ -631,12 +643,14 @@ res_sens_analysis_3 <- function(df,probs_df,abx,abcol,a_val,b_val) {
   print(df %>% count(Intravenous_1) %>% arrange(desc(n)))
   print(df %>% count(Oral_1) %>% arrange(desc(n)))
   print(df %>% count(PDRx_1) %>% arrange(desc(n)))
-  
+  print(df %>% filter(PDRx_1%in%access_singles) %>% nrow())
+  print(df %>% filter(PDRx_1%in%oral_singles) %>% nrow())
+  print(df %>% filter(PDRx_1%in%iv_singles) %>% nrow())
   
 }
 
 ###Susceptibility plots
-susc_plotter <- function(df,subset="",measure,suffix="",agent_col1,agent_name1,agent_col2,agent_name2,variable="Resistance importance weighting") {
+susc_plotter <- function(df,subset="",measure,suffix="",agent_col1,agent_name1,agent_col2,agent_name2,variable="NEWS") {
   
   agent_col1 <- enquo(agent_col1)
   agent_col2 <- enquo(agent_col2)
@@ -662,7 +676,7 @@ susc_plotter <- function(df,subset="",measure,suffix="",agent_col1,agent_name1,a
   print(susplot)
   
 }
-susc_plotter_iv <- function(df,subset="",measure,suffix="",agent_col1,agent_name1,agent_col2,agent_name2,variable="Resistance importance weighting") {
+susc_plotter_iv <- function(df,subset="",measure,suffix="",agent_col1,agent_name1,agent_col2,agent_name2,variable="NEWS") {
   
   agent_col1 <- enquo(agent_col1)
   agent_col2 <- enquo(agent_col2)
@@ -898,7 +912,7 @@ util_mk1 = function(df,spec_id,panel_size,ab_list=names(combined_antimicrobial_m
   df %>% filter(micro_specimen_id==spec_id) %>%
     filter(Antimicrobial%in%ab_list) %>%
     arrange(desc(Rx_utility)) %>% select(Antimicrobial,Rx_utility) %>% 
-    mutate(Rx_utility = round(Rx_utility,1)) %>% slice(1:panel_size) %>% 
+    mutate(Rx_utility = round(Rx_utility,1)) %>% dplyr::slice(1:panel_size) %>% 
     rename(`Antimicrobial ranking` = "Antimicrobial",`Rx Utility` = "Rx_utility")
   
 }
@@ -908,7 +922,7 @@ util_mk2 = function(df,spec_id,panel_size,ab_list=names(combined_antimicrobial_m
   df %>% filter(micro_specimen_id==spec_id) %>%
     filter(Antimicrobial%in%ab_list) %>%
     arrange(desc(AST_utility)) %>% select(Antimicrobial,AST_utility) %>% 
-    mutate(AST_utility = round(AST_utility,1)) %>% slice(1:panel_size) %>% 
+    mutate(AST_utility = round(AST_utility,1)) %>% dplyr::slice(1:panel_size) %>% 
     rename(`Antimicrobial ranking` = "Antimicrobial",`AST Utility` = "AST_utility")
   
 }
@@ -918,7 +932,7 @@ util_mk3 = function(df,spec_id,panel_size,ab_list=names(combined_antimicrobial_m
   df %>% filter(micro_specimen_id==spec_id) %>%
     filter(Antimicrobial%in%ab_list) %>% 
     arrange(desc(Urosepsis_Rx_utility)) %>% select(Antimicrobial,Urosepsis_Rx_utility) %>% 
-    mutate(Urosepsis_Rx_utility = round(Urosepsis_Rx_utility,1)) %>% slice(1:panel_size) %>% 
+    mutate(Urosepsis_Rx_utility = round(Urosepsis_Rx_utility,1)) %>% dplyr::slice(1:panel_size) %>% 
     rename(`Antimicrobial ranking` = "Antimicrobial",`Intravenous Rx Utility` = "Urosepsis_Rx_utility")
   
 }
@@ -928,7 +942,7 @@ util_mk4 = function(df,spec_id,panel_size,ab_list=names(combined_antimicrobial_m
   df %>% filter(micro_specimen_id==spec_id) %>%
     filter(Antimicrobial%in%ab_list) %>%
     arrange(desc(Outpatient_Rx_utility)) %>% select(Antimicrobial,Outpatient_Rx_utility) %>% 
-    mutate(Outpatient_Rx_utility = round(Outpatient_Rx_utility,1)) %>% slice(1:panel_size) %>% 
+    mutate(Outpatient_Rx_utility = round(Outpatient_Rx_utility,1)) %>% dplyr::slice(1:panel_size) %>% 
     rename(`Antimicrobial ranking` = "Antimicrobial",`Oral Rx Utility` = "Outpatient_Rx_utility")
   
 }
@@ -1064,397 +1078,390 @@ assign_Oral <- function(df,probab_df,method_used,ab_list1=oral_ab_singles %>% ab
   
 }
 
-###Utility score calculator
-calculate_utilities <- function(df,formulary_list=NULL,R_weight=1,ac_weight=1) {
+###Utility calculation
+abs_calc <- function(val,prob) {
   
-  df <- df %>% mutate(overall_util=util_uti + util_access*ac_weight +
+  ifelse(val>=0,val*prob,abs(val)*(1-prob))
+  
+}
+calculate_utilities <- function(df,formulary_list=c(),NEWS=0,R_weight=1) {
+  
+  df <- df %>% mutate(overall_util=util_uti + util_access +
                         util_oral + util_iv +
-                        util_reserve + util_highcost,
-                      overall_oral_util = util_uti + util_access*ac_weight +
-                        util_oral +
-                        util_reserve + util_highcost,
-                      overall_iv_util = util_uti + util_access*ac_weight +
-                        util_iv +
-                        util_reserve + util_highcost,
-                      R_penalty=R*R_weight,
+                        util_reserve + util_highcost 
+                      + util_tox + util_CDI + NEWS*R_weight,
                       S_utility = S*overall_util,
-                      S_PO_utility = S*overall_oral_util,
-                      S_IV_utility=S*overall_iv_util,
                       ent_S_utility = ent_S*overall_util,
                       AMPR_utility = case_when(
                         Antimicrobial=="Ampicillin" ~
-                          AMP_R_value*R, TRUE~0
+                          abs(R_weight)*AMP_R_value*R, TRUE~0
                       ),
                       SAMR_utility = case_when(
                         Antimicrobial=="Ampicillin-sulbactam" ~
-                          SAM_R_value*R, TRUE~0
+                          abs(R_weight)*SAM_R_value*R, TRUE~0
                       ),
                       TZPR_utility = case_when(
                         Antimicrobial=="Piperacillin-tazobactam" ~
-                          TZP_R_value*R, TRUE~0
+                          abs(R_weight)*TZP_R_value*R, TRUE~0
                       ),
                       CZOR_utility = case_when(
                         Antimicrobial=="Cefazolin" ~
-                          CZO_R_value*R, TRUE~0
+                          abs(R_weight)*CZO_R_value*R, TRUE~0
                       ),
                       CROR_utility = case_when(
                         Antimicrobial=="Ceftriaxone" ~
-                          CRO_R_value*R, TRUE~0
+                          abs(R_weight)*CRO_R_value*R, TRUE~0
                       ),
                       CAZR_utility = case_when(
                         Antimicrobial=="Ceftazidime" ~
-                          CAZ_R_value*R, TRUE~0
+                          abs(R_weight)*CAZ_R_value*R, TRUE~0
                       ),
                       FEPR_utility = case_when(
                         Antimicrobial=="Cefepime" ~
-                          FEP_R_value*R, TRUE~0
+                          abs(R_weight)*FEP_R_value*R, TRUE~0
                       ),
                       MEMR_utility = case_when(
                         Antimicrobial=="Meropenem" ~
-                          MEM_R_value*R, TRUE~0
+                          abs(R_weight)*MEM_R_value*R, TRUE~0
                       ),
                       CIPR_utility = case_when(
                         Antimicrobial=="Ciprofloxacin" ~
-                          CIP_R_value*R, TRUE~0
+                          abs(R_weight)*CIP_R_value*R, TRUE~0
                       ),
                       GENR_utility = case_when(
                         Antimicrobial=="Gentamicin" ~
-                          GEN_R_value*R, TRUE~0
+                          abs(R_weight)*GEN_R_value*R, TRUE~0
                       ),
                       SXTR_utility = case_when(
                         Antimicrobial=="Trimethoprim-sulfamethoxazole" ~
-                          SXT_R_value*R, TRUE~0
+                          abs(R_weight)*SXT_R_value*R, TRUE~0
                       ),
                       NITR_utility = case_when(
                         Antimicrobial=="Nitrofurantoin" ~
-                          NIT_R_value*R, TRUE~0
+                          abs(R_weight)*NIT_R_value*R, TRUE~0
                       ),
                       VANR_utility = case_when(
                         Antimicrobial=="Vancomycin" ~
-                          VAN_R_value*R, TRUE~0
+                          abs(R_weight)*VAN_R_value*R, TRUE~0
                       ),
                       Formulary_agent = case_when(
                         Antimicrobial%in%formulary_list ~
                           TRUE, TRUE~FALSE
                       ),
                       Formulary_utility = 
-                        Formulary_agent*R,
-                      AST_utility = (S_utility+
-                                       AMPR_utility +
-                                       SAMR_utility +
-                                       TZPR_utility +
-                                       CZOR_utility +
-                                       CROR_utility +
-                                       CAZR_utility +
-                                       FEPR_utility +
-                                       MEMR_utility +
-                                       CIPR_utility +
-                                       GENR_utility +
-                                       SXTR_utility +
-                                       NITR_utility +
-                                       VANR_utility +
-                                       Formulary_utility)*single_agent,
-                      Rx_utility = S_utility -
-                        R_penalty,
+                        abs(R_weight)*Formulary_agent*R,
+                      AST_utility = ((S_utility+
+                                        AMPR_utility +
+                                        SAMR_utility +
+                                        TZPR_utility +
+                                        CZOR_utility +
+                                        CROR_utility +
+                                        CAZR_utility +
+                                        FEPR_utility +
+                                        MEMR_utility +
+                                        CIPR_utility +
+                                        GENR_utility +
+                                        SXTR_utility +
+                                        NITR_utility +
+                                        VANR_utility +
+                                        Formulary_utility)*single_agent),
+                      Rx_utility = S_utility,
                       ent_AMPR_utility = case_when(
                         Antimicrobial=="Ampicillin" ~
-                          AMP_R_value*ent_R, TRUE~0
+                          abs(R_weight)*AMP_R_value*ent_R, TRUE~0
                       ),
                       ent_SAMR_utility = case_when(
                         Antimicrobial=="Ampicillin-sulbactam" ~
-                          SAM_R_value*ent_R, TRUE~0
+                          abs(R_weight)*SAM_R_value*ent_R, TRUE~0
                       ),
                       ent_TZPR_utility = case_when(
                         Antimicrobial=="Piperacillin-tazobactam" ~
-                          TZP_R_value*ent_R, TRUE~0
+                          abs(R_weight)*TZP_R_value*ent_R, TRUE~0
                       ),
                       ent_CZOR_utility = case_when(
                         Antimicrobial=="Cefazolin" ~
-                          CZO_R_value*ent_R, TRUE~0
+                          abs(R_weight)*CZO_R_value*ent_R, TRUE~0
                       ),
                       ent_CROR_utility = case_when(
                         Antimicrobial=="Ceftriaxone" ~
-                          CRO_R_value*ent_R, TRUE~0
+                          abs(R_weight)*CRO_R_value*ent_R, TRUE~0
                       ),
                       ent_CAZR_utility = case_when(
                         Antimicrobial=="Ceftazidime" ~
-                          CAZ_R_value*ent_R, TRUE~0
+                          abs(R_weight)*CAZ_R_value*ent_R, TRUE~0
                       ),
                       ent_FEPR_utility = case_when(
                         Antimicrobial=="Cefepime" ~
-                          FEP_R_value*ent_R, TRUE~0
+                          abs(R_weight)*FEP_R_value*ent_R, TRUE~0
                       ),
                       ent_MEMR_utility = case_when(
                         Antimicrobial=="Meropenem" ~
-                          MEM_R_value*ent_R, TRUE~0
+                          abs(R_weight)*MEM_R_value*ent_R, TRUE~0
                       ),
                       ent_CIPR_utility = case_when(
                         Antimicrobial=="Ciprofloxacin" ~
-                          CIP_R_value*ent_R, TRUE~0
+                          abs(R_weight)*CIP_R_value*ent_R, TRUE~0
                       ),
                       ent_GENR_utility = case_when(
                         Antimicrobial=="Gentamicin" ~
-                          GEN_R_value*ent_R, TRUE~0
+                          abs(R_weight)*GEN_R_value*ent_R, TRUE~0
                       ),
                       ent_SXTR_utility = case_when(
                         Antimicrobial=="Trimethoprim-sulfamethoxazole" ~
-                          SXT_R_value*ent_R, TRUE~0
+                          abs(R_weight)*SXT_R_value*ent_R, TRUE~0
                       ),
                       ent_NITR_utility = case_when(
                         Antimicrobial=="Nitrofurantoin" ~
-                          NIT_R_value*ent_R, TRUE~0
+                          abs(R_weight)*NIT_R_value*ent_R, TRUE~0
                       ),
                       ent_VANR_utility = case_when(
                         Antimicrobial=="Vancomycin" ~
-                          VAN_R_value*ent_R, TRUE~0
+                          abs(R_weight)*VAN_R_value*ent_R, TRUE~0
                       ),
                       ent_Formulary_agent = case_when(
                         Antimicrobial%in%formulary_list ~
                           TRUE, TRUE~FALSE
                       ),
                       ent_Formulary_utility = 
-                        Formulary_agent*ent_R,
-                      ent_AST_utility = (ent_S_utility+
-                                           ent_AMPR_utility +
-                                           ent_SAMR_utility +
-                                           ent_TZPR_utility +
-                                           ent_CZOR_utility +
-                                           ent_CROR_utility +
-                                           ent_CAZR_utility +
-                                           ent_FEPR_utility +
-                                           ent_MEMR_utility +
-                                           ent_CIPR_utility +
-                                           ent_GENR_utility +
-                                           ent_SXTR_utility +
-                                           ent_NITR_utility +
-                                           ent_VANR_utility +
-                                           ent_Formulary_utility)*single_agent,
-                      ent_Rx_utility = (overall_util * ent_S) -
-                        (ent_R*(prob_sepsisae - util_CDI -
-                                  util_tox)))
+                        abs(R_weight)*Formulary_agent*ent_R,
+                      ent_AST_utility = ((ent_S_utility+
+                                            ent_AMPR_utility +
+                                            ent_SAMR_utility +
+                                            ent_TZPR_utility +
+                                            ent_CZOR_utility +
+                                            ent_CROR_utility +
+                                            ent_CAZR_utility +
+                                            ent_FEPR_utility +
+                                            ent_MEMR_utility +
+                                            ent_CIPR_utility +
+                                            ent_GENR_utility +
+                                            ent_SXTR_utility +
+                                            ent_NITR_utility +
+                                            ent_VANR_utility +
+                                            ent_Formulary_utility)*single_agent),
+                      ent_Rx_utility = (overall_util * ent_S))
   
   df %>% 
     mutate(
       Urosepsis_Rx_utility = case_when(
-        util_iv ==0 ~min(df$Rx_utility)-0.01,
-        TRUE~S_IV_utility - R_penalty),
+        util_iv ==0 ~0,
+        TRUE~Rx_utility),
       Outpatient_Rx_utility = case_when(
-        util_oral ==0 ~min(df$Rx_utility)-0.01,
-        TRUE~S_PO_utility -  R_penalty),
+        util_oral ==0 ~0,
+        TRUE~Rx_utility),
       ent_Urosepsis_Rx_utility = case_when(
-        util_iv ==0 ~min(df$Rx_utility)-0.01,
-        TRUE~(overall_iv_util*ent_S)-(ent_R*(prob_sepsisae - util_CDI -
-                                               util_tox))),
+        util_iv ==0 ~0,
+        TRUE~(overall_util*ent_S)),
       ent_Outpatient_Rx_utility = case_when(
-        util_oral ==0 ~min(df$Rx_utility)-0.01,
-        TRUE~(overall_oral_util*ent_S)-(ent_R*(prob_sepsisae - util_CDI -
-                                                 util_tox)))
+        util_oral ==0 ~0,
+        TRUE~(overall_util*ent_S))
     )
   
 }
-
-###Utility score calculator (improved resistance predictions)
-calculate_utilities_2 <- function(df,formulary_list=NULL,R_weight=1,ac_weight=1) {
-  
-  df <- df %>% mutate(overall_util=util_uti + util_access*ac_weight +
-                        util_oral + util_iv +
-                        util_reserve + util_highcost,
-                      overall_oral_util = util_uti + util_access*ac_weight +
-                        util_oral +
-                        util_reserve + util_highcost,
-                      overall_iv_util = util_uti + util_access*ac_weight +
-                        util_iv +
-                        util_reserve + util_highcost,
-                      R_penalty=(((better_R*100)^R_weight)/100)*(prob_sepsisae),
-                      S_utility = S*overall_util,
-                      S_PO_utility = S*overall_oral_util,
-                      S_IV_utility=S*overall_iv_util,
-                      ent_S_utility = ent_S*overall_util,
-                      AMPR_utility = case_when(
-                        Antimicrobial=="Ampicillin" ~
-                          AMP_R_value*R, TRUE~0
-                      ),
-                      SAMR_utility = case_when(
-                        Antimicrobial=="Ampicillin-sulbactam" ~
-                          SAM_R_value*R, TRUE~0
-                      ),
-                      TZPR_utility = case_when(
-                        Antimicrobial=="Piperacillin-tazobactam" ~
-                          TZP_R_value*R, TRUE~0
-                      ),
-                      CZOR_utility = case_when(
-                        Antimicrobial=="Cefazolin" ~
-                          CZO_R_value*R, TRUE~0
-                      ),
-                      CROR_utility = case_when(
-                        Antimicrobial=="Ceftriaxone" ~
-                          CRO_R_value*R, TRUE~0
-                      ),
-                      CAZR_utility = case_when(
-                        Antimicrobial=="Ceftazidime" ~
-                          CAZ_R_value*R, TRUE~0
-                      ),
-                      FEPR_utility = case_when(
-                        Antimicrobial=="Cefepime" ~
-                          FEP_R_value*R, TRUE~0
-                      ),
-                      MEMR_utility = case_when(
-                        Antimicrobial=="Meropenem" ~
-                          MEM_R_value*R, TRUE~0
-                      ),
-                      CIPR_utility = case_when(
-                        Antimicrobial=="Ciprofloxacin" ~
-                          CIP_R_value*R, TRUE~0
-                      ),
-                      GENR_utility = case_when(
-                        Antimicrobial=="Gentamicin" ~
-                          GEN_R_value*R, TRUE~0
-                      ),
-                      SXTR_utility = case_when(
-                        Antimicrobial=="Trimethoprim-sulfamethoxazole" ~
-                          SXT_R_value*R, TRUE~0
-                      ),
-                      NITR_utility = case_when(
-                        Antimicrobial=="Nitrofurantoin" ~
-                          NIT_R_value*R, TRUE~0
-                      ),
-                      VANR_utility = case_when(
-                        Antimicrobial=="Vancomycin" ~
-                          VAN_R_value*R, TRUE~0
-                      ),
-                      Formulary_agent = case_when(
-                        Antimicrobial%in%formulary_list ~
-                          TRUE, TRUE~FALSE
-                      ),
-                      Formulary_utility = 
-                        Formulary_agent*R,
-                      AST_utility = (S_utility+
-                                       AMPR_utility +
-                                       SAMR_utility +
-                                       TZPR_utility +
-                                       CZOR_utility +
-                                       CROR_utility +
-                                       CAZR_utility +
-                                       FEPR_utility +
-                                       MEMR_utility +
-                                       CIPR_utility +
-                                       GENR_utility +
-                                       SXTR_utility +
-                                       NITR_utility +
-                                       VANR_utility +
-                                       Formulary_utility)*single_agent,
-                      Rx_utility = S_utility -
-                        R_penalty,
-                      ent_AMPR_utility = case_when(
-                        Antimicrobial=="Ampicillin" ~
-                          AMP_R_value*ent_R, TRUE~0
-                      ),
-                      ent_SAMR_utility = case_when(
-                        Antimicrobial=="Ampicillin-sulbactam" ~
-                          SAM_R_value*ent_R, TRUE~0
-                      ),
-                      ent_TZPR_utility = case_when(
-                        Antimicrobial=="Piperacillin-tazobactam" ~
-                          TZP_R_value*ent_R, TRUE~0
-                      ),
-                      ent_CZOR_utility = case_when(
-                        Antimicrobial=="Cefazolin" ~
-                          CZO_R_value*ent_R, TRUE~0
-                      ),
-                      ent_CROR_utility = case_when(
-                        Antimicrobial=="Ceftriaxone" ~
-                          CRO_R_value*ent_R, TRUE~0
-                      ),
-                      ent_CAZR_utility = case_when(
-                        Antimicrobial=="Ceftazidime" ~
-                          CAZ_R_value*ent_R, TRUE~0
-                      ),
-                      ent_FEPR_utility = case_when(
-                        Antimicrobial=="Cefepime" ~
-                          FEP_R_value*ent_R, TRUE~0
-                      ),
-                      ent_MEMR_utility = case_when(
-                        Antimicrobial=="Meropenem" ~
-                          MEM_R_value*ent_R, TRUE~0
-                      ),
-                      ent_CIPR_utility = case_when(
-                        Antimicrobial=="Ciprofloxacin" ~
-                          CIP_R_value*ent_R, TRUE~0
-                      ),
-                      ent_GENR_utility = case_when(
-                        Antimicrobial=="Gentamicin" ~
-                          GEN_R_value*ent_R, TRUE~0
-                      ),
-                      ent_SXTR_utility = case_when(
-                        Antimicrobial=="Trimethoprim-sulfamethoxazole" ~
-                          SXT_R_value*ent_R, TRUE~0
-                      ),
-                      ent_NITR_utility = case_when(
-                        Antimicrobial=="Nitrofurantoin" ~
-                          NIT_R_value*ent_R, TRUE~0
-                      ),
-                      ent_VANR_utility = case_when(
-                        Antimicrobial=="Vancomycin" ~
-                          VAN_R_value*ent_R, TRUE~0
-                      ),
-                      ent_Formulary_agent = case_when(
-                        Antimicrobial%in%formulary_list ~
-                          TRUE, TRUE~FALSE
-                      ),
-                      ent_Formulary_utility = 
-                        Formulary_agent*ent_R,
-                      ent_AST_utility = (ent_S_utility+
-                                           ent_AMPR_utility +
-                                           ent_SAMR_utility +
-                                           ent_TZPR_utility +
-                                           ent_CZOR_utility +
-                                           ent_CROR_utility +
-                                           ent_CAZR_utility +
-                                           ent_FEPR_utility +
-                                           ent_MEMR_utility +
-                                           ent_CIPR_utility +
-                                           ent_GENR_utility +
-                                           ent_SXTR_utility +
-                                           ent_NITR_utility +
-                                           ent_VANR_utility +
-                                           ent_Formulary_utility)*single_agent,
-                      ent_Rx_utility = (overall_util * ent_S) -
-                        (ent_R*(prob_sepsisae - util_CDI -
-                                  util_tox)))
-  
-  df %>% 
-    mutate(
-      Urosepsis_Rx_utility = case_when(
-        util_iv ==0 ~min(df$Rx_utility)-0.01,
-        TRUE~S_IV_utility - R_penalty),
-      Outpatient_Rx_utility = case_when(
-        util_oral ==0 ~min(df$Rx_utility)-0.01,
-        TRUE~S_PO_utility -  R_penalty),
-      ent_Urosepsis_Rx_utility = case_when(
-        util_iv ==0 ~min(df$Rx_utility)-0.01,
-        TRUE~(overall_iv_util*ent_S)-(ent_R*(prob_sepsisae - util_CDI -
-                                               util_tox))),
-      ent_Outpatient_Rx_utility = case_when(
-        util_oral ==0 ~min(df$Rx_utility)-0.01,
-        TRUE~(overall_oral_util*ent_S)-(ent_R*(prob_sepsisae - util_CDI -
-                                                 util_tox)))
-    )
-  
-}
-
-###Original utility score calculator
-calculate_utilities_orig <- function(df,formulary_list=NULL) {
+calculate_utilities_2 <- function(df,formulary_list=c(),R_weight=1) {
   
   df <- df %>% mutate(overall_util = util_uti + util_access +
                         util_oral + util_iv +
-                        util_reserve + util_highcost,
+                        util_reserve + util_highcost 
+                      + util_tox + util_CDI,
                       overall_oral_util = util_uti + util_access +
                         util_oral +
-                        util_reserve + util_highcost,
+                        util_reserve + util_highcost
+                      + util_tox + util_CDI,
                       overall_iv_util = util_uti + util_access +
                         util_iv +
-                        util_reserve + util_highcost,
-                      R_penalty=R*prob_sepsisae,
+                        util_reserve + util_highcost
+                      + util_tox + util_CDI,
+                      R_penalty=R_weight*better_R*prob_sepsisae,
+                      S_utility = S*overall_util,
+                      S_PO_utility = S*overall_oral_util,
+                      S_IV_utility=S*overall_iv_util,
+                      ent_S_utility = ent_S*overall_util,
+                      AMPR_utility = case_when(
+                        Antimicrobial=="Ampicillin" ~
+                          AMP_R_value*better_R, TRUE~0
+                      ),
+                      SAMR_utility = case_when(
+                        Antimicrobial=="Ampicillin-sulbactam" ~
+                          SAM_R_value*better_R, TRUE~0
+                      ),
+                      TZPR_utility = case_when(
+                        Antimicrobial=="Piperacillin-tazobactam" ~
+                          TZP_R_value*better_R, TRUE~0
+                      ),
+                      CZOR_utility = case_when(
+                        Antimicrobial=="Cefazolin" ~
+                          CZO_R_value*better_R, TRUE~0
+                      ),
+                      CROR_utility = case_when(
+                        Antimicrobial=="Ceftriaxone" ~
+                          CRO_R_value*better_R, TRUE~0
+                      ),
+                      CAZR_utility = case_when(
+                        Antimicrobial=="Ceftazidime" ~
+                          CAZ_R_value*better_R, TRUE~0
+                      ),
+                      FEPR_utility = case_when(
+                        Antimicrobial=="Cefepime" ~
+                          FEP_R_value*better_R, TRUE~0
+                      ),
+                      MEMR_utility = case_when(
+                        Antimicrobial=="Meropenem" ~
+                          MEM_R_value*better_R, TRUE~0
+                      ),
+                      CIPR_utility = case_when(
+                        Antimicrobial=="Ciprofloxacin" ~
+                          CIP_R_value*better_R, TRUE~0
+                      ),
+                      GENR_utility = case_when(
+                        Antimicrobial=="Gentamicin" ~
+                          GEN_R_value*better_R, TRUE~0
+                      ),
+                      SXTR_utility = case_when(
+                        Antimicrobial=="Trimethoprim-sulfamethoxazole" ~
+                          SXT_R_value*better_R, TRUE~0
+                      ),
+                      NITR_utility = case_when(
+                        Antimicrobial=="Nitrofurantoin" ~
+                          NIT_R_value*better_R, TRUE~0
+                      ),
+                      VANR_utility = case_when(
+                        Antimicrobial=="Vancomycin" ~
+                          VAN_R_value*better_R, TRUE~0
+                      ),
+                      Formulary_agent = case_when(
+                        Antimicrobial%in%formulary_list ~
+                          TRUE, TRUE~FALSE
+                      ),
+                      Formulary_utility = 
+                        R_weight*Formulary_agent*better_R,
+                      AST_utility = normalise(((S_utility+
+                                                  AMPR_utility +
+                                                  SAMR_utility +
+                                                  TZPR_utility +
+                                                  CZOR_utility +
+                                                  CROR_utility +
+                                                  CAZR_utility +
+                                                  FEPR_utility +
+                                                  MEMR_utility +
+                                                  CIPR_utility +
+                                                  GENR_utility +
+                                                  SXTR_utility +
+                                                  NITR_utility +
+                                                  VANR_utility +
+                                                  Formulary_utility)*single_agent)),
+                      Rx_utility = normalise((S_utility -
+                                                R_penalty)),
+                      ent_AMPR_utility = case_when(
+                        Antimicrobial=="Ampicillin" ~
+                          AMP_R_value*ent_R, TRUE~0
+                      ),
+                      ent_SAMR_utility = case_when(
+                        Antimicrobial=="Ampicillin-sulbactam" ~
+                          SAM_R_value*ent_R, TRUE~0
+                      ),
+                      ent_TZPR_utility = case_when(
+                        Antimicrobial=="Piperacillin-tazobactam" ~
+                          TZP_R_value*ent_R, TRUE~0
+                      ),
+                      ent_CZOR_utility = case_when(
+                        Antimicrobial=="Cefazolin" ~
+                          CZO_R_value*ent_R, TRUE~0
+                      ),
+                      ent_CROR_utility = case_when(
+                        Antimicrobial=="Ceftriaxone" ~
+                          CRO_R_value*ent_R, TRUE~0
+                      ),
+                      ent_CAZR_utility = case_when(
+                        Antimicrobial=="Ceftazidime" ~
+                          CAZ_R_value*ent_R, TRUE~0
+                      ),
+                      ent_FEPR_utility = case_when(
+                        Antimicrobial=="Cefepime" ~
+                          FEP_R_value*ent_R, TRUE~0
+                      ),
+                      ent_MEMR_utility = case_when(
+                        Antimicrobial=="Meropenem" ~
+                          MEM_R_value*ent_R, TRUE~0
+                      ),
+                      ent_CIPR_utility = case_when(
+                        Antimicrobial=="Ciprofloxacin" ~
+                          CIP_R_value*ent_R, TRUE~0
+                      ),
+                      ent_GENR_utility = case_when(
+                        Antimicrobial=="Gentamicin" ~
+                          GEN_R_value*ent_R, TRUE~0
+                      ),
+                      ent_SXTR_utility = case_when(
+                        Antimicrobial=="Trimethoprim-sulfamethoxazole" ~
+                          SXT_R_value*ent_R, TRUE~0
+                      ),
+                      ent_NITR_utility = case_when(
+                        Antimicrobial=="Nitrofurantoin" ~
+                          NIT_R_value*ent_R, TRUE~0
+                      ),
+                      ent_VANR_utility = case_when(
+                        Antimicrobial=="Vancomycin" ~
+                          VAN_R_value*ent_R, TRUE~0
+                      ),
+                      ent_Formulary_agent = case_when(
+                        Antimicrobial%in%formulary_list ~
+                          TRUE, TRUE~FALSE
+                      ),
+                      ent_Formulary_utility = 
+                        R_weight*Formulary_agent*ent_R,
+                      ent_AST_utility = normalise(((ent_S_utility+
+                                                      ent_AMPR_utility +
+                                                      ent_SAMR_utility +
+                                                      ent_TZPR_utility +
+                                                      ent_CZOR_utility +
+                                                      ent_CROR_utility +
+                                                      ent_CAZR_utility +
+                                                      ent_FEPR_utility +
+                                                      ent_MEMR_utility +
+                                                      ent_CIPR_utility +
+                                                      ent_GENR_utility +
+                                                      ent_SXTR_utility +
+                                                      ent_NITR_utility +
+                                                      ent_VANR_utility +
+                                                      ent_Formulary_utility)*single_agent)),
+                      ent_Rx_utility = normalise((overall_util * ent_S) -
+                                                   (R_weight*ent_R*(prob_sepsisae))))
+  
+  df %>% 
+    mutate(
+      Urosepsis_Rx_utility = case_when(
+        util_iv ==0 ~min(df$Rx_utility)-0.01,
+        TRUE~normalise(S_IV_utility - R_penalty)),
+      Outpatient_Rx_utility = case_when(
+        util_oral ==0 ~min(df$Rx_utility)-0.01,
+        TRUE~normalise(S_PO_utility -  R_penalty)),
+      ent_Urosepsis_Rx_utility = case_when(
+        util_iv ==0 ~min(df$Rx_utility)-0.01,
+        TRUE~normalise((overall_iv_util*ent_S)-(R_weight*ent_R*(prob_sepsisae - util_CDI -
+                                                                  util_tox)))),
+      ent_Outpatient_Rx_utility = case_when(
+        util_oral ==0 ~min(df$Rx_utility)-0.01,
+        TRUE~normalise((overall_oral_util*ent_S)-(R_weight*ent_R*(prob_sepsisae - util_CDI -
+                                                                    util_tox))))
+    )
+  
+}
+calculate_utilities_orig <- function(df,formulary_list=c(),R_weight=1) {
+  
+  df <- df %>% mutate(overall_util = util_uti + util_access +
+                        util_oral + util_iv +
+                        util_reserve + util_highcost 
+                      + util_tox + util_CDI,
+                      overall_oral_util = util_uti + util_access +
+                        util_oral +
+                        util_reserve + util_highcost
+                      + util_tox + util_CDI,
+                      overall_iv_util = util_uti + util_access +
+                        util_iv +
+                        util_reserve + util_highcost
+                      + util_tox + util_CDI,
+                      R_penalty=R_weight*R*prob_sepsisae,
                       S_utility = S*overall_util,
                       S_PO_utility = S*overall_oral_util,
                       S_IV_utility=S*overall_iv_util,
@@ -1516,24 +1523,24 @@ calculate_utilities_orig <- function(df,formulary_list=NULL) {
                           TRUE, TRUE~FALSE
                       ),
                       Formulary_utility = 
-                        Formulary_agent*R,
-                      AST_utility = (S_utility+
-                                       AMPR_utility +
-                                       SAMR_utility +
-                                       TZPR_utility +
-                                       CZOR_utility +
-                                       CROR_utility +
-                                       CAZR_utility +
-                                       FEPR_utility +
-                                       MEMR_utility +
-                                       CIPR_utility +
-                                       GENR_utility +
-                                       SXTR_utility +
-                                       NITR_utility +
-                                       VANR_utility +
-                                       Formulary_utility)*single_agent,
-                      Rx_utility = S_utility -
-                        R_penalty,
+                        R_weight*Formulary_agent*R,
+                      AST_utility = normalise(((S_utility+
+                                                  AMPR_utility +
+                                                  SAMR_utility +
+                                                  TZPR_utility +
+                                                  CZOR_utility +
+                                                  CROR_utility +
+                                                  CAZR_utility +
+                                                  FEPR_utility +
+                                                  MEMR_utility +
+                                                  CIPR_utility +
+                                                  GENR_utility +
+                                                  SXTR_utility +
+                                                  NITR_utility +
+                                                  VANR_utility +
+                                                  Formulary_utility)*single_agent)),
+                      Rx_utility = normalise((S_utility -
+                                                R_penalty)),
                       ent_AMPR_utility = case_when(
                         Antimicrobial=="Ampicillin" ~
                           AMP_R_value*ent_R, TRUE~0
@@ -1591,42 +1598,41 @@ calculate_utilities_orig <- function(df,formulary_list=NULL) {
                           TRUE, TRUE~FALSE
                       ),
                       ent_Formulary_utility = 
-                        Formulary_agent*ent_R,
-                      ent_AST_utility = (ent_S_utility+
-                                           ent_AMPR_utility +
-                                           ent_SAMR_utility +
-                                           ent_TZPR_utility +
-                                           ent_CZOR_utility +
-                                           ent_CROR_utility +
-                                           ent_CAZR_utility +
-                                           ent_FEPR_utility +
-                                           ent_MEMR_utility +
-                                           ent_CIPR_utility +
-                                           ent_GENR_utility +
-                                           ent_SXTR_utility +
-                                           ent_NITR_utility +
-                                           ent_VANR_utility +
-                                           ent_Formulary_utility)*single_agent,
-                      ent_Rx_utility = (overall_util * ent_S) -
-                        (ent_R*(prob_sepsisae - util_CDI -
-                                  util_tox)))
+                        R_weight*Formulary_agent*ent_R,
+                      ent_AST_utility = normalise(((ent_S_utility+
+                                                      ent_AMPR_utility +
+                                                      ent_SAMR_utility +
+                                                      ent_TZPR_utility +
+                                                      ent_CZOR_utility +
+                                                      ent_CROR_utility +
+                                                      ent_CAZR_utility +
+                                                      ent_FEPR_utility +
+                                                      ent_MEMR_utility +
+                                                      ent_CIPR_utility +
+                                                      ent_GENR_utility +
+                                                      ent_SXTR_utility +
+                                                      ent_NITR_utility +
+                                                      ent_VANR_utility +
+                                                      ent_Formulary_utility)*single_agent)),
+                      ent_Rx_utility = normalise((overall_util * ent_S) -
+                                                   (R_weight*ent_R*(prob_sepsisae))))
   
   df %>% 
     mutate(
       Urosepsis_Rx_utility = case_when(
         util_iv ==0 ~min(df$Rx_utility)-0.01,
-        TRUE~S_IV_utility - R_penalty),
+        TRUE~normalise(S_IV_utility - R_penalty)),
       Outpatient_Rx_utility = case_when(
         util_oral ==0 ~min(df$Rx_utility)-0.01,
-        TRUE~S_PO_utility -  R_penalty),
+        TRUE~normalise(S_PO_utility -  R_penalty)),
       ent_Urosepsis_Rx_utility = case_when(
         util_iv ==0 ~min(df$Rx_utility)-0.01,
-        TRUE~(overall_iv_util*ent_S)-(ent_R*(prob_sepsisae - util_CDI -
-                                               util_tox))),
+        TRUE~normalise((overall_iv_util*ent_S)-(R_weight*ent_R*(prob_sepsisae - util_CDI -
+                                                                  util_tox)))),
       ent_Outpatient_Rx_utility = case_when(
         util_oral ==0 ~min(df$Rx_utility)-0.01,
-        TRUE~(overall_oral_util*ent_S)-(ent_R*(prob_sepsisae - util_CDI -
-                                                 util_tox)))
+        TRUE~normalise((overall_oral_util*ent_S)-(R_weight*ent_R*(prob_sepsisae - util_CDI -
+                                                                    util_tox))))
     )
   
 }
@@ -1695,11 +1701,11 @@ number_results_per_panel <- function(df,start_col,end_col,which_abs,result_1,res
   for(i in 1:nrow(df)) {
     
     n_ac_s <- sum((df %>%
-                     select(all_of(intersect(df %>% select(!!start_col:!!end_col) %>%slice(i) %>% unlist(),which_abs))) %>% 
-                     slice(i)) == result_1 |
+                     select(all_of(intersect(df %>% select(!!start_col:!!end_col) %>%dplyr::slice(i) %>% unlist(),which_abs))) %>% 
+                     dplyr::slice(i)) == result_1 |
                     (df %>%
-                       select(all_of(intersect(df %>% select(!!start_col:!!end_col) %>%slice(i) %>% unlist(),which_abs))) %>% 
-                       slice(i)) == result_2)
+                       select(all_of(intersect(df %>% select(!!start_col:!!end_col) %>%dplyr::slice(i) %>% unlist(),which_abs))) %>% 
+                       dplyr::slice(i)) == result_2)
     
     n_all_s <- n_all_s %>% append(n_ac_s)
     
@@ -1849,12 +1855,12 @@ number_ab_results <- function(df,start_col,end_col,which_abs,result_1,result_2) 
   for(i in 1:nrow(df)) {
     
     all_s <- df %>%
-      select(all_of(intersect(df %>% select(!!start_col:!!end_col) %>%slice(i) %>% unlist(),all_abs))) %>% 
-      slice(i) %>% t() %>% data.frame() %>% filter(. ==result_1) %>% rownames()
+      select(all_of(intersect(df %>% select(!!start_col:!!end_col) %>%dplyr::slice(i) %>% unlist(),all_abs))) %>% 
+      dplyr::slice(i) %>% t() %>% data.frame() %>% filter(. ==result_1) %>% rownames()
     
     all_i <- df %>%
-      select(all_of(intersect(df %>% select(!!start_col:!!end_col) %>%slice(i) %>% unlist(),all_abs))) %>% 
-      slice(i) %>% t() %>% data.frame() %>% filter(. ==result_2) %>% rownames()
+      select(all_of(intersect(df %>% select(!!start_col:!!end_col) %>%dplyr::slice(i) %>% unlist(),all_abs))) %>% 
+      dplyr::slice(i) %>% t() %>% data.frame() %>% filter(. ==result_2) %>% rownames()
     
     ac_si <- all_s %>% append(all_i)
     
@@ -2017,25 +2023,25 @@ abs_df_assemble <- function(pd_df,standard_df) {
     df %>% filter(ind==ab_name(abx)) %>% arrange(Approach) %>% select(values)
     
     if(nrow(abs_df %>% filter(ind==ab_name(abx)) %>% select(1)) ==2 &
-       abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% slice(1) =="PDAST") {
+       abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% dplyr::slice(1) =="PDAST") {
       
-      abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(1) -
-        abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(2)
+      abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(1) -
+        abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(2)
       
     } else if (nrow(abs_df %>% filter(ind==ab_name(abx)) %>% select(1)) ==2 &
-               abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% slice(1) =="Standard"){
+               abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% dplyr::slice(1) =="Standard"){
       
-      -(abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(1) -
-          abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(2))
+      -(abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(1) -
+          abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(2))
       
     } else if (nrow(abs_df %>% filter(ind==ab_name(abx)) %>% select(1)) ==1 &
-               abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% slice(1) =="PDAST") {
+               abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% dplyr::slice(1) =="PDAST") {
       
-      abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(1)
+      abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(1)
       
     } else {
       
-      -(abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(1))
+      -(abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(1))
       
     }
     
@@ -2325,7 +2331,7 @@ write_csv(form_abs_df_r,"form_r_uf_sourcedata_abs_cleveplot.csv")
 form_r_results_by_ab <- form_abs_df_r %>% cleveland_ab_plot("resistant"," (Ciprofloxacin & Ceftriaxone added to formulary)")
 
 ###R weight sensitivity analysis
-weightseq <- seq(0,30,5)
+weightseq <- seq(0,20,1)
 iv_perclist <- c()
 po_perclist <- c()
 overall_perclist <- c()
@@ -2382,9 +2388,9 @@ write_csv(iv_plot_df,"iv_plot_df.csv")
 write_csv(po_plot_df,"po_plot_df.csv")
 write_csv(overall_plot_df,"overall_plot_df.csv")
 
-iv_plot_df %>% susc_plotter_iv("IV ","Resistance",agent_col1=GEN,agent_name1="Gentamicin",agent_col2=TZP,agent_name2="Piperacillin-tazobactam")
-po_plot_df %>% susc_plotter("oral ","Resistance",agent_col1=NIT,agent_name1="Nitrofurantoin")
-overall_plot_df %>% susc_plotter_iv("overall ", "Resistance",agent_col1=NIT,agent_name1="Nitrofurantoin",
+iv_plot_df %>% susc_plotter_iv("IV ","NEWS",agent_col1=GEN,agent_name1="Gentamicin",agent_col2=TZP,agent_name2="Piperacillin-tazobactam")
+po_plot_df %>% susc_plotter("oral ","NEWS",agent_col1=NIT,agent_name1="Nitrofurantoin")
+overall_plot_df %>% susc_plotter_iv("overall ", "NEWS",agent_col1=NIT,agent_name1="Nitrofurantoin",
                                     agent_col2=TZP,agent_name2="Piperacillin-tazobactam")
 
 ###Nitro Resistance sensitivity analysis
@@ -2419,6 +2425,8 @@ for(i in 1:9) {
   
 }
 
+
+res_sens_analysis_3(ur_util,util_probs_df,abx="Nitrofurantoin",NIT,a_val=9.5,b_val=14)
 iv_perclist_nit <- iv_perclist_nit %>% label_binder("All agents")
 po_perclist_nit <- po_perclist_nit %>% label_binder("All agents")
 overall_perclist_nit <- overall_perclist_nit %>% label_binder("All agents")
@@ -2536,6 +2544,237 @@ po_plot_df_combo %>% susc_plotter("oral ","Resistance","(including combinations)
                                   agent_col1=NIT,agent_name1="Nitrofurantoin")
 overall_plot_df_combo %>% susc_plotter("overall ","Resistance","(including combinations)",
                                        agent_col1=NIT,agent_name1="Nitrofurantoin")
+
+###XGBoost sensitivity analysis
+all_singles <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
+                 "MEM","CIP","GEN","SXT","NIT")
+ab_singles <- all_singles
+all_combos <- combn(all_singles, 2, FUN = function(x) paste(x, collapse = "_"))
+all_abs <- c(all_singles,all_combos)
+iv_singles <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
+                "GEN","SXT")
+iv_ab_singles <- iv_singles
+iv_combos <- combn(iv_singles, 2, FUN = function(x) paste(x, collapse = "_"))
+all_ivs <- c(iv_singles, iv_combos)
+oral_singles <- c("AMP","SAM","CIP",
+                  "SXT","NIT")
+oral_ab_singles <- oral_singles
+oral_combos <- combn(oral_singles, 2, FUN = function(x) paste(x, collapse = "_"))
+all_orals <- c(oral_singles, oral_combos)
+access_singles <- c("AMP","SAM","GEN",
+                    "SXT","NIT","CZO")
+access_combos <- combn(access_singles, 2, FUN = function(x) paste(x, collapse = "_"))
+all_access <- c(access_singles, access_combos)
+watch_singles <- c("CRO","CAZ","FEP","MEM","TZP","CIP","VAN")
+watch_combos <- combn(watch_singles, 2, FUN = function(x) paste(x, collapse = "_"))
+all_watch <- c(watch_singles, watch_combos)
+
+antimicrobial_map <- c(
+  "Ampicillin" = "AMP",
+  "Ampicillin-sulbactam" = "SAM",
+  "Piperacillin-tazobactam" = "TZP",
+  "Cefazolin" = "CZO",
+  "Ceftriaxone" = "CRO",
+  "Ceftazidime" = "CAZ",
+  "Cefepime" = "FEP",
+  "Meropenem" = "MEM",
+  "Ciprofloxacin" = "CIP",
+  "Gentamicin" = "GEN",
+  "Trimethoprim-sulfamethoxazole" = "SXT",
+  "Nitrofurantoin" = "NIT",
+  "Vancomycin" = "VAN"
+)
+
+map_combinations <- combn(names(antimicrobial_map), 2, simplify = FALSE)
+combined_antimicrobial_map <- c(
+  antimicrobial_map,
+  setNames(
+    lapply(map_combinations, function(x) paste(antimicrobial_map[x], collapse = "_")),
+    sapply(map_combinations, function(x) paste(x, collapse = "_"))
+  )
+)
+abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+  str_replace_all("/","-")
+combined_antimicrobial_map <- combined_antimicrobial_map[names(combined_antimicrobial_map) %in% abx_in_train]
+shortmap <- combined_antimicrobial_map %>% unlist()
+names(shortmap) <- NULL
+
+urines5 <- read_csv("urines5.csv")
+ur_xg <- read_csv("ur_util.csv")
+urines5 <- urines5 %>% mutate(marital_status=case_when(is.na(marital_status)~"UNKNOWN",
+                                                       TRUE~marital_status))
+ur_xg <- ur_xg %>% mutate(marital_status=case_when(is.na(marital_status)~"UNKNOWN",
+                                                   TRUE~marital_status))
+
+urines5_outcomes <- urines5 %>%
+  select(all_of(shortmap))
+ur_xg_outcomes <- ur_xg %>%
+  select(all_of(shortmap))
+
+urines5_outcomes <- urines5_outcomes %>%
+  mutate_all(~ as.numeric(ifelse(. == "R" | . == "NT", 0, 
+                                 ifelse(. == "S" | . == "I", 1, NA))))
+ur_xg_outcomes <- ur_xg_outcomes %>%
+  mutate_all(~ as.numeric(ifelse(. == "R" | . == "NT", 0, 
+                                 ifelse(. == "S" | . == "I", 1, NA))))
+
+urines5_predictors <- urines5 %>% select(!all_of(names(urines5_outcomes)))
+ur_xg_predictors <- ur_xg %>%
+  select(any_of(names(urines5_predictors)))
+
+set.seed(123)
+dummies <- dummyVars(" ~ .", data = urines5_predictors)
+urines5_predictors <- predict(dummies, newdata = urines5_predictors)
+dummies2 <- dummyVars(" ~ .", data = ur_xg_predictors)
+ur_xg_predictors <- predict(dummies2, newdata = ur_xg_predictors)
+
+urines5_combined <- as.data.frame(cbind(urines5_outcomes, urines5_predictors))
+ur_xg_combined <- as.data.frame(cbind(ur_xg_outcomes, ur_xg_predictors))
+
+test_probs_df <- data.frame(matrix(nrow=floor(nrow(urines5_combined)*0.2),ncol=0))
+micro_probs_df <- data.frame(matrix(nrow=nrow(ur_xg_combined),ncol=0))
+aucs <- data.frame(matrix(nrow=1,ncol=0))
+
+for (outcome in colnames(urines5_outcomes)) {
+  
+  if (sum(!is.na(urines5_combined[[outcome]])) > 0) {
+    
+    trainIndex <- createDataPartition(urines5_combined[[outcome]], p = .8, list = FALSE, times = 1)
+    urines5Train <- urines5_combined[trainIndex, ]
+    urines5Test <- urines5_combined[-trainIndex, ]
+    
+    predictor_columns <- colnames(urines5_predictors)
+    selected_columns <- intersect(predictor_columns, colnames(urines5Train))
+    missing_cols <- setdiff(selected_columns, colnames(ur_xg_combined))
+    ur_xg_combined[missing_cols] <- 0
+    train_matrix <- xgb.DMatrix(data = as.matrix(urines5Train %>% select(all_of(selected_columns))), 
+                                label = urines5Train[[outcome]])
+    test_matrix <- xgb.DMatrix(data = as.matrix(urines5Test %>% select(all_of(selected_columns))), 
+                               label = urines5Test[[outcome]])
+    micro_matrix <- xgb.DMatrix(data = as.matrix(ur_xg_combined %>% select(all_of(selected_columns))), 
+                                label = ur_xg_combined[[outcome]])
+    
+    params <- list(
+      objective = "binary:logistic",
+      eval_metric = "logloss",
+      eta = 0.05,
+      max_depth = 6,
+      min_child_weight = 1,
+      subsample = 0.8,
+      colsample_bytree = 0.8
+    )
+    
+    cv_model <- xgb.cv(
+      params = params,
+      data = train_matrix,
+      nrounds = 1000,
+      nfold = 5,
+      early_stopping_rounds = 50,
+      verbose = 0
+    )
+    
+    optimal_nrounds <- cv_model$best_iteration
+    
+    xgb_model <- xgb.train(
+      params = params,
+      data = train_matrix,
+      nrounds = optimal_nrounds
+    )
+    
+    pred_prob_test <- predict(xgb_model, newdata = test_matrix)
+    roc_result <- roc(urines5Test[[outcome]], pred_prob_test)
+    auc_value <- auc(roc_result)
+    print(paste("AUC-ROC:", auc_value))
+    aucs[[outcome]] <- auc_value
+    pdf(glue("{outcome}_xg_roc.pdf"), width = 10, height = 10)
+    plot(roc_result, main = glue("{outcome} ROC Curve"), col = "blue")
+    dev.off()
+    pred_prob_micro <- predict(xgb_model, newdata = micro_matrix)
+    
+    test_probs_df[[outcome]] <- pred_prob_test
+    micro_probs_df[[outcome]] <- pred_prob_micro
+    
+  }
+}
+
+write_csv(micro_probs_df,"micro_xg_probs_df.csv")
+write_csv(test_probs_df,"test_xg_probs_df.csv")
+write_csv(aucs,"xg_aucs.csv")
+
+problist <- micro_probs_df %>% melt()
+util_xg_df <- util_probs_df %>% mutate(S=problist$value,
+                                       R=1-problist$value)
+
+weightseq <- seq(0,7,1)
+iv_perclist <- c()
+po_perclist <- c()
+overall_perclist <- c()
+ivac_list <- c()
+poac_list <- c()
+ovac_list <- c()
+ovor_list <- c()
+oviv_list <- c()
+
+for(weight in seq_along(weightseq)) {
+  
+  res_sens_analysis(ur_util,util_xg_df,weightseq[weight])
+  
+  iv_perclist <- c(iv_perclist,iv_perc)
+  po_perclist <- c(po_perclist,po_perc)
+  overall_perclist <- c(overall_perclist,overall_perc)
+  ivac_list <- c(ivac_list,iv_s_access)
+  poac_list <- c(poac_list,po_s_access)
+  ovac_list <- c(ovac_list,overall_s_access)
+  ovor_list <- c(ovor_list,overall_s_oral)
+  oviv_list <- c(oviv_list,overall_s_iv)
+  
+}
+
+label_binder <- function(vec,label) {
+  
+  data.frame(vec,Metric=label,Weight=weightseq)
+  
+}
+
+iv_perclist <- iv_perclist %>% label_binder("All agents")
+po_perclist <- po_perclist %>% label_binder("All agents")
+overall_perclist <- overall_perclist %>% label_binder("All agents")
+ivac_list <- ivac_list %>% label_binder("Access agents")
+poac_list <- poac_list %>% label_binder("Access agents")
+ovac_list <- ovac_list %>% label_binder("Access agents")
+ovor_list <- ovor_list %>% label_binder("Oral agents")
+oviv_list <- oviv_list %>% label_binder("IV agents")
+iv_perclist <- iv_perclist %>% rename(Percentage = "vec")
+po_perclist <- po_perclist %>% rename(Percentage = "vec")
+overall_perclist <- overall_perclist %>% rename(Percentage = "vec")
+ivac_list <- ivac_list %>% rename(Percentage = "vec")
+poac_list <- poac_list %>% rename(Percentage = "vec")
+ovac_list <- ovac_list %>% rename(Percentage = "vec")
+ovor_list <- ovor_list %>% rename(Percentage = "vec")
+oviv_list <- oviv_list %>% rename(Percentage = "vec")
+iv_perclist <- iv_perclist %>% mutate(Percentage=100-Percentage)
+po_perclist <- po_perclist %>% mutate(Percentage=100-Percentage)
+overall_perclist <- overall_perclist %>% mutate(Percentage=100-Percentage)
+
+iv_xg_plot_df <- data.frame(rbind(
+  iv_perclist,ivac_list
+))
+po_xg_plot_df <- data.frame(rbind(
+  po_perclist,poac_list
+))
+overall_xg_plot_df <- data.frame(rbind(
+  overall_perclist,ovac_list,ovor_list,oviv_list
+))
+
+write_csv(iv_xg_plot_df,"iv_xg_plot_df.csv")
+write_csv(po_xg_plot_df,"po_xg_plot_df.csv")
+write_csv(overall_xg_plot_df,"overall_xg_plot_df.csv")
+
+iv_xg_plot_df %>% susc_plotter_iv("IV ","NEWS",agent_col1=GEN,agent_name1="Gentamicin",agent_col2=TZP,agent_name2="Piperacillin-tazobactam")
+po_xg_plot_df %>% susc_plotter("oral ","NEWS",agent_col1=NIT,agent_name1="Nitrofurantoin")
+overall_xg_plot_df %>% susc_plotter_iv("overall ", "NEWS",agent_col1=NIT,agent_name1="Nitrofurantoin",
+                                    agent_col2=TZP,agent_name2="Piperacillin-tazobactam")
+
 
 ###R weighting analysis with improved probability predictions
 result_key <- ur_util %>% select(micro_specimen_id,AMP:VAN,AMP_SAM:NIT_VAN)
