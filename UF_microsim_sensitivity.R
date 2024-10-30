@@ -658,16 +658,15 @@ susc_plotter <- function(df,subset="",measure,suffix="",agent_col1,agent_name1,a
   df$Metric <- factor(df$Metric, levels=c("All agents","Access agents"))
   
   susplot <- ggplot(df,aes(x=Weight,y=Percentage,group=Metric,color=Metric,fill=Metric)) +
-    geom_line()+
-    geom_hline(linetype="dashed",yintercept=(nrow(ur_util %>% filter(!!agent_col1=="S"|!!agent_col1=="I"))/nrow(ur_util))*100,color="darkgrey") +
-    geom_area(position = "identity", alpha = 0.4) +
+    geom_area(position = "identity", alpha = 0.6) +
+    geom_hline(linetype="dashed",yintercept=(nrow(ur_util %>% filter(!!agent_col1=="S"|!!agent_col1=="I"))/nrow(ur_util))*100,color="gray16") +
     geom_hline(linetype="dashed",yintercept=70,color="darkgreen") +
     ylim(0,100)+
     theme_minimal()+
     ggtitle(glue("Urine isolate susceptibility to {subset}antimicrobial recommended\n{suffix}"))+
     xlab(glue("{variable}"))+
     ylab("Percentage of isolates susceptible to recommendation")+
-    annotate("text", x = Inf, y = (nrow(ur_util %>% filter(!!agent_col1=="S"|!!agent_col1=="I"))/nrow(ur_util))*100+2, label = glue(agent_name1), hjust = 1.1, color = "darkgrey")+
+    annotate("text", x = Inf, y = (nrow(ur_util %>% filter(!!agent_col1=="S"|!!agent_col1=="I"))/nrow(ur_util))*100+2, label = glue(agent_name1), hjust = 1.1, color = "gray16")+
     annotate("text", x = Inf, y = 72, label = "UN Access target", hjust = 1.1, color = "darkgreen")
   
   ggsave(glue("{subset}_{measure}_{suffix}_susplot.pdf"), plot = susplot, device = "pdf", width = 10, height = 6,
@@ -676,7 +675,7 @@ susc_plotter <- function(df,subset="",measure,suffix="",agent_col1,agent_name1,a
   print(susplot)
   
 }
-susc_plotter_iv <- function(df,subset="",measure,suffix="",agent_col1,agent_name1,agent_col2,agent_name2,variable="NEWS") {
+susc_plotter_iv <- function(df,subset="",measure,suffix="",agent_col1,agent_name1,variable="NEWS") {
   
   agent_col1 <- enquo(agent_col1)
   agent_col2 <- enquo(agent_col2)
@@ -684,18 +683,42 @@ susc_plotter_iv <- function(df,subset="",measure,suffix="",agent_col1,agent_name
   df$Metric <- factor(df$Metric, levels=c("All agents","Access agents"))
   
   susplot <- ggplot(df,aes(x=Weight,y=Percentage,group=Metric,color=Metric,fill=Metric)) +
-    geom_line()+
-    geom_hline(linetype="dashed",yintercept=(nrow(ur_util %>% filter(!!agent_col1=="S"|!!agent_col1=="I"))/nrow(ur_util))*100,color="darkgrey") +
-    geom_hline(linetype="dashed",yintercept=(nrow(ur_util %>% filter(!!agent_col2=="S"|!!agent_col2=="I"))/nrow(ur_util))*100,color="darkgrey") +
-    geom_area(position = "identity", alpha = 0.4) +
+    geom_area(position = "identity", alpha = 0.6) +
+    geom_hline(linetype="dashed",yintercept=(nrow(ur_util %>% filter(!!agent_col1=="S"|!!agent_col1=="I"))/nrow(ur_util))*100,color="gray16") +
     geom_hline(linetype="dashed",yintercept=70,color="darkgreen") +
     ylim(0,100)+
     theme_minimal()+
     ggtitle(glue("Urine isolate susceptibility to {subset}antimicrobial recommended\n{suffix}"))+
     xlab(glue("{variable}"))+
     ylab("Percentage of isolates susceptible to recommendation")+
-    annotate("text", x = Inf, y = (nrow(ur_util %>% filter(!!agent_col1=="S"|!!agent_col1=="I"))/nrow(ur_util))*100+2, label = glue(agent_name1), hjust = 1.1, color = "darkgrey")+
-    annotate("text", x = Inf, y = (nrow(ur_util %>% filter(!!agent_col2=="S"|!!agent_col2=="I"))/nrow(ur_util))*100+2, label = glue(agent_name2), hjust = 1.1, color = "darkgrey")+
+    annotate("text", x = Inf, y = (nrow(ur_util %>% filter(!!agent_col1=="S"|!!agent_col1=="I"))/nrow(ur_util))*100+2, label = glue(agent_name1), hjust = 1.1, color = "gray16")+
+    annotate("text", x = Inf, y = 72, label = "UN Access target", hjust = 1.1, color = "darkgreen")
+  
+  ggsave(glue("{subset}_{measure}_{suffix}_susplot.pdf"), plot = susplot, device = "pdf", width = 10, height = 6,
+         path="/Users/alexhoward/Documents/Projects/UDAST_code")
+  
+  print(susplot)
+  
+}
+susc_plotter_overall <- function(df,subset="",measure,suffix="",agent_col1,agent_name1,agent_col2,agent_name2,variable="NEWS") {
+  
+  agent_col1 <- enquo(agent_col1)
+  agent_col2 <- enquo(agent_col2)
+  
+  df$Metric <- factor(df$Metric, levels=c("All agents","Access agents","IV agents","Oral agents"))
+  
+  susplot <- ggplot(df,aes(x=Weight,y=Percentage,group=Metric,color=Metric,fill=Metric)) +
+    geom_area(position = "identity", alpha = 0.6) +
+    geom_hline(linetype="dashed",yintercept=(nrow(ur_util %>% filter(!!agent_col1=="S"|!!agent_col1=="I"))/nrow(ur_util))*100,color="gray16") +
+    geom_hline(linetype="dashed",yintercept=(nrow(ur_util %>% filter(!!agent_col2=="S"|!!agent_col2=="I"))/nrow(ur_util))*100,color="gray16") +
+    geom_hline(linetype="dashed",yintercept=70,color="darkgreen") +
+    ylim(0,100)+
+    theme_minimal()+
+    ggtitle(glue("Urine isolate susceptibility to {subset}antimicrobial recommended\n{suffix}"))+
+    xlab(glue("{variable}"))+
+    ylab("Percentage of isolates susceptible to recommendation")+
+    annotate("text", x = Inf, y = (nrow(ur_util %>% filter(!!agent_col1=="S"|!!agent_col1=="I"))/nrow(ur_util))*100+2, label = glue(agent_name1), hjust = 1.1, color = "gray16")+
+    annotate("text", x = Inf, y = (nrow(ur_util %>% filter(!!agent_col2=="S"|!!agent_col2=="I"))/nrow(ur_util))*100+2, label = glue(agent_name2), hjust = 1.1, color = "gray16")+
     annotate("text", x = Inf, y = 72, label = "UN Access target", hjust = 1.1, color = "darkgreen")
   
   ggsave(glue("{subset}_{measure}_{suffix}_susplot.pdf"), plot = susplot, device = "pdf", width = 10, height = 6,
@@ -1084,7 +1107,7 @@ abs_calc <- function(val,prob) {
   ifelse(val>=0,val*prob,abs(val)*(1-prob))
   
 }
-calculate_utilities <- function(df,formulary_list=c(),NEWS=0,R_weight=1) {
+calculate_utilities <- function(df,formulary_list=c(),NEWS=0,R_weight=4) {
   
   df <- df %>% mutate(overall_util=util_uti + util_access +
                         util_oral + util_iv +
@@ -2390,8 +2413,9 @@ write_csv(overall_plot_df,"overall_plot_df.csv")
 
 iv_plot_df %>% susc_plotter_iv("IV ","NEWS",agent_col1=GEN,agent_name1="Gentamicin",agent_col2=TZP,agent_name2="Piperacillin-tazobactam")
 po_plot_df %>% susc_plotter("oral ","NEWS",agent_col1=NIT,agent_name1="Nitrofurantoin")
-overall_plot_df %>% susc_plotter_iv("overall ", "NEWS",agent_col1=NIT,agent_name1="Nitrofurantoin",
+overall_plot_df %>% susc_plotter_overall("overall ", "NEWS",agent_col1=NIT,agent_name1="Nitrofurantoin",
                                     agent_col2=TZP,agent_name2="Piperacillin-tazobactam")
+
 
 ###Nitro Resistance sensitivity analysis
 weightseq <- c()
@@ -2545,7 +2569,15 @@ po_plot_df_combo %>% susc_plotter("oral ","Resistance","(including combinations)
 overall_plot_df_combo %>% susc_plotter("overall ","Resistance","(including combinations)",
                                        agent_col1=NIT,agent_name1="Nitrofurantoin")
 
-###XGBoost sensitivity analysis
+
+
+
+
+
+
+
+
+###XGBoost sensitivity analysis (single antimicrobials only)
 all_singles <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
                  "MEM","CIP","GEN","SXT","NIT")
 ab_singles <- all_singles
@@ -2595,7 +2627,13 @@ combined_antimicrobial_map <- c(
 )
 abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
   str_replace_all("/","-")
+fullmap <- combined_antimicrobial_map %>% unlist()
+names(fullmap) <- NULL
 combined_antimicrobial_map <- combined_antimicrobial_map[names(combined_antimicrobial_map) %in% abx_in_train]
+
+##Temporary step filtering to single antimicrobials
+ab_single_full <- ab_singles %>% ab_name() %>% str_replace("/","-")
+combined_antimicrobial_map <- combined_antimicrobial_map[names(combined_antimicrobial_map) %in% ab_single_full]
 shortmap <- combined_antimicrobial_map %>% unlist()
 names(shortmap) <- NULL
 
@@ -2618,7 +2656,7 @@ ur_xg_outcomes <- ur_xg_outcomes %>%
   mutate_all(~ as.numeric(ifelse(. == "R" | . == "NT", 0, 
                                  ifelse(. == "S" | . == "I", 1, NA))))
 
-urines5_predictors <- urines5 %>% select(!all_of(names(urines5_outcomes)))
+urines5_predictors <- urines5 %>% select(!all_of(fullmap))
 ur_xg_predictors <- ur_xg %>%
   select(any_of(names(urines5_predictors)))
 
@@ -2634,6 +2672,8 @@ ur_xg_combined <- as.data.frame(cbind(ur_xg_outcomes, ur_xg_predictors))
 test_probs_df <- data.frame(matrix(nrow=floor(nrow(urines5_combined)*0.2),ncol=0))
 micro_probs_df <- data.frame(matrix(nrow=nrow(ur_xg_combined),ncol=0))
 aucs <- data.frame(matrix(nrow=1,ncol=0))
+shap_summary_tables <- list()
+metrics_list <- list() 
 
 for (outcome in colnames(urines5_outcomes)) {
   
@@ -2653,7 +2693,7 @@ for (outcome in colnames(urines5_outcomes)) {
                                label = urines5Test[[outcome]])
     micro_matrix <- xgb.DMatrix(data = as.matrix(ur_xg_combined %>% select(all_of(selected_columns))), 
                                 label = ur_xg_combined[[outcome]])
-    
+
     params <- list(
       objective = "binary:logistic",
       eval_metric = "logloss",
@@ -2664,21 +2704,51 @@ for (outcome in colnames(urines5_outcomes)) {
       colsample_bytree = 0.8
     )
     
+    print("Running CV...")
+    
     cv_model <- xgb.cv(
       params = params,
       data = train_matrix,
       nrounds = 1000,
       nfold = 5,
       early_stopping_rounds = 50,
-      verbose = 0
+      verbose = 1,
     )
     
     optimal_nrounds <- cv_model$best_iteration
     
+    print("Training...")
+    
     xgb_model <- xgb.train(
       params = params,
       data = train_matrix,
-      nrounds = optimal_nrounds
+      nrounds = optimal_nrounds,
+    )
+    
+    print("Shapping...")
+    
+    shap_values <- predict(xgb_model, newdata = train_matrix, predcontrib = TRUE)
+    shap_df <- as.data.frame(shap_values)
+    shap_df <- shap_df[, -ncol(shap_df)]
+    shap_summary <- data.frame(
+      Feature = colnames(shap_df),
+      MeanAbsSHAP = colMeans(abs(shap_df))
+    )
+    shap_summary <- shap_summary %>% filter(MeanAbsSHAP!=0)
+    
+    #Feature selection
+    train_matrix <- xgb.DMatrix(data = as.matrix(urines5Train %>% select(shap_summary %>% pull(Feature))), 
+                                label = urines5Train[[outcome]])
+    test_matrix <- xgb.DMatrix(data = as.matrix(urines5Test %>% select(shap_summary %>% pull(Feature))), 
+                               label = urines5Test[[outcome]])
+    micro_matrix <- xgb.DMatrix(data = as.matrix(ur_xg_combined %>% select(shap_summary %>% pull(Feature))), 
+                                label = ur_xg_combined[[outcome]])
+    
+    #Run again with selected features
+    xgb_model <- xgb.train(
+      params = params,
+      data = train_matrix,
+      nrounds = optimal_nrounds,
     )
     
     pred_prob_test <- predict(xgb_model, newdata = test_matrix)
@@ -2694,7 +2764,48 @@ for (outcome in colnames(urines5_outcomes)) {
     test_probs_df[[outcome]] <- pred_prob_test
     micro_probs_df[[outcome]] <- pred_prob_micro
     
+    
+    
+    shap_summary <- shap_summary[order(-shap_summary$MeanAbsSHAP), ]
+    
+    shap_summary_tables[[outcome]] <- shap_summary
+    
+    pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
+    actual_test_class <- urines5Test[[outcome]]
+    
+    confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
+    accuracy <- confusion$overall['Accuracy']
+    precision <- confusion$byClass['Precision']
+    recall <- confusion$byClass['Recall']
+    f1_score <- 2 * (precision * recall) / (precision + recall) # F1 calculation
+    
+    metrics_list[[outcome]] <- list(
+      AUC = auc_value,
+      Accuracy = accuracy,
+      Precision = precision,
+      Recall = recall,
+      F1_Score = f1_score
+    )
+    
   }
+}
+
+for (i in 1:length(shap_summary_tables)) {
+  
+  shappy <- data.frame(shap_summary_tables[i]) %>% mutate(across(2, ~ round(., 3))) %>% filter(if_any(2, ~ . != 0))
+  
+  colnames(shappy) <- c("Feature","Variable")
+  
+  write_csv(shappy,glue("SHAP_{combined_antimicrobial_map[i]}.csv"))
+  
+}
+
+for (i in 1:length(metrics_list)) {
+  
+  metricky <- data.frame(metrics_list[i])
+  
+  write_csv(metricky,glue("metrics_{combined_antimicrobial_map[i]}.csv"))
+  
 }
 
 write_csv(micro_probs_df,"micro_xg_probs_df.csv")
@@ -2705,7 +2816,210 @@ problist <- micro_probs_df %>% melt()
 util_xg_df <- util_probs_df %>% mutate(S=problist$value,
                                        R=1-problist$value)
 
-weightseq <- seq(0,7,1)
+
+old_aucs <- read_csv("xg_aucs.csv")
+rbind(aucs,old_aucs) %>% view()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##########TEST VERSION
+
+hyper_grid <- expand.grid(
+  eta = c(0.01, 0.05, 0.1),
+  max_depth = c(4, 6, 8),
+  min_child_weight = c(1, 5, 10),
+  subsample = c(0.7, 0.8, 0.9),
+  colsample_bytree = c(0.7, 0.8, 0.9)
+)
+
+n_cores <- 10
+cl <- makeCluster(n_cores)
+registerDoParallel(cl)
+
+for (outcome in colnames(urines5_outcomes)) {
+  if (sum(!is.na(urines5_combined[[outcome]])) > 0) {
+    
+    trainIndex <- createDataPartition(urines5_combined[[outcome]], p = .8, list = FALSE, times = 1)
+    urines5Train <- urines5_combined[trainIndex, ]
+    urines5Test <- urines5_combined[-trainIndex, ]
+    
+    predictor_columns <- colnames(urines5_predictors)
+    selected_columns <- intersect(predictor_columns, colnames(urines5Train))
+    missing_cols <- setdiff(selected_columns, colnames(ur_xg_combined))
+    ur_xg_combined[missing_cols] <- 0
+    
+    train_matrix <- xgb.DMatrix(data = as.matrix(urines5Train %>% select(all_of(selected_columns))),
+                                label = urines5Train[[outcome]])
+    test_matrix <- xgb.DMatrix(data = as.matrix(urines5Test %>% select(all_of(selected_columns))),
+                               label = urines5Test[[outcome]])
+    micro_matrix <- xgb.DMatrix(data = as.matrix(ur_xg_combined %>% select(all_of(selected_columns))),
+                                label = ur_xg_combined[[outcome]])
+    
+    best_auc <- 0
+    best_params <- list()
+    best_nrounds <- 100
+    
+    
+    results <- foreach(i = 1:nrow(hyper_grid), .combine = 'rbind', .packages = c('xgboost', 'dplyr', 'magrittr','progress')) %dopar% {
+      
+      num_iterations <- nrow(hyper_grid)
+      pb <- progress_bar$new(
+        format = "  processing [:bar] :percent ETA: :eta",
+        total = num_iterations,
+        clear = FALSE,
+        width = 60
+      )
+      
+      pb$tick()
+      
+      train_matrix <- xgb.DMatrix(data = as.matrix(urines5Train %>% select(all_of(selected_columns))),
+                                  label = urines5Train[[outcome]])
+      
+      cv_model <- xgb.cv(
+        params = as.list(hyper_grid[i, ]),
+        data = train_matrix,
+        nrounds = 500,
+        nfold = 5,
+        early_stopping_rounds = 50,
+        metrics = "auc",
+        verbose = 0
+      )
+      
+      if (!is.null(cv_model) && "test_auc_mean" %in% names(cv_model$evaluation_log)) {
+        best_iteration_index <- which.max(cv_model$evaluation_log$test_auc_mean)
+        best_iteration_auc <- cv_model$evaluation_log$test_auc_mean[best_iteration_index]
+        
+        list(params = params, auc = best_iteration_auc, nrounds = best_iteration_index)
+      } else {
+        NULL
+      }
+      
+    }
+      
+      if (length(results) > 0) {
+        best_result <- results[[which.max(sapply(results, function(x) x$auc))]]
+        best_params <- best_result$params
+        best_nrounds <- best_result$nrounds
+      
+    
+    
+    xgb_model <- xgb.train(
+      params = best_params,
+      data = train_matrix,
+      nrounds = best_nrounds
+    )
+    
+    pred_prob_test <- predict(xgb_model, newdata = test_matrix)
+    roc_result <- roc(urines5Test[[outcome]], pred_prob_test)
+    auc_value <- auc(roc_result)
+    aucs[[outcome]] <- auc_value
+    
+    pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
+    actual_test_class <- urines5Test[[outcome]]
+    
+    confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
+    accuracy <- confusion$overall['Accuracy']
+    precision <- confusion$byClass['Precision']
+    recall <- confusion$byClass['Recall']
+    f1_score <- 2 * (precision * recall) / (precision + recall) # F1 calculation
+    
+    metrics_list[[outcome]] <- list(
+      AUC = auc_value,
+      Accuracy = accuracy,
+      Precision = precision,
+      Recall = recall,
+      F1_Score = f1_score
+    )
+    
+    shap_values <- predict(xgb_model, newdata = train_matrix, predcontrib = TRUE)
+    shap_df <- as.data.frame(shap_values)
+    shap_df <- shap_df[, -ncol(shap_df)]
+    
+    shap_summary <- data.frame(
+      Feature = colnames(shap_df),
+      MeanAbsSHAP = colMeans(abs(shap_df))
+    )
+    shap_summary <- shap_summary[order(-shap_summary$MeanAbsSHAP), ]
+    
+    shap_summary_tables[[outcome]] <- shap_summary
+    
+    selected_features <- shap_summary$Feature[1:10]
+    train_matrix_rfe <- xgb.DMatrix(data = as.matrix(urines5Train %>% select(all_of(selected_features))),
+                                    label = urines5Train[[outcome]])
+    
+    xgb_model_rfe <- xgb.train(
+      params = best_params,
+      data = train_matrix_rfe,
+      nrounds = best_nrounds
+    )
+    
+    test_matrix_rfe <- xgb.DMatrix(data = as.matrix(urines5Test %>% select(all_of(selected_features))),
+                                   label = urines5Test[[outcome]])
+    pred_prob_test_rfe <- predict(xgb_model_rfe, newdata = test_matrix_rfe)
+    roc_result_rfe <- roc(urines5Test[[outcome]], pred_prob_test_rfe)
+    auc_value_rfe <- auc(roc_result_rfe)
+    print(paste("AUC-ROC after RFE:", auc_value_rfe))
+    
+    pdf(glue("{outcome}_xg_roc.pdf"), width = 10, height = 10)
+    plot(roc_result_rfe, main = glue("{outcome} ROC Curve"), col = "blue")
+    dev.off()
+    
+    pred_prob_micro_rfe <- predict(xgb_model_rfe, newdata = micro_matrix)
+    test_probs_df[[outcome]] <- pred_prob_test_rfe
+    micro_probs_df[[outcome]] <- pred_prob_micro_rfe
+    
+    shap_interaction_values <- predict(xgb_model, newdata = train_matrix, predinteraction = TRUE)
+    
+    shap_interaction_summary <- data.frame(
+      Feature1 = rownames(shap_interaction_values),
+      MeanAbsInteractionSHAP = rowMeans(abs(shap_interaction_values))
+    )
+    shap_interaction_summary <- shap_interaction_summary[order(-shap_interaction_summary$MeanAbsInteractionSHAP), ]
+    
+    write.csv(shap_interaction_summary, glue("{outcome}_shap_interaction_summary.csv"))
+  }
+  }
+}
+
+stopCluster(cl)
+
+write_csv(micro_probs_df,"micro_xg_probs_df.csv")
+write_csv(test_probs_df,"test_xg_probs_df.csv")
+write_csv(aucs,"xg_aucs.csv")
+
+for (i in 1:length(shap_summary_tables)) {
+  
+  shappy <- data.frame(shap_summary_tables[i]) %>% mutate(across(2, ~ round(., 3))) %>% filter(if_any(2, ~ . != 0))
+  
+  colnames(shappy) <- c("Feature","Variable")
+  
+  write_csv(shappy,glue("SHAP_{combined_antimicrobial_map[i]}.csv"))
+  
+}
+
+problist <- micro_probs_df %>% melt()
+util_xg_df <- util_probs_df %>% mutate(S=problist$value,
+                                       R=1-problist$value)
+
+weightseq <- seq(0,20,1)
 iv_perclist <- c()
 po_perclist <- c()
 overall_perclist <- c()
@@ -2770,9 +3084,10 @@ write_csv(iv_xg_plot_df,"iv_xg_plot_df.csv")
 write_csv(po_xg_plot_df,"po_xg_plot_df.csv")
 write_csv(overall_xg_plot_df,"overall_xg_plot_df.csv")
 
-iv_xg_plot_df %>% susc_plotter_iv("IV ","NEWS",agent_col1=GEN,agent_name1="Gentamicin",agent_col2=TZP,agent_name2="Piperacillin-tazobactam")
+iv_xg_plot_df %>% susc_plotter("IV ","NEWS",agent_col1=TZP,agent_name1="Piperacillin-tazobactam")
 po_xg_plot_df %>% susc_plotter("oral ","NEWS",agent_col1=NIT,agent_name1="Nitrofurantoin")
-overall_xg_plot_df %>% susc_plotter_iv("overall ", "NEWS",agent_col1=NIT,agent_name1="Nitrofurantoin",
+overall_xg_plot_nopo <- overall_xg_plot_df %>% filter(Metric!="Oral agents")
+overall_xg_plot_nopo %>% susc_plotter_overall("overall ", "NEWS",agent_col1=NIT,agent_name1="Nitrofurantoin",
                                     agent_col2=TZP,agent_name2="Piperacillin-tazobactam")
 
 
