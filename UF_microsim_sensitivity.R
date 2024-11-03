@@ -2390,6 +2390,31 @@ prev_ICD_applier <- function(df,icd_df,prefix,codes,time_frame) {
   
 }
 
+###Assigning previous event feature variable
+prev_event_assign <- function(df,B_var,event_df,event_var,no_days,no_events) {
+  
+  df <- df %>% mutate(charttime=as.POSIXct(charttime,format='%Y-%m-%d %H:%M:%S'))
+  
+  event_df %>%
+    mutate(event = {{event_var}}) %>% 
+    select('subject_id', "event", charttime = 'admittime') %>% 
+    mutate(charttime=as.POSIXct(charttime,format='%Y-%m-%d %H:%M:%S')) %>% 
+    filter(!is.na(event)) %>% 
+    bind_rows(df) %>% 
+    mutate(event = case_when(!is.na(event) ~ "Yes",
+                             TRUE ~ "No")) %>% 
+    MIMER::check_previous_events(cols="event", sort_by_col='charttime',
+                                 patient_id_col='subject_id', event_indi_value='Yes',
+                                 new_col_prefix="pr_",
+                                 time_period_in_days = no_days, minimum_prev_events = no_events,
+                                 default_na_date = '9999-12-31 00:00:00') %>% 
+    mutate({{B_var}} := case_when(pr_event==TRUE ~ TRUE,
+                                  TRUE ~ FALSE)) %>%
+    mutate(event = NULL, pr_event=NULL) %>% 
+    filter(grepl('URINE', spec_type_desc))
+  
+}
+
 ###Reference lists
 all_singles <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
                  "MEM","CIP","GEN","SXT","NIT")
@@ -3027,25 +3052,36 @@ urines5_combined <- data.frame(cbind(urines5_combined,new_rx_cols))
 write_csv(urines5_combined,"urines5_combined.csv")
 write_csv(ur_util,"ur_util_combined.csv")
 
-###Tuning hospital admission
+###Tuning hospital admission - HERE NOW
 time_list <- c(30,180,720,1e4)
 
 for (i in 1:length(time_list)) {
 urines_ref <- urines_ref %>% 
-  prev_event_assign(pHADM,hadm,hadm_id,time_list[i],1) %>%
+  prev_event_assign(pHADM2,hadm,hadm_id,time_list[i],1) %>%
   ungroup()
 colnames(urines_ref)[ncol(urines_ref)] <- glue("pHADM_{time_list[i]}")
 ur_util <- ur_util %>% 
-  prev_event_assign(pHADM,hadm,hadm_id,time_list[i],1) %>%
+  prev_event_assign(pHADM2,hadm,hadm_id,time_list[i],1) %>%
   ungroup()
 colnames(ur_util)[ncol(urines_ref)] <- glue("pHADM_{time_list[i]}")
 }
 
-new_hadm_cols <- urines_ref %>% select(pHADM_30:pHADM_10000)
+new_hadm_cols <- urines_ref %>% select(pHADM_10000:pHADM_720)
 urines5_combined <- data.frame(cbind(urines5_combined,new_hadm_cols))
 
 write_csv(urines5_combined,"urines5_combined.csv")
 write_csv(ur_util,"ur_util_combined.csv")
+
+###2 hospital admissions in the last year
+urines_ref <- urines_ref %>% 
+  prev_event_assign(pHADM2,hadm,hadm_id,365,2) %>%
+  ungroup()
+ur_util <- ur_util %>% 
+  prev_event_assign(pHADM2,hadm,hadm_id,365,2) %>%
+  ungroup()
+
+hadm2 <- urines_ref %>% select(pHADM2)
+urines5_combined <- data.frame(cbind(urines5_combined,hadm2))
 
 ###Tuning coded ICD-10 diagnosis
 diag_codes <- c("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", 
@@ -3080,17 +3116,6 @@ urines5_combined <- data.frame(cbind(urines5_combined,new_proc_cols))
 write_csv(urines5_combined,"urines5_combined.csv")
 write_csv(ur_util,"ur_util_combined.csv")
 
-###Tuning previous UTI diagnosis
-uti_key <-d_icd_diagnoses %>% filter(grepl("urinary tract infection",long_title,ignore.case=T) |
-                                       grepl("acute pyelon",long_title,ignore.case=T) |
-                                       (grepl("urinary catheter",long_title,ignore.case=T) & 
-                                          grepl("infec",long_title,ignore.case=T)))
-hadm_key <- hadm %>% select(hadm_id,admittime)
-uti_df <- diagnoses_raw %>% left_join(uti_key,by=c("icd_code","icd_version")) %>% 
-  filter(!is.na(long_title)) %>% left_join(hadm_key,by="hadm_id")
-urines_ref <- urines_ref %>% care_event_assigner(uti_df,"(urin|pyelo|cath)",long_title,pUTI,"admittime",365,1)
-ur_util <- ur_util %>% care_event_assigner(uti_df,"(urin|pyelo|cath)",long_title,pUTI,"admittime",365,1)
-
 ###Final model
 
 test_probs_df <- data.frame(matrix(nrow=floor(nrow(urines5_combined)*0.2),ncol=0))
@@ -3099,7 +3124,7 @@ aucs <- data.frame(matrix(nrow=1,ncol=0))
 shap_summary_tables <- list()
 metrics_list <- list() 
 
-for (outcome in colnames(urines5_outcomes)[12]) {
+for (outcome in colnames(urines5_outcomes)) {
   
   if (sum(!is.na(urines5_combined[[outcome]])) > 0) {
     
