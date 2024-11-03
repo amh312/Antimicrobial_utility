@@ -137,11 +137,11 @@ cleveland_ab_plot <- function(ab_df,resulttype,addendum="") {
 }
 
 ###Resistance weighting sensitivity analysis
-res_sens_analysis <- function(df,probs_df,R_variable=1,utility_of_interest) { 
+res_sens_analysis <- function(df,probs_df,NEWS_variable=0,R_value=1,utility_of_interest) { 
   
   utility_of_interest <- enquo(utility_of_interest)
   
-  probs_df <- probs_df %>% calculate_utilities(NEWS = R_variable)
+  probs_df <- probs_df %>% calculate_utilities(NEWS = NEWS_variable,R_weight = R_value)
 abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
   str_replace_all("/","-")
 probs_df <- probs_df %>% filter(Antimicrobial %in% abx_in_train)
@@ -771,9 +771,9 @@ dens_check <- function(df,abx_agent,result,alpha,beta) {
 }
 
 ###Combination Resistance weighting sensitivity analysis
-combo_res_sens_analysis <- function(df,probs_df,R_variable=1,access_weight=1) { 
+combo_res_sens_analysis <- function(df,probs_df,NEWS_variable=0,R_value=1) { 
   
-  probs_df <- probs_df %>% calculate_utilities(R_weight = R_variable,ac_weight = access_weight)
+  probs_df <- probs_df %>% calculate_utilities(NEWS = NEWS_variable,R_weight = R_value)
   abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
     str_replace_all("/","-")
   probs_df <- probs_df %>% filter(Antimicrobial %in% abx_in_train)
@@ -1107,7 +1107,7 @@ abs_calc <- function(val,prob) {
   ifelse(val>=0,val*prob,abs(val)*(1-prob))
   
 }
-calculate_utilities <- function(df,formulary_list=c(),NEWS=0,R_weight=4) {
+calculate_utilities <- function(df,formulary_list=c(),NEWS=0,R_weight=1) {
   
   df <- df %>% mutate(overall_util=util_uti + util_access +
                         util_oral + util_iv +
@@ -2305,6 +2305,91 @@ assign_standard_oral <- function(df,choice_1=NA,choice_2=NA,choice_3=NA,
   
 }
 
+###Applying previous AST result search across multiple result types
+prev_AST_applier <- function(df1,micro_data,suffix,result,timeframe=365,n_events=1) {
+  
+  params <- paste0("p", antibiotics, suffix)
+  
+  apply_prev_event <- function(df, param, antibiotic) {
+    df %>%
+      prev_event_type_assign(!!sym(param), micro_data, !!sym(antibiotic), result, timeframe, n_events)
+  }
+  df1 <- reduce(seq_along(antibiotics), function(df, i) {
+    apply_prev_event(df, params[i], antibiotics[i])
+  }, .init = df1) %>%
+    ungroup()
+  
+}
+
+###Assigning previous event type feature variable
+prev_event_type_assign <- function(df,B_var,event_df,event_var,event_type,no_days,no_events) {
+  
+  df <- df %>% mutate(charttime=as.POSIXct(charttime,format='%Y-%m-%d %H:%M:%S'))
+  
+  event_df %>%
+    mutate(event = {{event_var}}) %>% 
+    select('subject_id', "event", charttime = 'admittime') %>% 
+    mutate(charttime=as.POSIXct(charttime,format='%Y-%m-%d %H:%M:%S')) %>% 
+    filter(grepl(event_type, event)) %>%
+    bind_rows(df) %>% 
+    mutate(event = case_when(!is.na(event) ~ "Yes",
+                             TRUE ~ "No")) %>% 
+    MIMER::check_previous_events(cols="event", sort_by_col='charttime',
+                                 patient_id_col='subject_id', event_indi_value='Yes',
+                                 new_col_prefix="pr_",
+                                 time_period_in_days = no_days, minimum_prev_events = no_events,
+                                 default_na_date = '9999-12-31 00:00:00') %>% 
+    mutate({{B_var}} := case_when(pr_event==TRUE ~ TRUE,
+                                  TRUE ~ FALSE)) %>%
+    mutate(event = NULL, pr_event=NULL) %>% 
+    filter(grepl('URINE', spec_type_desc))
+  
+  
+}
+
+###Assigning previous treatment
+prev_rx_assign <- function(df, B_var, drug_df, abx, abx_groupvar,no_days,no_events) {
+  
+  ur_df <- df %>% mutate(charttime=as.POSIXct(charttime,format='%Y-%m-%d %H:%M:%S'))
+  
+  abx_groupvar <- enquo(abx_groupvar)
+  
+  drug_df %>%
+    select('subject_id', ab_name,charttime='starttime') %>%
+    mutate(charttime=as.POSIXct(charttime,format='%Y-%m-%d %H:%M:%S')) %>% 
+    filter(grepl(glue("{abx}"), !!abx_groupvar)) %>% 
+    bind_rows(ur_df) %>% 
+    mutate(abx_treatment = case_when(!is.na(ab_name) ~ "Yes",
+                                     TRUE ~ "No")) %>% 
+    MIMER::check_previous_events(cols="abx_treatment", sort_by_col='charttime',
+                                 patient_id_col='subject_id', event_indi_value='Yes',
+                                 new_col_prefix="pr_rx_",
+                                 time_period_in_days = no_days, minimum_prev_events = no_events,
+                                 default_na_date = '9999-12-31 00:00:00') %>% 
+    mutate({{B_var}} := case_when(pr_rx_abx_treatment==TRUE ~ TRUE,
+                                  TRUE ~ FALSE)) %>% 
+    mutate(abx_treatment=NULL,pr_rx_abx_treatment=NULL) %>% 
+    filter(grepl('URINE', spec_type_desc))
+  
+}
+
+###Applying ICD-1O code search across multiple ICD-10 code prefixes
+prev_ICD_applier <- function(df,icd_df,prefix,codes,time_frame) {
+  
+  apply_prev_event_assignments <- function(df, code) {
+    param_name <- paste0(prefix, code)
+    df %>%
+      prev_event_type_assign(!!sym(param_name), icd_df, icd_group, code, time_frame, 1)
+  }
+  
+  pos_urines <- reduce(codes, function(df, code) {
+    apply_prev_event_assignments(df, code)
+  }, .init = pos_urines) %>%
+    mutate(pDIAG_U = FALSE) %>%
+    ungroup()
+  
+}
+
 ###Reference lists
 all_singles <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
                  "MEM","CIP","GEN","SXT","NIT")
@@ -2338,6 +2423,12 @@ form_ur_util <- read_csv("form_ur_util_final.csv")
 util_probs_df <- read_csv("pre_util_probs_df.csv")
 ur_util <- read_csv("interim_ur_util.csv")
 train_abx <- read_csv("train_abx.csv")
+micro <- read_csv("micro_clean2.csv")
+drugs <- read_csv("drugs_clean.csv")
+hadm <- read_csv("admissions.csv") #Admission data
+d_icd_diagnoses <- read_csv("d_icd_diagnoses.csv") #icd codes
+diagnoses_raw <- read_csv("diagnoses_icd.csv") #icd epi
+
 
 ###Count numbers of S and R results per antimicrobial agent
 form_pdast_all_singles <- form_ur_util %>% number_ab_results(PDAST_1,PDAST_6,all_singles,"S","I")
@@ -2448,7 +2539,7 @@ for(i in 1:9) {
   b <- b-(i/2)
   
 }
-
+randomLHS(6,4)
 
 res_sens_analysis_3(ur_util,util_probs_df,abx="Nitrofurantoin",NIT,a_val=9.5,b_val=14)
 iv_perclist_nit <- iv_perclist_nit %>% label_binder("All agents")
@@ -2485,99 +2576,9 @@ iv_plot_df_nit %>% susc_plotter_iv("IV ","Resistance",agent_col1=GEN,agent_name1
 po_plot_df_nit %>% susc_plotter("oral ","Resistance",agent_col1=TZP,agent_name1="Piperacillin-tazobactam",variable="Nitrofurantoin resistance rate")
 overall_plot_df_nit %>% susc_plotter("overall ", "Resistance",agent_col1=TZP,agent_name1="Piperacillin-tazobactam",variable="Nitrofurantoin resistance rate")
 
-###Combination R weighting sensitivity analysis
-all_singles <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
-                 "MEM","CIP","GEN","SXT","NIT","VAN")
-ab_singles <- all_singles
-all_combos <- combn(all_singles, 2, FUN = function(x) paste(x, collapse = "_"))
-all_abs <- c(all_singles,all_combos)
-iv_singles <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
-                "GEN","SXT","VAN")
-iv_ab_singles <- iv_singles
-iv_combos <- combn(iv_singles, 2, FUN = function(x) paste(x, collapse = "_"))
-all_ivs <- c(iv_singles, iv_combos)
-oral_singles <- c("AMP","SAM","CIP",
-                  "SXT","NIT")
-oral_ab_singles <- oral_singles
-oral_combos <- combn(oral_singles, 2, FUN = function(x) paste(x, collapse = "_"))
-all_orals <- c(oral_singles, oral_combos)
-access_singles <- c("AMP","SAM","GEN",
-                    "SXT","NIT","CZO")
-access_combos <- combn(access_singles, 2, FUN = function(x) paste(x, collapse = "_"))
-all_access <- c(access_singles, access_combos)
-watch_singles <- c("CRO","CAZ","FEP","MEM","TZP","CIP","VAN")
-watch_combos <- combn(watch_singles, 2, FUN = function(x) paste(x, collapse = "_"))
-all_watch <- c(watch_singles, watch_combos)
-
-weightseq <- seq(0,30,5)
-iv_perclist_combo <- c()
-po_perclist_combo <- c()
-overall_perclist_combo <- c()
-ivac_list_combo <- c()
-poac_list_combo <- c()
-ovac_list_combo <- c()
 
 
-for(weight in seq_along(weightseq)) {
-  
-  combo_res_sens_analysis(ur_util,util_probs_df,R_variable=weightseq[weight])
-  
-  iv_perclist_combo <- c(iv_perclist_combo,iv_perc)
-  po_perclist_combo <- c(po_perclist_combo,po_perc)
-  overall_perclist_combo <- c(overall_perclist_combo,overall_perc)
-  ivac_list_combo <- c(ivac_list_combo,iv_s_access)
-  poac_list_combo <- c(poac_list_combo,po_s_access)
-  ovac_list_combo <- c(ovac_list_combo,overall_s_access)
-  
-}
-
-iv_perclist_combo <- iv_perclist_combo %>% label_binder("All agents")
-po_perclist_combo <- po_perclist_combo %>% label_binder("All agents")
-overall_perclist_combo <- overall_perclist_combo %>% label_binder("All agents")
-ivac_list_combo <- ivac_list_combo %>% label_binder("Access agents")
-poac_list_combo <- poac_list_combo %>% label_binder("Access agents")
-ovac_list_combo <- ovac_list_combo %>% label_binder("Access agents")
-iv_perclist_combo <- iv_perclist_combo %>% rename(Percentage = "vec")
-po_perclist_combo <- po_perclist_combo %>% rename(Percentage = "vec")
-overall_perclist_combo <- overall_perclist_combo %>% rename(Percentage = "vec")
-ivac_list_combo <- ivac_list_combo %>% rename(Percentage = "vec")
-poac_list_combo <- poac_list_combo %>% rename(Percentage = "vec")
-ovac_list_combo <- ovac_list_combo %>% rename(Percentage = "vec")
-iv_perclist_combo <- iv_perclist_combo %>% mutate(Percentage=100-Percentage)
-po_perclist_combo <- po_perclist_combo %>% mutate(Percentage=100-Percentage)
-overall_perclist_combo <- overall_perclist_combo %>% mutate(Percentage=100-Percentage)
-
-iv_plot_df_combo <- data.frame(rbind(
-  iv_perclist_combo,ivac_list_combo
-))
-po_plot_df_combo <- data.frame(rbind(
-  po_perclist_combo,poac_list_combo
-))
-overall_plot_df_combo <- data.frame(rbind(
-  overall_perclist_combo,ovac_list_combo
-))
-
-write_csv(iv_plot_df_combo,"iv_plot_df_combo.csv")
-write_csv(po_plot_df_combo,"po_plot_df_combo.csv")
-write_csv(overall_plot_df_combo,"overall_plot_df_combo.csv")
-
-iv_plot_df_combo %>% susc_plotter_iv("IV ","Resistance","(including combinations)",
-                                  agent_col1=GEN,agent_name1="Gentamicin",
-                                  agent_col2=TZP,agent_name2="Piperacillin-tazobactam")
-po_plot_df_combo %>% susc_plotter("oral ","Resistance","(including combinations)",
-                                  agent_col1=NIT,agent_name1="Nitrofurantoin")
-overall_plot_df_combo %>% susc_plotter("overall ","Resistance","(including combinations)",
-                                       agent_col1=NIT,agent_name1="Nitrofurantoin")
-
-
-
-
-
-
-
-
-
-###XGBoost sensitivity analysis (single antimicrobials only)
+###XGBoost sensitivity analysis
 all_singles <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
                  "MEM","CIP","GEN","SXT","NIT")
 ab_singles <- all_singles
@@ -2630,10 +2631,6 @@ abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>%
 fullmap <- combined_antimicrobial_map %>% unlist()
 names(fullmap) <- NULL
 combined_antimicrobial_map <- combined_antimicrobial_map[names(combined_antimicrobial_map) %in% abx_in_train]
-
-##Temporary step filtering to single antimicrobials
-ab_single_full <- ab_singles %>% ab_name() %>% str_replace("/","-")
-combined_antimicrobial_map <- combined_antimicrobial_map[names(combined_antimicrobial_map) %in% ab_single_full]
 shortmap <- combined_antimicrobial_map %>% unlist()
 names(shortmap) <- NULL
 
@@ -2669,13 +2666,440 @@ ur_xg_predictors <- predict(dummies2, newdata = ur_xg_predictors)
 urines5_combined <- as.data.frame(cbind(urines5_outcomes, urines5_predictors))
 ur_xg_combined <- as.data.frame(cbind(ur_xg_outcomes, ur_xg_predictors))
 
+###First round of hyperparameter tuning (max tree depth and min child weight)
+
+num_samples <- 10
+max_depth_range <- c(2,9)
+min_child_weight_range <- c(1, 10)
+lhs_sample <- randomLHS(num_samples, 2)
+max_depth <- round(lhs_sample[, 1] * (max_depth_range[2] - max_depth_range[1]) + max_depth_range[1])
+min_child_weight <- round(lhs_sample[, 2] * (min_child_weight_range[2] - min_child_weight_range[1]) + min_child_weight_range[1])
+parameter_grid <- data.frame(max_depth = max_depth, min_child_weight = min_child_weight)
+print(parameter_grid)
+max_child_bestparams <- c()
+best_auc <- 0
+
+for (outcome in colnames(urines5_outcomes)) {
+  
+  if (sum(!is.na(urines5_combined[[outcome]])) > 0) {
+    
+    trainIndex <- createDataPartition(urines5_combined[[outcome]], p = .8, list = FALSE, times = 1)
+    urines5Train <- urines5_combined[trainIndex, ]
+    urines5Test <- urines5_combined[-trainIndex, ]
+    
+    predictor_columns <- colnames(urines5_predictors)
+    selected_columns <- intersect(predictor_columns, colnames(urines5Train))
+    missing_cols <- setdiff(selected_columns, colnames(ur_xg_combined))
+    ur_xg_combined[missing_cols] <- 0
+    train_matrix <- xgb.DMatrix(data = as.matrix(urines5Train %>% select(all_of(selected_columns))), 
+                                label = urines5Train[[outcome]])
+    test_matrix <- xgb.DMatrix(data = as.matrix(urines5Test %>% select(all_of(selected_columns))), 
+                               label = urines5Test[[outcome]])
+    micro_matrix <- xgb.DMatrix(data = as.matrix(ur_xg_combined %>% select(all_of(selected_columns))), 
+                                label = ur_xg_combined[[outcome]])
+    
+    for (i in 1:nrow(parameter_grid)) {
+    
+    print(glue("Running CV {i} for {outcome}..."))
+    
+      params <- list(
+        objective = "binary:logistic",
+        eval_metric = "auc",
+        eta = 0.05,
+        max_depth = parameter_grid %>% select(max_depth) %>% dplyr::slice(i) %>% unlist(),
+        min_child_weight = parameter_grid %>% select(min_child_weight) %>% dplyr::slice(i) %>% unlist(),
+        subsample = 0.8,
+        colsample_bytree = 0.8
+      )
+      
+    cv_model <- xgb.cv(
+      params = params,
+      data = train_matrix,
+      nrounds = 50,
+      nfold = 5,
+      early_stopping_rounds = 50,
+      verbose = 1,
+    )
+    
+    best_iteration_index <- which.max(cv_model$evaluation_log$test_auc_mean)
+    best_iteration_auc <- cv_model$evaluation_log$test_auc_mean[best_iteration_index]
+    cv_model$evaluation_log$test_logloss_mean
+    if (best_iteration_auc > best_auc) {
+      best_auc <- best_iteration_auc
+      best_params <- params
+      best_nrounds <- best_iteration_index
+    }
+    
+    }
+    
+    max_child_bestparams[[outcome]] <- best_params
+    
+  }
+}
+
+
+for (i in 1:length(max_child_bestparams)) {
+  
+  maxy <- data.frame(max_child_bestparams[i])
+  
+  write_csv(maxy,glue("max_child_{combined_antimicrobial_map[i]}.csv"))
+  
+}
+
+for (outcome in colnames(urines5_outcomes)){
+print(max_child_bestparams[[outcome]]$min_child_weight)
+}
+
+###Second round of hyperparameter tuning
+
+num_samples <- 10
+subsample_range <- c(0.5,1)
+colsample_bytree_range <- c(0.5, 1)
+lhs_sample <- randomLHS(num_samples, 2)
+subsample <- round(lhs_sample[, 1] * (subsample_range[2] - subsample_range[1]) + subsample_range[1],2)
+colsample_bytree <- round(lhs_sample[, 2] * (colsample_bytree_range[2] - colsample_bytree_range[1]) + colsample_bytree_range[1],2)
+parameter_grid <- data.frame(subsample = subsample, colsample_bytree = colsample_bytree)
+print(parameter_grid)
+col_sub_bestparams <- c()
+best_auc <- 0
+
+for (outcome in colnames(urines5_outcomes)) {
+  
+  if (sum(!is.na(urines5_combined[[outcome]])) > 0) {
+    
+    trainIndex <- createDataPartition(urines5_combined[[outcome]], p = .8, list = FALSE, times = 1)
+    urines5Train <- urines5_combined[trainIndex, ]
+    urines5Test <- urines5_combined[-trainIndex, ]
+    
+    predictor_columns <- colnames(urines5_predictors)
+    selected_columns <- intersect(predictor_columns, colnames(urines5Train))
+    missing_cols <- setdiff(selected_columns, colnames(ur_xg_combined))
+    ur_xg_combined[missing_cols] <- 0
+    train_matrix <- xgb.DMatrix(data = as.matrix(urines5Train %>% select(all_of(selected_columns))), 
+                                label = urines5Train[[outcome]])
+    test_matrix <- xgb.DMatrix(data = as.matrix(urines5Test %>% select(all_of(selected_columns))), 
+                               label = urines5Test[[outcome]])
+    micro_matrix <- xgb.DMatrix(data = as.matrix(ur_xg_combined %>% select(all_of(selected_columns))), 
+                                label = ur_xg_combined[[outcome]])
+    
+    for (i in 1:nrow(parameter_grid)) {
+      
+      print(glue("Running CV {i} for {outcome}..."))
+      
+      params <- list(
+        objective = "binary:logistic",
+        eval_metric = "auc",
+        eta = 0.05,
+        max_depth = max_child_bestparams[[outcome]]$max_depth,
+        min_child_weight = max_child_bestparams[[outcome]]$min_child_weight,
+        subsample = parameter_grid %>% select(subsample) %>% dplyr::slice(i) %>% unlist(),
+        colsample_bytree = parameter_grid %>% select(colsample_bytree) %>% dplyr::slice(i) %>% unlist()
+      )
+      
+      cv_model <- xgb.cv(
+        params = params,
+        data = train_matrix,
+        nrounds = 50,
+        nfold = 5,
+        early_stopping_rounds = 50,
+        verbose = 1,
+      )
+      
+      best_iteration_index <- which.max(cv_model$evaluation_log$test_auc_mean)
+      best_iteration_auc <- cv_model$evaluation_log$test_auc_mean[best_iteration_index]
+      cv_model$evaluation_log$test_logloss_mean
+      if (best_iteration_auc > best_auc) {
+        best_auc <- best_iteration_auc
+        best_params <- params
+        best_nrounds <- best_iteration_index
+      }
+      
+    }
+    
+    col_sub_bestparams[[outcome]] <- best_params
+    
+  }
+}
+
+for (i in 1:length(col_sub_bestparams)) {
+  
+  coly <- data.frame(col_sub_bestparams[i])
+  
+  write_csv(coly,glue("col_sub_{combined_antimicrobial_map[i]}.csv"))
+  
+}
+
+###Third round of hyperparameter tuning
+
+parameter_list <- c(0.1,0.05,0.01,0.001)
+best_auc <- 0
+final_bestparams <- c()
+
+for (outcome in colnames(urines5_outcomes)) {
+  
+  if (sum(!is.na(urines5_combined[[outcome]])) > 0) {
+    
+    trainIndex <- createDataPartition(urines5_combined[[outcome]], p = .8, list = FALSE, times = 1)
+    urines5Train <- urines5_combined[trainIndex, ]
+    urines5Test <- urines5_combined[-trainIndex, ]
+    
+    predictor_columns <- colnames(urines5_predictors)
+    selected_columns <- intersect(predictor_columns, colnames(urines5Train))
+    missing_cols <- setdiff(selected_columns, colnames(ur_xg_combined))
+    ur_xg_combined[missing_cols] <- 0
+    train_matrix <- xgb.DMatrix(data = as.matrix(urines5Train %>% select(all_of(selected_columns))), 
+                                label = urines5Train[[outcome]])
+    test_matrix <- xgb.DMatrix(data = as.matrix(urines5Test %>% select(all_of(selected_columns))), 
+                               label = urines5Test[[outcome]])
+    micro_matrix <- xgb.DMatrix(data = as.matrix(ur_xg_combined %>% select(all_of(selected_columns))), 
+                                label = ur_xg_combined[[outcome]])
+    
+    for (i in 1:length(parameter_list)) {
+      
+      print(glue("Running CV {i} for {outcome}..."))
+      
+      params <- list(
+        objective = "binary:logistic",
+        eval_metric = "auc",
+        eta = parameter_list[i],
+        max_depth = max_child_bestparams[[outcome]]$max_depth,
+        min_child_weight = max_child_bestparams[[outcome]]$min_child_weight,
+        subsample = col_sub_bestparams[[outcome]]$subsample,
+        colsample_bytree = col_sub_bestparams[[outcome]]$colsample_bytree
+      )
+      
+      cv_model <- xgb.cv(
+        params = params,
+        data = train_matrix,
+        nrounds = 1000,
+        nfold = 5,
+        early_stopping_rounds = 50,
+        verbose = 1,
+      )
+      
+      best_iteration_index <- which.max(cv_model$evaluation_log$test_auc_mean)
+      best_iteration_auc <- cv_model$evaluation_log$test_auc_mean[best_iteration_index]
+      cv_model$evaluation_log$test_logloss_mean
+      if (best_iteration_auc > best_auc) {
+        best_auc <- best_iteration_auc
+        best_params <- params
+        best_nrounds <- best_iteration_index
+      }
+      
+    }
+    
+    final_bestparams[[outcome]] <- best_params
+    
+  }
+}
+
+for (i in 1:length(final_bestparams)) {
+  
+  param <- data.frame(final_bestparams[i])
+  
+  write_csv(param,glue("final_params_{combined_antimicrobial_map[i]}.csv"))
+  
+}
+
+
+###Tuning time to last resistance
+urines_ref <- read_csv("urines_ref.csv")
+ur_util_ref <- ur_util
+micro3 <- micro %>% rename(admittime = "charttime")
+
+time_list <- c(30,180,720,1e4)
+
+for (i in 1:length(time_list)) {
+  
+  antibiotics <- c("AMP", "SAM", "TZP", "CZO", "CRO", "CAZ", "FEP", "MEM", 
+                   "CIP", "GEN", "SXT", "NIT", "VAN", "AMPC", "TCY", "PEN", 
+                   "CLI", "LVX", "AMK", "TOB")
+  urines_ref <- prev_AST_applier(urines_ref,micro3,glue("r_{as.character(time_list[i])}"),"R",timeframe=time_list[i])
+  ur_util <- prev_AST_applier(ur_util,micro3,glue("r_{as.character(time_list[i])}"),"R",timeframe=time_list[i])
+  
+}
+
+new_r_cols <- urines_ref %>% select(pAMPr_30:pTOBr_10000)
+urines5_combined <- data.frame(cbind(urines5_combined,new_r_cols))
+
+time_list <- c(7,30,180,720,1e4)
+
+###Tuning time to last susceptibility
+for (i in 1:length(time_list)) {
+  
+  antibiotics <- c("AMP", "SAM", "TZP", "CZO", "CRO", "CAZ", "FEP", "MEM", 
+                   "CIP", "GEN", "SXT", "NIT", "VAN", "AMPC", "TCY", "PEN", 
+                   "CLI", "LVX", "AMK", "TOB")
+  urines_ref <- prev_AST_applier(urines_ref,micro3,glue("s_{as.character(time_list[i])}"),"S",timeframe=time_list[i])
+  ur_util <- prev_AST_applier(ur_util,micro3,glue("s_{as.character(time_list[i])}"),"S",timeframe=time_list[i])
+  
+}
+
+new_s_cols <- urines_ref %>% select(pAMPs_30:pTOBs_10000)
+urines5_combined <- data.frame(cbind(urines5_combined,new_s_cols))
+
+write_csv(urines5_combined,"urines5_combined.csv")
+write_csv(ur_util,"ur_util_combined.csv")
+
+###Tuning time to last treatment
+antibiotics <- c("Ampicillin", "Amoxicillin", "Amoxicillin/clavulanic acid", "Ampicillin/sulbactam",
+                 "Piperacillin/tazobactam", "Cefazolin", "Cefalexin", "Cefpodoxime proxetil",
+                 "Ceftriaxone", "Ceftazidime", "Cefepime", "Meropenem", "Ertapenem",
+                 "Aztreonam", "Ciprofloxacin", "Levofloxacin", "Gentamicin", "Tobramycin",
+                 "Amikacin", "Rifampicin", "Trimethoprim/sulfamethoxazole", "Nitrofurantoin",
+                 "Erythromycin", "Clarithromycin", "Azithromycin", "Clindamycin", "Vancomycin",
+                 "Metronidazole", "Linezolid", "Daptomycin", "Doxycycline")
+suffixes <- c("AMPrx", "AMXrx", "AMCrx", "SAMrx", "TZPrx", "CZOrx", "CZOrx", "CZOrx",
+              "CROrx", "CAZrx", "FEPrx", "MEMrx", "ETPrx", "ATMrx", "CIPrx", "CIPrx",
+              "GENrx", "TOBrx", "AMKrx", "RIFrx", "SXTrx", "NITrx", "ERYrx", "CLRrx",
+              "AZMrx", "CLIrx", "VANrx", "MTRrx", "LNZrx", "DAPrx", "DOXrx")
+
+apply_prev_rx <- function(df, suffix, antibiotic,time_to_event=365) {
+  param_name <- paste0("p", suffix,"_",time_list[j])
+  df %>%
+    prev_rx_assign(!!sym(param_name), drugs, antibiotic, ab_name, time_to_event, 1)
+}
+
+time_list <- c(30,180,720,1e4)
+drugs$ab_name <- drugs$abx_name
+
+for (j in 1:length(time_list)) {
+urines_ref <- reduce(seq_along(antibiotics), function(df, i) {
+  apply_prev_rx(df, suffixes[i], antibiotics[i],time_list[j])
+}, .init = urines_ref) %>%
+  ungroup()
+ur_util <- reduce(seq_along(antibiotics), function(df, i) {
+  apply_prev_rx(df, suffixes[i], antibiotics[i],time_list[j])
+}, .init = ur_util) %>%
+  ungroup()
+}
+
+new_rx_cols <- urines_ref %>% select(pAMPrx_30:pDOXrx_10000)
+urines5_combined <- data.frame(cbind(urines5_combined,new_rx_cols))
+
+write_csv(urines5_combined,"urines5_combined.csv")
+write_csv(ur_util,"ur_util_combined.csv")
+
+###2 episodes of resistance in the last year
+antibiotics <- c("AMP", "SAM", "TZP", "CZO", "CRO", "CAZ", "FEP", "MEM", 
+                 "CIP", "GEN", "SXT", "NIT", "VAN", "AMPC", "TCY", "PEN", 
+                 "CLI", "LVX", "AMK", "TOB")
+urines_ref <- prev_AST_applier(urines_ref,micro3,"r2","R",timeframe=365,n_events=2)
+ur_util <- prev_AST_applier(ur_util,micro3,"r2","R",timeframe=365,n_events = 2)
+
+new_2r_cols <- urines_ref %>% select(pAMPr2:pTOBr2)
+urines5_combined <- data.frame(cbind(urines5_combined,new_2r_cols))
+
+write_csv(urines5_combined,"urines5_combined.csv")
+write_csv(ur_util,"ur_util_combined.csv")
+
+###2 antimicrobial courses in the last year
+antibiotics <- c("Ampicillin", "Amoxicillin", "Amoxicillin/clavulanic acid", "Ampicillin/sulbactam",
+                 "Piperacillin/tazobactam", "Cefazolin", "Cefalexin", "Cefpodoxime proxetil",
+                 "Ceftriaxone", "Ceftazidime", "Cefepime", "Meropenem", "Ertapenem",
+                 "Aztreonam", "Ciprofloxacin", "Levofloxacin", "Gentamicin", "Tobramycin",
+                 "Amikacin", "Rifampicin", "Trimethoprim/sulfamethoxazole", "Nitrofurantoin",
+                 "Erythromycin", "Clarithromycin", "Azithromycin", "Clindamycin", "Vancomycin",
+                 "Metronidazole", "Linezolid", "Daptomycin", "Doxycycline")
+suffixes <- c("AMPrx", "AMXrx", "AMCrx", "SAMrx", "TZPrx", "CZOrx", "CZOrx", "CZOrx",
+              "CROrx", "CAZrx", "FEPrx", "MEMrx", "ETPrx", "ATMrx", "CIPrx", "CIPrx",
+              "GENrx", "TOBrx", "AMKrx", "RIFrx", "SXTrx", "NITrx", "ERYrx", "CLRrx",
+              "AZMrx", "CLIrx", "VANrx", "MTRrx", "LNZrx", "DAPrx", "DOXrx")
+
+apply_prev_rx <- function(df, suffix, antibiotic,time_to_event=365,no_events=2) {
+  param_name <- paste0("p", suffix,"2")
+  df %>%
+    prev_rx_assign(!!sym(param_name), drugs, antibiotic, ab_name, time_to_event, no_events)
+}
+
+urines_ref <- reduce(seq_along(antibiotics), function(df, i) {
+  apply_prev_rx(df, suffixes[i], antibiotics[i],365,2)
+}, .init = urines_ref) %>%
+  ungroup()
+ur_util <- reduce(seq_along(antibiotics), function(df, i) {
+  apply_prev_rx(df, suffixes[i], antibiotics[i],365,2)
+}, .init = ur_util) %>%
+  ungroup()
+
+new_rx_cols <- urines_ref %>% select(pAMPrx2:pDOXrx2)
+urines5_combined <- data.frame(cbind(urines5_combined,new_rx_cols))
+
+write_csv(urines5_combined,"urines5_combined.csv")
+write_csv(ur_util,"ur_util_combined.csv")
+
+###Tuning hospital admission
+time_list <- c(30,180,720,1e4)
+
+for (i in 1:length(time_list)) {
+urines_ref <- urines_ref %>% 
+  prev_event_assign(pHADM,hadm,hadm_id,time_list[i],1) %>%
+  ungroup()
+colnames(urines_ref)[ncol(urines_ref)] <- glue("pHADM_{time_list[i]}")
+ur_util <- ur_util %>% 
+  prev_event_assign(pHADM,hadm,hadm_id,time_list[i],1) %>%
+  ungroup()
+colnames(ur_util)[ncol(urines_ref)] <- glue("pHADM_{time_list[i]}")
+}
+
+new_hadm_cols <- urines_ref %>% select(pHADM_30:pHADM_10000)
+urines5_combined <- data.frame(cbind(urines5_combined,new_hadm_cols))
+
+write_csv(urines5_combined,"urines5_combined.csv")
+write_csv(ur_util,"ur_util_combined.csv")
+
+###Tuning coded ICD-10 diagnosis
+diag_codes <- c("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", 
+                "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T",
+                "V", "W", "X", "Y", "Z")
+
+for (i in 1:length(time_list)) {
+urines_ref <- urines_ref %>% prev_ICD_applier(diagnoses,glue("pDIAG{time_list[i]}_"),diag_codes,time_frame = time_list[i])
+ur_util <- ur_util %>% prev_ICD_applier(diagnoses,glue("pDIAG{time_list[i]}_"),diag_codes,time_frame = time_list[i])
+}
+
+new_icd_cols <- urines_ref %>% select(pDIAG30_A:pDIAG10000Z)
+urines5_combined <- data.frame(cbind(urines5_combined,new_icd_cols))
+
+write_csv(urines5_combined,"urines5_combined.csv")
+write_csv(ur_util,"ur_util_combined.csv")
+
+###Tuning coded ICD-10 procedure
+proc_codes <- c("0", "3", "8", "5", "T", "4", "S", "A", "9", 
+                "H", "I", "B", "7", "G", "1", "R", "J", "Q", 
+                "K", "6", "M", "P", "L", "D", "F", "2", "N", 
+                "C", "E", "X", "O")
+
+for (i in 1:length(time_list)) {
+urines_ref <- urines_ref %>% prev_ICD_applier(procedures,glue("pPROC{time_list[i]}_"),proc_codes,time_frame = time_list[i])
+ur_util <- ur_util %>% prev_ICD_applier(proceduresglue("pPROC{time_list[i]}_"),proc_codes,time_frame = time_list[i])
+}
+
+new_proc_cols <- urines_ref %>% select(pPROC30_0:pPROC10000_O)
+urines5_combined <- data.frame(cbind(urines5_combined,new_proc_cols))
+
+write_csv(urines5_combined,"urines5_combined.csv")
+write_csv(ur_util,"ur_util_combined.csv")
+
+###Tuning previous UTI diagnosis
+uti_key <-d_icd_diagnoses %>% filter(grepl("urinary tract infection",long_title,ignore.case=T) |
+                                       grepl("acute pyelon",long_title,ignore.case=T) |
+                                       (grepl("urinary catheter",long_title,ignore.case=T) & 
+                                          grepl("infec",long_title,ignore.case=T)))
+hadm_key <- hadm %>% select(hadm_id,admittime)
+uti_df <- diagnoses_raw %>% left_join(uti_key,by=c("icd_code","icd_version")) %>% 
+  filter(!is.na(long_title)) %>% left_join(hadm_key,by="hadm_id")
+urines_ref <- urines_ref %>% care_event_assigner(uti_df,"(urin|pyelo|cath)",long_title,pUTI,"admittime",365,1)
+ur_util <- ur_util %>% care_event_assigner(uti_df,"(urin|pyelo|cath)",long_title,pUTI,"admittime",365,1)
+
+###Final model
+
 test_probs_df <- data.frame(matrix(nrow=floor(nrow(urines5_combined)*0.2),ncol=0))
 micro_probs_df <- data.frame(matrix(nrow=nrow(ur_xg_combined),ncol=0))
 aucs <- data.frame(matrix(nrow=1,ncol=0))
 shap_summary_tables <- list()
 metrics_list <- list() 
 
-for (outcome in colnames(urines5_outcomes)) {
+for (outcome in colnames(urines5_outcomes)[12]) {
   
   if (sum(!is.na(urines5_combined[[outcome]])) > 0) {
     
@@ -2696,12 +3120,12 @@ for (outcome in colnames(urines5_outcomes)) {
 
     params <- list(
       objective = "binary:logistic",
-      eval_metric = "logloss",
-      eta = 0.05,
-      max_depth = 6,
-      min_child_weight = 1,
-      subsample = 0.8,
-      colsample_bytree = 0.8
+      eval_metric = "auc",
+      eta = final_bestparams[[outcome]]$eta,
+      max_depth = final_bestparams[[outcome]]$max_depth,
+      min_child_weight = final_bestparams[[outcome]]$min_child_weight,
+      subsample = final_bestparams[[outcome]]$subsample,
+      colsample_bytree = final_bestparams[[outcome]]$colsample_bytree
     )
     
     print("Running CV...")
@@ -2764,8 +3188,6 @@ for (outcome in colnames(urines5_outcomes)) {
     test_probs_df[[outcome]] <- pred_prob_test
     micro_probs_df[[outcome]] <- pred_prob_micro
     
-    
-    
     shap_summary <- shap_summary[order(-shap_summary$MeanAbsSHAP), ]
     
     shap_summary_tables[[outcome]] <- shap_summary
@@ -2813,211 +3235,9 @@ write_csv(test_probs_df,"test_xg_probs_df.csv")
 write_csv(aucs,"xg_aucs.csv")
 
 problist <- micro_probs_df %>% melt()
-util_xg_df <- util_probs_df %>% mutate(S=problist$value,
-                                       R=1-problist$value)
 
-
-old_aucs <- read_csv("xg_aucs.csv")
-rbind(aucs,old_aucs) %>% view()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-##########TEST VERSION
-
-hyper_grid <- expand.grid(
-  eta = c(0.01, 0.05, 0.1),
-  max_depth = c(4, 6, 8),
-  min_child_weight = c(1, 5, 10),
-  subsample = c(0.7, 0.8, 0.9),
-  colsample_bytree = c(0.7, 0.8, 0.9)
-)
-
-n_cores <- 10
-cl <- makeCluster(n_cores)
-registerDoParallel(cl)
-
-for (outcome in colnames(urines5_outcomes)) {
-  if (sum(!is.na(urines5_combined[[outcome]])) > 0) {
-    
-    trainIndex <- createDataPartition(urines5_combined[[outcome]], p = .8, list = FALSE, times = 1)
-    urines5Train <- urines5_combined[trainIndex, ]
-    urines5Test <- urines5_combined[-trainIndex, ]
-    
-    predictor_columns <- colnames(urines5_predictors)
-    selected_columns <- intersect(predictor_columns, colnames(urines5Train))
-    missing_cols <- setdiff(selected_columns, colnames(ur_xg_combined))
-    ur_xg_combined[missing_cols] <- 0
-    
-    train_matrix <- xgb.DMatrix(data = as.matrix(urines5Train %>% select(all_of(selected_columns))),
-                                label = urines5Train[[outcome]])
-    test_matrix <- xgb.DMatrix(data = as.matrix(urines5Test %>% select(all_of(selected_columns))),
-                               label = urines5Test[[outcome]])
-    micro_matrix <- xgb.DMatrix(data = as.matrix(ur_xg_combined %>% select(all_of(selected_columns))),
-                                label = ur_xg_combined[[outcome]])
-    
-    best_auc <- 0
-    best_params <- list()
-    best_nrounds <- 100
-    
-    
-    results <- foreach(i = 1:nrow(hyper_grid), .combine = 'rbind', .packages = c('xgboost', 'dplyr', 'magrittr','progress')) %dopar% {
-      
-      num_iterations <- nrow(hyper_grid)
-      pb <- progress_bar$new(
-        format = "  processing [:bar] :percent ETA: :eta",
-        total = num_iterations,
-        clear = FALSE,
-        width = 60
-      )
-      
-      pb$tick()
-      
-      train_matrix <- xgb.DMatrix(data = as.matrix(urines5Train %>% select(all_of(selected_columns))),
-                                  label = urines5Train[[outcome]])
-      
-      cv_model <- xgb.cv(
-        params = as.list(hyper_grid[i, ]),
-        data = train_matrix,
-        nrounds = 500,
-        nfold = 5,
-        early_stopping_rounds = 50,
-        metrics = "auc",
-        verbose = 0
-      )
-      
-      if (!is.null(cv_model) && "test_auc_mean" %in% names(cv_model$evaluation_log)) {
-        best_iteration_index <- which.max(cv_model$evaluation_log$test_auc_mean)
-        best_iteration_auc <- cv_model$evaluation_log$test_auc_mean[best_iteration_index]
-        
-        list(params = params, auc = best_iteration_auc, nrounds = best_iteration_index)
-      } else {
-        NULL
-      }
-      
-    }
-      
-      if (length(results) > 0) {
-        best_result <- results[[which.max(sapply(results, function(x) x$auc))]]
-        best_params <- best_result$params
-        best_nrounds <- best_result$nrounds
-      
-    
-    
-    xgb_model <- xgb.train(
-      params = best_params,
-      data = train_matrix,
-      nrounds = best_nrounds
-    )
-    
-    pred_prob_test <- predict(xgb_model, newdata = test_matrix)
-    roc_result <- roc(urines5Test[[outcome]], pred_prob_test)
-    auc_value <- auc(roc_result)
-    aucs[[outcome]] <- auc_value
-    
-    pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
-    actual_test_class <- urines5Test[[outcome]]
-    
-    confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
-    accuracy <- confusion$overall['Accuracy']
-    precision <- confusion$byClass['Precision']
-    recall <- confusion$byClass['Recall']
-    f1_score <- 2 * (precision * recall) / (precision + recall) # F1 calculation
-    
-    metrics_list[[outcome]] <- list(
-      AUC = auc_value,
-      Accuracy = accuracy,
-      Precision = precision,
-      Recall = recall,
-      F1_Score = f1_score
-    )
-    
-    shap_values <- predict(xgb_model, newdata = train_matrix, predcontrib = TRUE)
-    shap_df <- as.data.frame(shap_values)
-    shap_df <- shap_df[, -ncol(shap_df)]
-    
-    shap_summary <- data.frame(
-      Feature = colnames(shap_df),
-      MeanAbsSHAP = colMeans(abs(shap_df))
-    )
-    shap_summary <- shap_summary[order(-shap_summary$MeanAbsSHAP), ]
-    
-    shap_summary_tables[[outcome]] <- shap_summary
-    
-    selected_features <- shap_summary$Feature[1:10]
-    train_matrix_rfe <- xgb.DMatrix(data = as.matrix(urines5Train %>% select(all_of(selected_features))),
-                                    label = urines5Train[[outcome]])
-    
-    xgb_model_rfe <- xgb.train(
-      params = best_params,
-      data = train_matrix_rfe,
-      nrounds = best_nrounds
-    )
-    
-    test_matrix_rfe <- xgb.DMatrix(data = as.matrix(urines5Test %>% select(all_of(selected_features))),
-                                   label = urines5Test[[outcome]])
-    pred_prob_test_rfe <- predict(xgb_model_rfe, newdata = test_matrix_rfe)
-    roc_result_rfe <- roc(urines5Test[[outcome]], pred_prob_test_rfe)
-    auc_value_rfe <- auc(roc_result_rfe)
-    print(paste("AUC-ROC after RFE:", auc_value_rfe))
-    
-    pdf(glue("{outcome}_xg_roc.pdf"), width = 10, height = 10)
-    plot(roc_result_rfe, main = glue("{outcome} ROC Curve"), col = "blue")
-    dev.off()
-    
-    pred_prob_micro_rfe <- predict(xgb_model_rfe, newdata = micro_matrix)
-    test_probs_df[[outcome]] <- pred_prob_test_rfe
-    micro_probs_df[[outcome]] <- pred_prob_micro_rfe
-    
-    shap_interaction_values <- predict(xgb_model, newdata = train_matrix, predinteraction = TRUE)
-    
-    shap_interaction_summary <- data.frame(
-      Feature1 = rownames(shap_interaction_values),
-      MeanAbsInteractionSHAP = rowMeans(abs(shap_interaction_values))
-    )
-    shap_interaction_summary <- shap_interaction_summary[order(-shap_interaction_summary$MeanAbsInteractionSHAP), ]
-    
-    write.csv(shap_interaction_summary, glue("{outcome}_shap_interaction_summary.csv"))
-  }
-  }
-}
-
-stopCluster(cl)
-
-write_csv(micro_probs_df,"micro_xg_probs_df.csv")
-write_csv(test_probs_df,"test_xg_probs_df.csv")
-write_csv(aucs,"xg_aucs.csv")
-
-for (i in 1:length(shap_summary_tables)) {
-  
-  shappy <- data.frame(shap_summary_tables[i]) %>% mutate(across(2, ~ round(., 3))) %>% filter(if_any(2, ~ . != 0))
-  
-  colnames(shappy) <- c("Feature","Variable")
-  
-  write_csv(shappy,glue("SHAP_{combined_antimicrobial_map[i]}.csv"))
-  
-}
-
-problist <- micro_probs_df %>% melt()
-util_xg_df <- util_probs_df %>% mutate(S=problist$value,
-                                       R=1-problist$value)
+util_xg_df <- util_probs_df %>% 
+  mutate(S=problist$value, R=1-problist$value)
 
 weightseq <- seq(0,20,1)
 iv_perclist <- c()
@@ -3031,7 +3251,7 @@ oviv_list <- c()
 
 for(weight in seq_along(weightseq)) {
   
-  res_sens_analysis(ur_util,util_xg_df,weightseq[weight])
+  res_sens_analysis(ur_util,util_xg_df,NEWS_variable=weightseq[weight],R_value=1)
   
   iv_perclist <- c(iv_perclist,iv_perc)
   po_perclist <- c(po_perclist,po_perc)
@@ -3089,6 +3309,99 @@ po_xg_plot_df %>% susc_plotter("oral ","NEWS",agent_col1=NIT,agent_name1="Nitrof
 overall_xg_plot_nopo <- overall_xg_plot_df %>% filter(Metric!="Oral agents")
 overall_xg_plot_nopo %>% susc_plotter_overall("overall ", "NEWS",agent_col1=NIT,agent_name1="Nitrofurantoin",
                                     agent_col2=TZP,agent_name2="Piperacillin-tazobactam")
+
+###Combination R weighting sensitivity analysis
+all_singles <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
+                 "MEM","CIP","GEN","SXT","NIT","VAN")
+ab_singles <- all_singles
+all_combos <- combn(all_singles, 2, FUN = function(x) paste(x, collapse = "_"))
+all_abs <- c(all_singles,all_combos)
+iv_singles <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
+                "GEN","SXT","VAN")
+iv_ab_singles <- iv_singles
+iv_combos <- combn(iv_singles, 2, FUN = function(x) paste(x, collapse = "_"))
+all_ivs <- c(iv_singles, iv_combos)
+oral_singles <- c("AMP","SAM","CIP",
+                  "SXT","NIT")
+oral_ab_singles <- oral_singles
+oral_combos <- combn(oral_singles, 2, FUN = function(x) paste(x, collapse = "_"))
+all_orals <- c(oral_singles, oral_combos)
+access_singles <- c("AMP","SAM","GEN",
+                    "SXT","NIT","CZO")
+access_combos <- combn(access_singles, 2, FUN = function(x) paste(x, collapse = "_"))
+all_access <- c(access_singles, access_combos)
+watch_singles <- c("CRO","CAZ","FEP","MEM","TZP","CIP","VAN")
+watch_combos <- combn(watch_singles, 2, FUN = function(x) paste(x, collapse = "_"))
+all_watch <- c(watch_singles, watch_combos)
+
+weightseq <- seq(0,30,5)
+iv_perclist_combo <- c()
+po_perclist_combo <- c()
+overall_perclist_combo <- c()
+ivac_list_combo <- c()
+poac_list_combo <- c()
+ovac_list_combo <- c()
+oviv_list_combo <- c()
+ovor_list_combo <- c()
+
+
+for(weight in seq_along(weightseq)) {
+  
+  combo_res_sens_analysis(ur_util,util_probs_df,NEWS_variable=weightseq[weight],R_value=1)
+  
+  iv_perclist_combo <- c(iv_perclist_combo,iv_perc)
+  po_perclist_combo <- c(po_perclist_combo,po_perc)
+  overall_perclist_combo <- c(overall_perclist_combo,overall_perc)
+  ivac_list_combo <- c(ivac_list_combo,iv_s_access)
+  poac_list_combo <- c(poac_list_combo,po_s_access)
+  ovac_list_combo <- c(ovac_list_combo,overall_s_access)
+  ovor_list_combo <- c(ovor_list_combo,overall_s_oral)
+  oviv_list_combo <- c(oviv_list_combo,overall_s_iv)
+  
+}
+
+iv_perclist_combo <- iv_perclist_combo %>% label_binder("All agents")
+po_perclist_combo <- po_perclist_combo %>% label_binder("All agents")
+overall_perclist_combo <- overall_perclist_combo %>% label_binder("All agents")
+ivac_list_combo <- ivac_list_combo %>% label_binder("Access agents")
+poac_list_combo <- poac_list_combo %>% label_binder("Access agents")
+ovac_list_combo <- ovac_list_combo %>% label_binder("Access agents")
+ovor_list_combo <- ovor_list_combo %>% label_binder("Oral agents")
+oviv_list_combo <- oviv_list_combo %>% label_binder("IV agents")
+iv_perclist_combo <- iv_perclist_combo %>% rename(Percentage = "vec")
+po_perclist_combo <- po_perclist_combo %>% rename(Percentage = "vec")
+overall_perclist_combo <- overall_perclist_combo %>% rename(Percentage = "vec")
+ivac_list_combo <- ivac_list_combo %>% rename(Percentage = "vec")
+poac_list_combo <- poac_list_combo %>% rename(Percentage = "vec")
+ovac_list_combo <- ovac_list_combo %>% rename(Percentage = "vec")
+ovor_list_combo <- ovor_list_combo %>% rename(Percentage = "vec")
+oviv_list_combo <- oviv_list_combo %>% rename(Percentage = "vec")
+iv_perclist_combo <- iv_perclist_combo %>% mutate(Percentage=100-Percentage)
+po_perclist_combo <- po_perclist_combo %>% mutate(Percentage=100-Percentage)
+overall_perclist_combo <- overall_perclist_combo %>% mutate(Percentage=100-Percentage)
+
+iv_plot_df_combo <- data.frame(rbind(
+  iv_perclist_combo,ivac_list_combo
+))
+po_plot_df_combo <- data.frame(rbind(
+  po_perclist_combo,poac_list_combo
+))
+overall_plot_df_combo <- data.frame(rbind(
+  overall_perclist_combo,ovac_list_combo
+))
+
+write_csv(iv_plot_df_combo,"iv_plot_df_combo.csv")
+write_csv(po_plot_df_combo,"po_plot_df_combo.csv")
+write_csv(overall_plot_df_combo,"overall_plot_df_combo.csv")
+
+iv_plot_df_combo %>% susc_plotter("IV ","Resistance","(including combinations)",
+                                     agent_col1=TZP,agent_name1="Piperacillin-tazobactam")
+po_plot_df_combo %>% susc_plotter("oral ","Resistance","(including combinations)",
+                                  agent_col1=NIT,agent_name1="Nitrofurantoin")
+overall_plot_df_combo_nopo <- overall_xg_plot_df %>% filter(Metric!="Oral agents")
+overall_plot_df_combo_nopo %>% susc_plotter_overall("overall (no oral) ","Resistance","(including combinations)",
+                                               agent_col1=NIT,agent_name1="Nitrofurantoin",
+                                               agent_col2=TZP,agent_name2="Piperacillin-tazobactam")
 
 
 ###R weighting analysis with improved probability predictions
