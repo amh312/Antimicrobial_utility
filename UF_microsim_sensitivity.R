@@ -2382,9 +2382,9 @@ prev_ICD_applier <- function(df,icd_df,prefix,codes,time_frame) {
       prev_event_type_assign(!!sym(param_name), icd_df, icd_group, code, time_frame, 1)
   }
   
-  pos_urines <- reduce(codes, function(df, code) {
+  df <- reduce(codes, function(df, code) {
     apply_prev_event_assignments(df, code)
-  }, .init = pos_urines) %>%
+  }, .init = df) %>%
     mutate(pDIAG_U = FALSE) %>%
     ungroup()
   
@@ -2412,6 +2412,26 @@ prev_event_assign <- function(df,B_var,event_df,event_var,no_days,no_events) {
                                   TRUE ~ FALSE)) %>%
     mutate(event = NULL, pr_event=NULL) %>% 
     filter(grepl('URINE', spec_type_desc))
+  
+}
+
+###Search for previous event across multiple variables
+apply_prev_event <- function(df, param,organism,time_frame=365,no_events=1) {
+  df %>%
+    prev_event_type_assign(!!sym(param), urine_df, org_fullname,organism, time_frame, no_events)
+}
+
+###Checking for previous care events
+care_event_assigner <- function(df,search_df,search_term,search_column,feature_name,event_date_col,timeframe,n_events=1) {
+  
+  feature_name <- enquo(feature_name)
+  search_column <- enquo(search_column)
+  
+  care_event <- search_df %>% filter(grepl(search_term,!!search_column,ignore.case=T)) %>% mutate(
+    !!search_column:=search_term) %>% rename(admittime=event_date_col)
+  df %>% 
+    prev_event_type_assign(!!feature_name,care_event,!!search_column,search_term,timeframe,n_events) %>%
+    ungroup()
   
 }
 
@@ -2453,7 +2473,10 @@ drugs <- read_csv("drugs_clean.csv")
 hadm <- read_csv("admissions.csv") #Admission data
 d_icd_diagnoses <- read_csv("d_icd_diagnoses.csv") #icd codes
 diagnoses_raw <- read_csv("diagnoses_icd.csv") #icd epi
-
+diagnoses <- read_csv("diagnoses_clean.csv")
+procedures <- read_csv("procedures_clean.csv")
+urine_df <- read_csv("pos_urines.csv")
+poe <- read_csv("poe_clean.csv")
 
 ###Count numbers of S and R results per antimicrobial agent
 form_pdast_all_singles <- form_ur_util %>% number_ab_results(PDAST_1,PDAST_6,all_singles,"S","I")
@@ -3052,7 +3075,7 @@ urines5_combined <- data.frame(cbind(urines5_combined,new_rx_cols))
 write_csv(urines5_combined,"urines5_combined.csv")
 write_csv(ur_util,"ur_util_combined.csv")
 
-###Tuning hospital admission - HERE NOW
+###Tuning hospital admission
 time_list <- c(30,180,720,1e4)
 
 for (i in 1:length(time_list)) {
@@ -3068,15 +3091,15 @@ colnames(ur_util)[ncol(urines_ref)] <- glue("pHADM_{time_list[i]}")
 
 new_hadm_cols <- urines_ref %>% select(pHADM_10000:pHADM_720)
 urines5_combined <- data.frame(cbind(urines5_combined,new_hadm_cols))
-
+urines_ref <- urines_ref %>% select(-pHADM_10000)
 write_csv(urines5_combined,"urines5_combined.csv")
 write_csv(ur_util,"ur_util_combined.csv")
 
 ###2 hospital admissions in the last year
-urines_ref <- urines_ref %>% 
+ur_util <- ur_util %>% 
   prev_event_assign(pHADM2,hadm,hadm_id,365,2) %>%
   ungroup()
-ur_util <- ur_util %>% 
+urines_ref <- urines_ref %>% 
   prev_event_assign(pHADM2,hadm,hadm_id,365,2) %>%
   ungroup()
 
@@ -3093,11 +3116,8 @@ urines_ref <- urines_ref %>% prev_ICD_applier(diagnoses,glue("pDIAG{time_list[i]
 ur_util <- ur_util %>% prev_ICD_applier(diagnoses,glue("pDIAG{time_list[i]}_"),diag_codes,time_frame = time_list[i])
 }
 
-new_icd_cols <- urines_ref %>% select(pDIAG30_A:pDIAG10000Z)
+new_icd_cols <- urines_ref %>% select(pDIAG30_A:pDIAG10000_Z)
 urines5_combined <- data.frame(cbind(urines5_combined,new_icd_cols))
-
-write_csv(urines5_combined,"urines5_combined.csv")
-write_csv(ur_util,"ur_util_combined.csv")
 
 ###Tuning coded ICD-10 procedure
 proc_codes <- c("0", "3", "8", "5", "T", "4", "S", "A", "9", 
@@ -3107,7 +3127,7 @@ proc_codes <- c("0", "3", "8", "5", "T", "4", "S", "A", "9",
 
 for (i in 1:length(time_list)) {
 urines_ref <- urines_ref %>% prev_ICD_applier(procedures,glue("pPROC{time_list[i]}_"),proc_codes,time_frame = time_list[i])
-ur_util <- ur_util %>% prev_ICD_applier(proceduresglue("pPROC{time_list[i]}_"),proc_codes,time_frame = time_list[i])
+ur_util <- ur_util %>% prev_ICD_applier(procedures,glue("pPROC{time_list[i]}_"),proc_codes,time_frame = time_list[i])
 }
 
 new_proc_cols <- urines_ref %>% select(pPROC30_0:pPROC10000_O)
@@ -3115,6 +3135,132 @@ urines5_combined <- data.frame(cbind(urines5_combined,new_proc_cols))
 
 write_csv(urines5_combined,"urines5_combined.csv")
 write_csv(ur_util,"ur_util_combined.csv")
+
+###Tuning recent organism growth
+urine_df <- urine_df %>% mutate(admittime=charttime)
+organisms <- urine_df %>% count(org_fullname) %>% arrange(desc(n)) %>% 
+  dplyr::slice(1:10) %>% pull(org_fullname)
+
+for (j in 1:length(time_list)) {
+urines_ref <- reduce(seq_along(organisms), function(df, i) {
+  apply_prev_event(df, paste0("pG", organisms[i],"Urine",as.character(time_list[j])), organisms[i],time_frame=time_list[j])
+}, .init = urines_ref) %>%
+  ungroup()
+ur_util <- reduce(seq_along(organisms), function(df, i) {
+  apply_prev_event(df, paste0("pG", organisms[i],"Urine",as.character(time_list[j])), organisms[i],time_frame=time_list[j])
+}, .init = ur_util) %>%
+  ungroup()
+}
+
+new_org_cols <- urines_ref %>% select(`pGEscherichia coliUrine30`:`pGMorganella morganiiUrine10000`)
+urines5_combined <- data.frame(cbind(urines5_combined,new_org_cols))
+
+write_csv(urines5_combined,"urines5_combined.csv")
+write_csv(ur_util,"ur_util_combined.csv")
+
+###Tuning other previous care events
+time_list1 <- c(7,365,720,1e4)
+time_list2 <- c(7,30,720,1e4)
+
+for (i in 1:length(time_list1)) {
+
+urines_ref <- urines_ref %>% 
+  care_event_assigner(poe,"DNR",field_value,pDNR2,"ordertime",time_list2[i])
+colnames(urines_ref)[ncol(urines_ref)] <- glue("pDNR_{time_list2[i]}")
+urines_ref <- urines_ref %>%   
+  care_event_assigner(poe,"Psychiatry",field_value,pPsych2,"ordertime",time_list2[i])
+colnames(urines_ref)[ncol(urines_ref)] <- glue("pPsych_{time_list2[i]}")
+urines_ref <- urines_ref %>% 
+  care_event_assigner(poe,"Nephrostomy",field_value,pNeph2,"ordertime",time_list2[i])
+colnames(urines_ref)[ncol(urines_ref)] <- glue("pNeph_{time_list2[i]}")
+urines_ref <- urines_ref %>% 
+  care_event_assigner(poe,"Surgery",field_value,pSURG2,"ordertime",time_list2[i])
+colnames(urines_ref)[ncol(urines_ref)] <- glue("pSURG_{time_list2[i]}")
+urines_ref <- urines_ref %>% 
+  care_event_assigner(poe,"Nutrition consult",order_subtype,pNUTR2,"ordertime",time_list2[i])
+colnames(urines_ref)[ncol(urines_ref)] <- glue("pNUTR_{time_list2[i]}")
+urines_ref <- urines_ref %>% 
+  care_event_assigner(poe,"Physical Therapy",order_subtype,pPhysio2,"ordertime",time_list2[i])
+colnames(urines_ref)[ncol(urines_ref)] <- glue("pPhysio_{time_list2[i]}")
+urines_ref <- urines_ref %>% 
+  care_event_assigner(poe,"Restraints",order_subtype,pRestr2,"ordertime",time_list2[i])
+colnames(urines_ref)[ncol(urines_ref)] <- glue("pRestr_{time_list2[i]}")
+urines_ref <- urines_ref %>% 
+  care_event_assigner(poe,"Occupational Therapy",order_subtype,pOT2,"ordertime",time_list2[i])
+colnames(urines_ref)[ncol(urines_ref)] <- glue("pOT_{time_list2[i]}")
+urines_ref <- urines_ref %>% 
+  care_event_assigner(poe,"Central TPN",order_subtype,pTPN2,"ordertime",time_list2[i])
+colnames(urines_ref)[ncol(urines_ref)] <- glue("pTPN_{time_list2[i]}")
+urines_ref <- urines_ref %>% 
+  care_event_assigner(poe,"cath",field_value,pCATH2,"ordertime",time_list1[i])
+colnames(urines_ref)[ncol(urines_ref)] <- glue("pCATH_{time_list1[i]}")
+urines_ref <- urines_ref %>% 
+  care_event_assigner(poe,"Discharge",field_value,pDISC2,"ordertime",time_list1[i])
+colnames(urines_ref)[ncol(urines_ref)] <- glue("pDISC_{time_list1[i]}")
+urines_ref <- urines_ref %>% 
+  care_event_assigner(poe,"ICU",field_value,pICU2,"ordertime",time_list1[i])
+colnames(urines_ref)[ncol(urines_ref)] <- glue("pICU_{time_list1[i]}")
+urines_ref <- urines_ref %>% 
+  care_event_assigner(poe,"NGT",field_value,pNGT2,"ordertime",time_list1[i])
+colnames(urines_ref)[ncol(urines_ref)] <- glue("pNGT_{time_list1[i]}")
+urines_ref <- urines_ref %>% 
+  care_event_assigner(poe,"Hydration",field_value,pHyd2,"ordertime",time_list1[i])
+colnames(urines_ref)[ncol(urines_ref)] <- glue("pHyd_{time_list1[i]}")
+urines_ref <- urines_ref %>% 
+  care_event_assigner(poe,"Chemo",field_value,pChemo2,"ordertime",time_list1[i])
+colnames(urines_ref)[ncol(urines_ref)] <- glue("pChemo_{time_list1[i]}")
+
+ur_util <- ur_util %>% 
+  care_event_assigner(poe,"DNR",field_value,pDNR2,"ordertime",time_list2[i])
+colnames(ur_util)[ncol(ur_util)] <- glue("pDNR_{time_list2[i]}")
+ur_util <- ur_util %>%   
+  care_event_assigner(poe,"Psychiatry",field_value,pPsych2,"ordertime",time_list2[i])
+colnames(ur_util)[ncol(ur_util)] <- glue("pPsych_{time_list2[i]}")
+ur_util <- ur_util %>% 
+  care_event_assigner(poe,"Nephrostomy",field_value,pNeph2,"ordertime",time_list2[i])
+colnames(ur_util)[ncol(ur_util)] <- glue("pNeph_{time_list2[i]}")
+ur_util <- ur_util %>% 
+  care_event_assigner(poe,"Surgery",field_value,pSURG2,"ordertime",time_list2[i])
+colnames(ur_util)[ncol(ur_util)] <- glue("pSURG_{time_list2[i]}")
+ur_util <- ur_util %>% 
+  care_event_assigner(poe,"Nutrition consult",order_subtype,pNUTR2,"ordertime",time_list2[i])
+colnames(ur_util)[ncol(ur_util)] <- glue("pNUTR_{time_list2[i]}")
+ur_util <- ur_util %>% 
+  care_event_assigner(poe,"Physical Therapy",order_subtype,pPhysio2,"ordertime",time_list2[i])
+colnames(ur_util)[ncol(ur_util)] <- glue("pPhysio_{time_list2[i]}")
+ur_util <- ur_util %>% 
+  care_event_assigner(poe,"Restraints",order_subtype,pRestr2,"ordertime",time_list2[i])
+colnames(ur_util)[ncol(ur_util)] <- glue("pRestr_{time_list2[i]}")
+ur_util <- ur_util %>% 
+  care_event_assigner(poe,"Occupational Therapy",order_subtype,pOT2,"ordertime",time_list2[i])
+colnames(ur_util)[ncol(ur_util)] <- glue("pOT_{time_list2[i]}")
+ur_util <- ur_util %>% 
+  care_event_assigner(poe,"Central TPN",order_subtype,pTPN2,"ordertime",time_list2[i])
+colnames(ur_util)[ncol(ur_util)] <- glue("pTPN_{time_list2[i]}")
+ur_util <- ur_util %>% 
+  care_event_assigner(poe,"cath",field_value,pCATH2,"ordertime",time_list1[i])
+colnames(ur_util)[ncol(ur_util)] <- glue("pCATH_{time_list1[i]}")
+ur_util <- ur_util %>% 
+  care_event_assigner(poe,"Discharge",field_value,pDISC2,"ordertime",time_list1[i])
+colnames(ur_util)[ncol(ur_util)] <- glue("pDISC_{time_list1[i]}")
+ur_util <- ur_util %>% 
+  care_event_assigner(poe,"ICU",field_value,pICU2,"ordertime",time_list1[i])
+colnames(ur_util)[ncol(ur_util)] <- glue("pICU_{time_list1[i]}")
+ur_util <- ur_util %>% 
+  care_event_assigner(poe,"NGT",field_value,pNGT2,"ordertime",time_list1[i])
+colnames(ur_util)[ncol(ur_util)] <- glue("pNGT_{time_list1[i]}")
+ur_util <- ur_util %>% 
+  care_event_assigner(poe,"Hydration",field_value,pHyd2,"ordertime",time_list1[i])
+colnames(ur_util)[ncol(ur_util)] <- glue("pHyd_{time_list1[i]}")
+ur_util <- ur_util %>% 
+  care_event_assigner(poe,"Chemo",field_value,pChemo2,"ordertime",time_list1[i])
+colnames(ur_util)[ncol(ur_util)] <- glue("pChemo_{time_list1[i]}")
+
+}
+
+new_poe_cols <- urines_ref %>% select(pDNR_7:pChemo_10000)
+urines5_combined <- data.frame(cbind(urines5_combined,new_org_cols))
+
 
 ###Final model
 
