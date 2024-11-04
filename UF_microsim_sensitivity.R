@@ -3259,8 +3259,11 @@ colnames(ur_util)[ncol(ur_util)] <- glue("pChemo_{time_list1[i]}")
 }
 
 new_poe_cols <- urines_ref %>% select(pDNR_7:pChemo_10000)
-urines5_combined <- data.frame(cbind(urines5_combined,new_org_cols))
+urines5_combined <- data.frame(cbind(urines5_combined,new_poe_cols))
 
+write_csv(urines5_combined,"urines5_combined.csv")
+write_csv(ur_util,"ur_util_combined.csv")
+write_csv(urines_ref,"urines_ref_combined.csv")
 
 ###Final model
 
