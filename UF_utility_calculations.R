@@ -15,64 +15,68 @@ abs_calc <- function(val,prob) {
   ifelse(val>=0,val*prob,abs(val)*(1-prob))
   
 }
-calculate_utilities <- function(df,formulary_list=c(),R_weight=1,NEWS=0) {
+calculate_utilities <- function(df,formulary_list=c(),R_weight=1,MEWS=0) {
   
   df <- df %>% mutate(overall_util=util_uti + util_access +
+                        util_oral + 
+                        util_reserve + util_highcost 
+                      + util_tox + util_CDI + util_iv*MEWS*R_weight,
+                      short_util = util_uti + util_access +
                         util_oral + util_iv +
                         util_reserve + util_highcost 
-                      + util_tox + util_CDI + NEWS*R_weight,
+                      + util_tox + util_CDI,
                       S_utility = S*overall_util,
                       AMPR_utility = case_when(
                         Antimicrobial=="Ampicillin" ~
-                          abs(R_weight)*AMP_R_value*R*NEWS, TRUE~0
+                          abs(R_weight)*AMP_R_value*R, TRUE~0
                       ),
                       SAMR_utility = case_when(
                         Antimicrobial=="Ampicillin-sulbactam" ~
-                          abs(R_weight)*SAM_R_value*R*NEWS, TRUE~0
+                          abs(R_weight)*SAM_R_value*R, TRUE~0
                       ),
                       TZPR_utility = case_when(
                         Antimicrobial=="Piperacillin-tazobactam" ~
-                          abs(R_weight)*TZP_R_value*R*NEWS, TRUE~0
+                          abs(R_weight)*TZP_R_value*R, TRUE~0
                       ),
                       CZOR_utility = case_when(
                         Antimicrobial=="Cefazolin" ~
-                          abs(R_weight)*CZO_R_value*R*NEWS, TRUE~0
+                          abs(R_weight)*CZO_R_value*R, TRUE~0
                       ),
                       CROR_utility = case_when(
                         Antimicrobial=="Ceftriaxone" ~
-                          abs(R_weight)*CRO_R_value*R*NEWS, TRUE~0
+                          abs(R_weight)*CRO_R_value*R, TRUE~0
                       ),
                       CAZR_utility = case_when(
                         Antimicrobial=="Ceftazidime" ~
-                          abs(R_weight)*CAZ_R_value*R*NEWS, TRUE~0
+                          abs(R_weight)*CAZ_R_value*R, TRUE~0
                       ),
                       FEPR_utility = case_when(
                         Antimicrobial=="Cefepime" ~
-                          abs(R_weight)*FEP_R_value*R*NEWS, TRUE~0
+                          abs(R_weight)*FEP_R_value*R, TRUE~0
                       ),
                       MEMR_utility = case_when(
                         Antimicrobial=="Meropenem" ~
-                          abs(R_weight)*MEM_R_value*R*NEWS, TRUE~0
+                          abs(R_weight)*MEM_R_value*R, TRUE~0
                       ),
                       CIPR_utility = case_when(
                         Antimicrobial=="Ciprofloxacin" ~
-                          abs(R_weight)*CIP_R_value*R*NEWS, TRUE~0
+                          abs(R_weight)*CIP_R_value*R, TRUE~0
                       ),
                       GENR_utility = case_when(
                         Antimicrobial=="Gentamicin" ~
-                          abs(R_weight)*GEN_R_value*R*NEWS, TRUE~0
+                          abs(R_weight)*GEN_R_value*R, TRUE~0
                       ),
                       SXTR_utility = case_when(
                         Antimicrobial=="Trimethoprim-sulfamethoxazole" ~
-                          abs(R_weight)*SXT_R_value*R*NEWS, TRUE~0
+                          abs(R_weight)*SXT_R_value*R, TRUE~0
                       ),
                       NITR_utility = case_when(
                         Antimicrobial=="Nitrofurantoin" ~
-                          abs(R_weight)*NIT_R_value*R*NEWS, TRUE~0
+                          abs(R_weight)*NIT_R_value*R, TRUE~0
                       ),
                       VANR_utility = case_when(
                         Antimicrobial=="Vancomycin" ~
-                          abs(R_weight)*VAN_R_value*R*NEWS, TRUE~0
+                          abs(R_weight)*VAN_R_value*R, TRUE~0
                       ),
                       Formulary_agent = case_when(
                         Antimicrobial%in%formulary_list ~
@@ -80,7 +84,7 @@ calculate_utilities <- function(df,formulary_list=c(),R_weight=1,NEWS=0) {
                       ),
                       Formulary_utility = 
                         abs(R_weight)*Formulary_agent*R,
-                      AST_utility = ((S_utility+
+                      AST_utility = (short_util+
                                                   AMPR_utility +
                                                   SAMR_utility +
                                                   TZPR_utility +
@@ -94,7 +98,7 @@ calculate_utilities <- function(df,formulary_list=c(),R_weight=1,NEWS=0) {
                                                   SXTR_utility +
                                                   NITR_utility +
                                                   VANR_utility +
-                                                  Formulary_utility)*single_agent),
+                                                  Formulary_utility)*single_agent,
                       Rx_utility = S_utility)
   
   df %>% 
@@ -515,13 +519,24 @@ R_util_sens <- function(df,probs_df,uf,min_val,max_val) {
       highcost_abs <- c()
       cost_value <- scores2[rownames(scores2)=="High_cost",] %>% 
         select(Value) %>% unlist()
+      cost_list <- read_csv("us_drug_cost_list.csv")
+      drug_order <- cost_list %>% distinct(`Generic Name`) %>% unlist()
+      cost_list <- cost_list %>% group_by(`Generic Name`) %>% summarise(min_cost=min(Cost)) %>% ungroup() %>% 
+        mutate(`Generic Name` = factor(`Generic Name`,levels=drug_order)) %>% arrange(`Generic Name`)
+      comb <- combn(cost_list$`Generic Name`, 2, simplify = FALSE)
+      cost_comb <- combn(cost_list$min_cost, 2, function(x) sum(x))
+      cost_list2 <- data.frame(
+        Antimicrobial = sapply(comb, function(x) paste(x, collapse = "_")),
+        min_cost = cost_comb
+      )  
+      cost_list <- cost_list %>% rename(Antimicrobial="Generic Name")
+      cost_list <- data.frame(rbind(cost_list,cost_list2))
+      cost_list <- cost_list %>% mutate(min_cost = min_cost/max(min_cost),
+                                        Antimicrobial = str_replace_all(Antimicrobial,"/","-"))
+      probs_df_2 <- probs_df_2 %>% left_join(cost_list)
       
       ###AST R result utility
       Rval_key <- df %>% select(micro_specimen_id,AMP_R_value:VAN_R_value)
-      
-      ###Enterococcus removal sensitivity analysis key
-      ent_sens_key <- ent_probs_df %>% select(micro_specimen_id,Antimicrobial,S,R) %>% 
-        rename(ent_R = "R", ent_S = "S")
       
       ###Attach individual utilities to dataframe
       probs_df_2 <- probs_df_2 %>% 
@@ -546,14 +561,14 @@ R_util_sens <- function(df,probs_df,uf,min_val,max_val) {
                Reserve_agent = case_when(Antimicrobial %in% reserve_abs ~ 1, TRUE~0),
                value_reserve = reserve_value,
                util_reserve = abs_calc(value_reserve,Reserve_agent),
-               Highcost_agent = case_when(Antimicrobial %in% highcost_abs ~ 0.25, TRUE~0),
+               Highcost_agent = min_cost,
                value_highcost = cost_value,
                util_highcost = abs_calc(value_highcost,Highcost_agent),
                prob_sepsisae = sepsis_util_probs,
                single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE))
       
       ###Calculate overall utility score
-      probs_df_2 <- probs_df_2 %>% calculate_utilities(NEWS=R_wt_value,R_weight = 1)
+      probs_df_2 <- probs_df_2 %>% calculate_utilities(MEWS=R_wt_value,R_weight = 1)
       
       ###Filter out combination predictions not present in training dataset
       abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
@@ -754,7 +769,7 @@ util_sens <- function(df,probs_df,uf,variable_criterion,min_val,max_val) {
       access_value <- scores2[rownames(scores2)=="Access",] %>% 
         select(Value) %>% unlist()
       
-      ###Oral option utilituy
+      ###Oral option utility
       oral_abs <- c("AMP","SAM","CIP",
                     "SXT","NIT") %>% ab_name() %>% 
         str_replace("/","-")
@@ -783,13 +798,24 @@ util_sens <- function(df,probs_df,uf,variable_criterion,min_val,max_val) {
       highcost_abs <- c()
       cost_value <- scores2[rownames(scores2)=="High_cost",] %>% 
         select(Value) %>% unlist()
+      cost_list <- read_csv("us_drug_cost_list.csv")
+      drug_order <- cost_list %>% distinct(`Generic Name`) %>% unlist()
+      cost_list <- cost_list %>% group_by(`Generic Name`) %>% summarise(min_cost=min(Cost)) %>% ungroup() %>% 
+        mutate(`Generic Name` = factor(`Generic Name`,levels=drug_order)) %>% arrange(`Generic Name`)
+      comb <- combn(cost_list$`Generic Name`, 2, simplify = FALSE)
+      cost_comb <- combn(cost_list$min_cost, 2, function(x) sum(x))
+      cost_list2 <- data.frame(
+        Antimicrobial = sapply(comb, function(x) paste(x, collapse = "_")),
+        min_cost = cost_comb
+      )  
+      cost_list <- cost_list %>% rename(Antimicrobial="Generic Name")
+      cost_list <- data.frame(rbind(cost_list,cost_list2))
+      cost_list <- cost_list %>% mutate(min_cost = min_cost/max(min_cost),
+                                        Antimicrobial = str_replace_all(Antimicrobial,"/","-"))
+      probs_df_2 <- probs_df_2 %>% left_join(cost_list)
       
       ###AST R result utility
       Rval_key <- df %>% select(micro_specimen_id,AMP_R_value:VAN_R_value)
-      
-      ###Enterococcus removal sensitivity analysis key
-      ent_sens_key <- ent_probs_df %>% select(micro_specimen_id,Antimicrobial,S,R) %>% 
-        rename(ent_R = "R", ent_S = "S")
       
       ###Attach individual utilities to dataframe
       probs_df_2 <- probs_df_2 %>% 
@@ -814,7 +840,7 @@ util_sens <- function(df,probs_df,uf,variable_criterion,min_val,max_val) {
                Reserve_agent = case_when(Antimicrobial %in% reserve_abs ~ 1, TRUE~0),
                value_reserve = reserve_value,
                util_reserve = abs_calc(value_reserve,Reserve_agent),
-               Highcost_agent = case_when(Antimicrobial %in% highcost_abs ~ 0.25, TRUE~0),
+               Highcost_agent = min_cost,
                value_highcost = cost_value,
                util_highcost = abs_calc(value_highcost,Highcost_agent),
                prob_sepsisae = sepsis_util_probs,
@@ -823,6 +849,7 @@ util_sens <- function(df,probs_df,uf,variable_criterion,min_val,max_val) {
       ###Calculate overall utility score
       probs_df_2 <- probs_df_2 %>% calculate_utilities(R_weight=R_wt_value)
       print(probs_df_2 %>% filter(Antimicrobial==iterabs[j]) %>% summarise(medac=median(Rx_utility)))
+      
       ###Filter out combination predictions not present in training dataset
       abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
         str_replace_all("/","-")
@@ -1069,13 +1096,24 @@ cdi_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
       highcost_abs <- c()
       cost_value <- scores[rownames(scores)=="High_cost",] %>% 
         select(Value) %>% unlist()
+      cost_list <- read_csv("us_drug_cost_list.csv")
+      drug_order <- cost_list %>% distinct(`Generic Name`) %>% unlist()
+      cost_list <- cost_list %>% group_by(`Generic Name`) %>% summarise(min_cost=min(Cost)) %>% ungroup() %>% 
+        mutate(`Generic Name` = factor(`Generic Name`,levels=drug_order)) %>% arrange(`Generic Name`)
+      comb <- combn(cost_list$`Generic Name`, 2, simplify = FALSE)
+      cost_comb <- combn(cost_list$min_cost, 2, function(x) sum(x))
+      cost_list2 <- data.frame(
+        Antimicrobial = sapply(comb, function(x) paste(x, collapse = "_")),
+        min_cost = cost_comb
+      )  
+      cost_list <- cost_list %>% rename(Antimicrobial="Generic Name")
+      cost_list <- data.frame(rbind(cost_list,cost_list2))
+      cost_list <- cost_list %>% mutate(min_cost = min_cost/max(min_cost),
+                                        Antimicrobial = str_replace_all(Antimicrobial,"/","-"))
+      probs_df_3 <- probs_df_3 %>% left_join(cost_list)
       
       ###AST R result utility
       Rval_key <- df %>% select(micro_specimen_id,AMP_R_value:VAN_R_value)
-      
-      ###Enterococcus removal sensitivity analysis key
-      ent_sens_key <- ent_probs_df %>% select(micro_specimen_id,Antimicrobial,S,R) %>% 
-        rename(ent_R = "R", ent_S = "S")
       
       if (i==0){
         
@@ -1119,7 +1157,7 @@ cdi_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
                Reserve_agent = case_when(Antimicrobial %in% reserve_abs ~ 1, TRUE~0),
                value_reserve = reserve_value,
                util_reserve = abs_calc(value_reserve,Reserve_agent),
-               Highcost_agent = case_when(Antimicrobial %in% highcost_abs ~ 0.25, TRUE~0),
+               Highcost_agent = min_cost,
                value_highcost = cost_value,
                util_highcost = abs_calc(value_highcost,Highcost_agent),
                prob_sepsisae = sepsis_util_probs,
@@ -1248,13 +1286,24 @@ tox_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
       highcost_abs <- c()
       cost_value <- scores[rownames(scores)=="High_cost",] %>% 
         select(Value) %>% unlist()
+      cost_list <- read_csv("us_drug_cost_list.csv")
+      drug_order <- cost_list %>% distinct(`Generic Name`) %>% unlist()
+      cost_list <- cost_list %>% group_by(`Generic Name`) %>% summarise(min_cost=min(Cost)) %>% ungroup() %>% 
+        mutate(`Generic Name` = factor(`Generic Name`,levels=drug_order)) %>% arrange(`Generic Name`)
+      comb <- combn(cost_list$`Generic Name`, 2, simplify = FALSE)
+      cost_comb <- combn(cost_list$min_cost, 2, function(x) sum(x))
+      cost_list2 <- data.frame(
+        Antimicrobial = sapply(comb, function(x) paste(x, collapse = "_")),
+        min_cost = cost_comb
+      )  
+      cost_list <- cost_list %>% rename(Antimicrobial="Generic Name")
+      cost_list <- data.frame(rbind(cost_list,cost_list2))
+      cost_list <- cost_list %>% mutate(min_cost = min_cost/max(min_cost),
+                                        Antimicrobial = str_replace_all(Antimicrobial,"/","-"))
+      probs_df_3 <- probs_df_3 %>% left_join(cost_list)
       
       ###AST R result utility
       Rval_key <- df %>% select(micro_specimen_id,AMP_R_value:VAN_R_value)
-      
-      ###Enterococcus removal sensitivity analysis key
-      ent_sens_key <- ent_probs_df %>% select(micro_specimen_id,Antimicrobial,S,R) %>% 
-        rename(ent_R = "R", ent_S = "S")
       
       if (i==0){
         
@@ -1298,7 +1347,7 @@ tox_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
                Reserve_agent = case_when(Antimicrobial %in% reserve_abs ~ 1, TRUE~0),
                value_reserve = reserve_value,
                util_reserve = abs_calc(value_reserve,Reserve_agent),
-               Highcost_agent = case_when(Antimicrobial %in% highcost_abs ~ 0.25, TRUE~0),
+               Highcost_agent = min_cost,
                value_highcost = cost_value,
                util_highcost = abs_calc(value_highcost,Highcost_agent),
                prob_sepsisae = sepsis_util_probs,
@@ -1427,13 +1476,24 @@ sepsisae_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,
       highcost_abs <- c()
       cost_value <- scores[rownames(scores)=="High_cost",] %>% 
         select(Value) %>% unlist()
+      cost_list <- read_csv("us_drug_cost_list.csv")
+      drug_order <- cost_list %>% distinct(`Generic Name`) %>% unlist()
+      cost_list <- cost_list %>% group_by(`Generic Name`) %>% summarise(min_cost=min(Cost)) %>% ungroup() %>% 
+        mutate(`Generic Name` = factor(`Generic Name`,levels=drug_order)) %>% arrange(`Generic Name`)
+      comb <- combn(cost_list$`Generic Name`, 2, simplify = FALSE)
+      cost_comb <- combn(cost_list$min_cost, 2, function(x) sum(x))
+      cost_list2 <- data.frame(
+        Antimicrobial = sapply(comb, function(x) paste(x, collapse = "_")),
+        min_cost = cost_comb
+      )  
+      cost_list <- cost_list %>% rename(Antimicrobial="Generic Name")
+      cost_list <- data.frame(rbind(cost_list,cost_list2))
+      cost_list <- cost_list %>% mutate(min_cost = min_cost/max(min_cost),
+                                        Antimicrobial = str_replace_all(Antimicrobial,"/","-"))
+      probs_df_3 <- probs_df_3 %>% left_join(cost_list)
       
       ###AST R result utility
       Rval_key <- df %>% select(micro_specimen_id,AMP_R_value:VAN_R_value)
-      
-      ###Enterococcus removal sensitivity analysis key
-      ent_sens_key <- ent_probs_df %>% select(micro_specimen_id,Antimicrobial,S,R) %>% 
-        rename(ent_R = "R", ent_S = "S")
       
       if (i==0){
         
@@ -1471,7 +1531,7 @@ sepsisae_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,
                Reserve_agent = case_when(Antimicrobial %in% reserve_abs ~ 1, TRUE~0),
                value_reserve = reserve_value,
                util_reserve = abs_calc(value_reserve,Reserve_agent),
-               Highcost_agent = case_when(Antimicrobial %in% highcost_abs ~ 0.25, TRUE~0),
+               Highcost_agent = min_cost,
                value_highcost = cost_value,
                util_highcost = abs_calc(value_highcost,Highcost_agent),
                prob_sepsisae = prob_vector,
@@ -1655,13 +1715,24 @@ cdi_outbreak_sens <- function(df,probs_df,uf,characteristic,characteristic_col,c
       highcost_abs <- c()
       cost_value <- scores[rownames(scores)=="High_cost",] %>% 
         select(Value) %>% unlist()
+      cost_list <- read_csv("us_drug_cost_list.csv")
+      drug_order <- cost_list %>% distinct(`Generic Name`) %>% unlist()
+      cost_list <- cost_list %>% group_by(`Generic Name`) %>% summarise(min_cost=min(Cost)) %>% ungroup() %>% 
+        mutate(`Generic Name` = factor(`Generic Name`,levels=drug_order)) %>% arrange(`Generic Name`)
+      comb <- combn(cost_list$`Generic Name`, 2, simplify = FALSE)
+      cost_comb <- combn(cost_list$min_cost, 2, function(x) sum(x))
+      cost_list2 <- data.frame(
+        Antimicrobial = sapply(comb, function(x) paste(x, collapse = "_")),
+        min_cost = cost_comb
+      )  
+      cost_list <- cost_list %>% rename(Antimicrobial="Generic Name")
+      cost_list <- data.frame(rbind(cost_list,cost_list2))
+      cost_list <- cost_list %>% mutate(min_cost = min_cost/max(min_cost),
+                                        Antimicrobial = str_replace_all(Antimicrobial,"/","-"))
+      probs_df_3 <- probs_df_3 %>% left_join(cost_list)
       
       ###AST R result utility
       Rval_key <- df %>% select(micro_specimen_id,AMP_R_value:VAN_R_value)
-      
-      ###Enterococcus removal sensitivity analysis key
-      ent_sens_key <- ent_probs_df %>% select(micro_specimen_id,Antimicrobial,S,R) %>% 
-        rename(ent_R = "R", ent_S = "S")
       
       ###Attach individual utilities to dataframe
       probs_df_3 <- probs_df_3 %>% 
@@ -1686,7 +1757,7 @@ cdi_outbreak_sens <- function(df,probs_df,uf,characteristic,characteristic_col,c
                Reserve_agent = case_when(Antimicrobial %in% reserve_abs ~ 1, TRUE~0),
                value_reserve = reserve_value,
                util_reserve = abs_calc(value_reserve,Reserve_agent),
-               Highcost_agent = case_when(Antimicrobial %in% highcost_abs ~ 0.25, TRUE~0),
+               Highcost_agent = min_cost,
                value_highcost = cost_value,
                util_highcost = abs_calc(value_highcost,Highcost_agent),
                prob_sepsisae = sepsis_util_probs,
@@ -1861,16 +1932,27 @@ tox_pop_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_c
     highcost_abs <- c()
     cost_value <- scores[rownames(scores)=="High_cost",] %>% 
       select(Value) %>% unlist()
+    cost_list <- read_csv("us_drug_cost_list.csv")
+    drug_order <- cost_list %>% distinct(`Generic Name`) %>% unlist()
+    cost_list <- cost_list %>% group_by(`Generic Name`) %>% summarise(min_cost=min(Cost)) %>% ungroup() %>% 
+      mutate(`Generic Name` = factor(`Generic Name`,levels=drug_order)) %>% arrange(`Generic Name`)
+    comb <- combn(cost_list$`Generic Name`, 2, simplify = FALSE)
+    cost_comb <- combn(cost_list$min_cost, 2, function(x) sum(x))
+    cost_list2 <- data.frame(
+      Antimicrobial = sapply(comb, function(x) paste(x, collapse = "_")),
+      min_cost = cost_comb
+    )  
+    cost_list <- cost_list %>% rename(Antimicrobial="Generic Name")
+    cost_list <- data.frame(rbind(cost_list,cost_list2))
+    cost_list <- cost_list %>% mutate(min_cost = min_cost/max(min_cost),
+                                      Antimicrobial = str_replace_all(Antimicrobial,"/","-"))
+    probs_df_3 <- probs_df_3 %>% left_join(cost_list)
     
     ###AST R result utility
     Rval_key <- df %>% select(micro_specimen_id,AMP_R_value:VAN_R_value)
     
-    ###Enterococcus removal sensitivity analysis key
-    ent_sens_key <- ent_probs_df %>% select(micro_specimen_id,Antimicrobial,S,R) %>% 
-      rename(ent_R = "R", ent_S = "S")
-    
     ###Attach individual utilities to dataframe
-    mutate(prob_CDI = cdi_util_probs,
+    probs_df_3 <- probs_df_3 %>% mutate(prob_CDI = cdi_util_probs,
            value_CDI = cdi_value,
            util_CDI = abs_calc(value_CDI,prob_CDI),
            prob_tox = tox_util_probs,
@@ -1891,7 +1973,7 @@ tox_pop_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_c
            Reserve_agent = case_when(Antimicrobial %in% reserve_abs ~ 1, TRUE~0),
            value_reserve = reserve_value,
            util_reserve = abs_calc(value_reserve,Reserve_agent),
-           Highcost_agent = case_when(Antimicrobial %in% highcost_abs ~ 0.25, TRUE~0),
+           Highcost_agent = min_cost,
            value_highcost = cost_value,
            util_highcost = abs_calc(value_highcost,Highcost_agent),
            prob_sepsisae = sepsis_util_probs,
@@ -2275,6 +2357,21 @@ reserve_value <- scores[rownames(scores)=="Reserve",] %>%
 highcost_abs <- c()
 cost_value <- scores[rownames(scores)=="High_cost",] %>% 
   select(Value) %>% unlist()
+cost_list <- read_csv("us_drug_cost_list.csv")
+drug_order <- cost_list %>% distinct(`Generic Name`) %>% unlist()
+cost_list <- cost_list %>% group_by(`Generic Name`) %>% summarise(min_cost=min(Cost)) %>% ungroup() %>% 
+  mutate(`Generic Name` = factor(`Generic Name`,levels=drug_order)) %>% arrange(`Generic Name`)
+comb <- combn(cost_list$`Generic Name`, 2, simplify = FALSE)
+cost_comb <- combn(cost_list$min_cost, 2, function(x) sum(x))
+cost_list2 <- data.frame(
+  Antimicrobial = sapply(comb, function(x) paste(x, collapse = "_")),
+  min_cost = cost_comb
+)  
+cost_list <- cost_list %>% rename(Antimicrobial="Generic Name")
+cost_list <- data.frame(rbind(cost_list,cost_list2))
+cost_list <- cost_list %>% mutate(min_cost = min_cost/max(min_cost),
+                                  Antimicrobial = str_replace_all(Antimicrobial,"/","-"))
+df <- df %>% left_join(cost_list)
 
 ###AST R result utility
 Rval_key <- ur_util %>% select(micro_specimen_id,AMP_R_value:VAN_R_value)
@@ -2302,7 +2399,7 @@ df <- df %>%
          Reserve_agent = case_when(Antimicrobial %in% reserve_abs ~ 1, TRUE~0),
          value_reserve = reserve_value,
          util_reserve = abs_calc(value_reserve,Reserve_agent),
-         Highcost_agent = case_when(Antimicrobial %in% highcost_abs ~ 0.25, TRUE~0),
+         Highcost_agent = min_cost,
          value_highcost = cost_value,
          util_highcost = abs_calc(value_highcost,Highcost_agent),
          prob_sepsisae = sepsis_util_probs,
@@ -2341,7 +2438,6 @@ abx <- read_csv("interim_abx.csv")
 train_abx <- read_csv("train_abx.csv")
 test_abx <- read_csv("test_abx.csv")
 util_probs_df <- read_csv("probs_df_overall.csv")
-ent_probs_df <- read_csv("ent_probs_df.csv")
 ur_util <- read_csv("interim_ur_util.csv")
 micro <- read_csv("micro_clean2.csv")
 mic_ref <- micro %>% anti_join(ur_util,by="subject_id")
@@ -2476,6 +2572,7 @@ ORplot <- ggplot(scores,aes(x=OR_dif,y=Coefficient,fill=colour)) +
 
 ggsave(glue("ORplot.pdf"), plot = ORplot, device = "pdf", width = 10, height = 8,
        path="/Users/alexhoward/Documents/Projects/UDAST_code")
+print(ORplot)
 
 ###Antimicrobial dummy variables in probability prediction dataframe
 util_probs_df$abx_name_ <- as.factor(util_probs_df$Antimicrobial)
@@ -2652,6 +2749,21 @@ reserve_value <- scores[rownames(scores)=="Reserve",] %>%
 highcost_abs <- c()
 cost_value <- scores[rownames(scores)=="High_cost",] %>% 
   select(Value) %>% unlist()
+cost_list <- read_csv("us_drug_cost_list.csv")
+drug_order <- cost_list %>% distinct(`Generic Name`) %>% unlist()
+cost_list <- cost_list %>% group_by(`Generic Name`) %>% summarise(min_cost=min(Cost)) %>% ungroup() %>% 
+  mutate(`Generic Name` = factor(`Generic Name`,levels=drug_order)) %>% arrange(`Generic Name`)
+comb <- combn(cost_list$`Generic Name`, 2, simplify = FALSE)
+cost_comb <- combn(cost_list$min_cost, 2, function(x) sum(x))
+cost_list2 <- data.frame(
+  Antimicrobial = sapply(comb, function(x) paste(x, collapse = "_")),
+  min_cost = cost_comb
+)  
+cost_list <- cost_list %>% rename(Antimicrobial="Generic Name")
+cost_list <- data.frame(rbind(cost_list,cost_list2))
+cost_list <- cost_list %>% mutate(min_cost = min_cost/max(min_cost),
+         Antimicrobial = str_replace_all(Antimicrobial,"/","-"))
+util_probs_df <- util_probs_df %>% left_join(cost_list)
 
 ###AST R result utility
 Rval_key <- ur_util %>% select(micro_specimen_id,AMP_R_value:VAN_R_value)
@@ -2679,7 +2791,7 @@ util_probs_df <- util_probs_df %>%
          Reserve_agent = case_when(Antimicrobial %in% reserve_abs ~ 1, TRUE~0),
          value_reserve = reserve_value,
          util_reserve = abs_calc(value_reserve,Reserve_agent),
-         Highcost_agent = case_when(Antimicrobial %in% highcost_abs ~ 0.25, TRUE~0),
+         Highcost_agent = min_cost,
          value_highcost = cost_value,
          util_highcost = abs_calc(value_highcost,Highcost_agent),
          prob_sepsisae = sepsis_util_probs,
@@ -2730,7 +2842,7 @@ util_probs_df %>% utility_plot(Outpatient_Rx_utility,"Oral treatment")
 util_probs_df %>% utility_plot(Outpatient_Rx_utility,"Oral treatment", " (single agent)")
 util_probs_df %>% utility_plot(Outpatient_Rx_utility,"Oral treatment", " (combinations)")
 util_probs_df %>% utility_plot(AST_utility,"AST")
-
+util_probs_df %>% filter(Antimicrobial=="Piperacillin-tazobactam_Trimethoprim-sulfamethoxazole") %>% select(min_cost)
 ##Sensitivity analysis
 
 ###Stem reference lists
@@ -2770,7 +2882,7 @@ cdi_sens_df %>% util_sens_plot("Treatment","CDI")
 tox_sens_df %>% util_sens_plot("Treatment","Toxicity")
 highcost_sens_df %>% util_sens_plot("Treatment","Cost")
 reserve_sens_df %>% util_sens_plot("Treatment","Reserve category")
-R_sens_df %>% R_util_sens_plot("Treatment","NEWS")
+R_sens_df %>% R_util_sens_plot("Treatment","Illness severity")
 
 uti_sens_df_ast <- ur_util %>% util_sens(util_probs_df,AST_utility,"UTI_specific",-2,2)
 access_sens_df_ast <- ur_util %>% util_sens(util_probs_df,AST_utility,"Access",-2,2)
@@ -2804,7 +2916,7 @@ tox_prob_df_ast %>% dens_sens_plot_2("toxicity","AST",tox_prob)
 
 ###Sensitivity analysis with CDI outbreak
 cdi_outbreak_df <- ur_util %>% cdi_outbreak_sens(util_probs_df,Rx_utility,"cdi_prob","prob_CDI",cdi_prob,prob_CDI,"CDI",r_num=1.5)
-cdi_outbreak_df %>% dens_sens_plot_2("Simulated CDI outbreak","Treatment",cdi_prob)
+cdi_outbreak_df %>% dens_sens_plot_2("CDI infection rate","Treatment",cdi_prob)
 
 cdi_outbreak_df_ast <- ur_util %>% cdi_outbreak_sens(util_probs_df,AST_utility,"cdi_prob","prob_CDI",cdi_prob,prob_CDI,"CDI")
 cdi_outbreak_df_ast %>% dens_sens_plot_2("CDI","AST",cdi_prob)
