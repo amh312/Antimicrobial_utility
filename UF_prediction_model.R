@@ -154,6 +154,12 @@ care_event_assigner <- function(df,search_df,search_term,search_column,feature_n
   
 }
 
+##Read-in
+
+train_abx <- read_csv("train_abx.csv")
+urines5 <- read_csv("urines5.csv")
+ur_xg <- read_csv("interim_ur_util.csv")
+
 ##Model tuning
 
 ###Antimicrobial mapping lists
@@ -211,8 +217,6 @@ shortmap <- combined_antimicrobial_map %>% unlist()
 names(shortmap) <- NULL
 
 ###Final preprocessing and dataset train/test splits
-urines5 <- read_csv("urines5.csv")
-ur_xg <- read_csv("interim_ur_util.csv")
 urines5 <- urines5 %>% mutate(marital_status=case_when(is.na(marital_status)~"UNKNOWN",
                                                        TRUE~marital_status))
 ur_xg <- ur_xg %>% mutate(marital_status=case_when(is.na(marital_status)~"UNKNOWN",
@@ -253,6 +257,7 @@ for (outcome in colnames(urines5_outcomes)) {
   
   if (sum(!is.na(urines5_combined[[outcome]])) > 0) {
     
+    set.seed(123)
     trainIndex <- createDataPartition(urines5_combined[[outcome]], p = .8, list = FALSE, times = 1)
     urines5Train <- urines5_combined[trainIndex, ]
     urines5Test <- urines5_combined[-trainIndex, ]
@@ -332,6 +337,7 @@ for (outcome in colnames(urines5_outcomes)) {
   
   if (sum(!is.na(urines5_combined[[outcome]])) > 0) {
     
+    set.seed(123)
     trainIndex <- createDataPartition(urines5_combined[[outcome]], p = .8, list = FALSE, times = 1)
     urines5Train <- urines5_combined[trainIndex, ]
     urines5Test <- urines5_combined[-trainIndex, ]
@@ -401,6 +407,7 @@ for (outcome in colnames(urines5_outcomes)) {
   
   if (sum(!is.na(urines5_combined[[outcome]])) > 0) {
     
+    set.seed(123)
     trainIndex <- createDataPartition(urines5_combined[[outcome]], p = .8, list = FALSE, times = 1)
     urines5Train <- urines5_combined[trainIndex, ]
     urines5Test <- urines5_combined[-trainIndex, ]
@@ -739,19 +746,13 @@ write_csv(urines5_combined,"urines5_combined.csv")
 write_csv(ur_util,"ur_util_combined.csv")
 write_csv(urines_ref,"urines_ref_combined.csv")
 
-##Final clinical prediction model
 
-###Model training, testing and microsimulation probability predictions
-ur_xg_combined <- ur_util
-test_probs_df <- data.frame(matrix(nrow=floor(nrow(urines5_combined)*0.2),ncol=0))
-micro_probs_df <- data.frame(matrix(nrow=nrow(ur_xg_combined),ncol=0))
-aucs <- data.frame(matrix(nrow=1,ncol=0))
-shap_summary_tables <- list()
-metrics_list <- list() 
+###Best iteration
 for (outcome in colnames(urines5_outcomes)) {
   
   if (sum(!is.na(urines5_combined[[outcome]])) > 0) {
     
+    set.seed(123)
     trainIndex <- createDataPartition(urines5_combined[[outcome]], p = .8, list = FALSE, times = 1)
     urines5Train <- urines5_combined[trainIndex, ]
     urines5Test <- urines5_combined[-trainIndex, ]
@@ -788,14 +789,65 @@ for (outcome in colnames(urines5_outcomes)) {
       verbose = 1,
     )
     
-    optimal_nrounds <- cv_model$best_iteration
+    final_bestparams[[outcome]]$best_nrounds <- cv_model$best_iteration
+
+  }
+}
+
+for (i in 1:length(final_bestparams)) {
+  
+  param <- data.frame(final_bestparams[i])
+  
+  write_csv(param,glue("final_params_{combined_antimicrobial_map[i]}.csv"))
+  
+}
+
+  
+
+##Final clinical prediction model
+
+###Model training, testing and microsimulation probability predictions
+test_probs_df <- data.frame(matrix(nrow=floor(nrow(urines5_combined)*0.2),ncol=0))
+micro_probs_df <- data.frame(matrix(nrow=nrow(ur_xg_combined),ncol=0))
+aucs <- data.frame(matrix(nrow=1,ncol=0))
+shap_summary_tables <- list()
+metrics_list <- list() 
+for (outcome in colnames(urines5_outcomes)) {
+  
+  if (sum(!is.na(urines5_combined[[outcome]])) > 0) {
+    
+    set.seed(123)
+    trainIndex <- createDataPartition(urines5_combined[[outcome]], p = .8, list = FALSE, times = 1)
+    urines5Train <- urines5_combined[trainIndex, ]
+    urines5Test <- urines5_combined[-trainIndex, ]
+    
+    predictor_columns <- colnames(urines5_predictors)
+    selected_columns <- intersect(predictor_columns, colnames(urines5Train))
+    missing_cols <- setdiff(selected_columns, colnames(ur_xg_combined))
+    ur_xg_combined[missing_cols] <- 0
+    train_matrix <- xgb.DMatrix(data = as.matrix(urines5Train %>% select(all_of(selected_columns))), 
+                                label = urines5Train[[outcome]])
+    test_matrix <- xgb.DMatrix(data = as.matrix(urines5Test %>% select(all_of(selected_columns))), 
+                               label = urines5Test[[outcome]])
+    micro_matrix <- xgb.DMatrix(data = as.matrix(ur_xg_combined %>% select(all_of(selected_columns))), 
+                                label = ur_xg_combined[[outcome]])
+    
+    params <- list(
+      objective = "binary:logistic",
+      eval_metric = "auc",
+      eta = final_bestparams[[outcome]]$eta,
+      max_depth = final_bestparams[[outcome]]$max_depth,
+      min_child_weight = final_bestparams[[outcome]]$min_child_weight,
+      subsample = final_bestparams[[outcome]]$subsample,
+      colsample_bytree = final_bestparams[[outcome]]$colsample_bytree
+    )
     
     print("Training...")
     
     xgb_model <- xgb.train(
       params = params,
       data = train_matrix,
-      nrounds = optimal_nrounds,
+      nrounds = final_bestparams[[outcome]]$best_nrounds
     )
     
     print("Shapping...")
@@ -821,7 +873,7 @@ for (outcome in colnames(urines5_outcomes)) {
     xgb_model <- xgb.train(
       params = params,
       data = train_matrix,
-      nrounds = optimal_nrounds,
+      nrounds = final_bestparams[[outcome]]$best_nrounds,
     )
     
     pred_prob_test <- predict(xgb_model, newdata = test_matrix)
@@ -848,7 +900,7 @@ for (outcome in colnames(urines5_outcomes)) {
     accuracy <- confusion$overall['Accuracy']
     precision <- confusion$byClass['Precision']
     recall <- confusion$byClass['Recall']
-    f1_score <- 2 * (precision * recall) / (precision + recall) # F1 calculation
+    f1_score <- 2 * (precision * recall) / (precision + recall)
     
     metrics_list[[outcome]] <- list(
       AUC = auc_value,
@@ -882,16 +934,15 @@ write_csv(micro_probs_df,"micro_xg_probs_df.csv")
 write_csv(test_probs_df,"test_xg_probs_df.csv")
 write_csv(aucs,"xg_aucs.csv")
 
-###Microsimulation probability dataframe
+###Microsimulation dataframe
 replace_values <- function(column, map) {
   flipped_map <- setNames(names(map), map)
   column %>%
     as.character() %>%
     sapply(function(x) if (x %in% names(flipped_map)) flipped_map[[x]] else x)
 }
-micro_probs_df$micro_specimen_id <- ur_util$micro_specimen_id
-micro_probs_df$subject_id <- ur_util$subject_id
-colnames(probs_df_overall)
+micro_probs_df$micro_specimen_id <- ur_xg$micro_specimen_id
+micro_probs_df$subject_id <- ur_xg$subject_id
 probs_df_overall <- micro_probs_df %>% melt(id.vars=c("micro_specimen_id","subject_id")) %>% 
   mutate(variable=replace_values(variable, combined_antimicrobial_map)) %>% 
   rename(S="value",Antimicrobial="variable") %>% mutate(I=NA,R=1-S,NT=NA)
@@ -901,3 +952,163 @@ probs_df_overall <- probs_df_overall %>% relocate(micro_specimen_id,.after = "NT
   relocate(id_no,.before="Antimicrobial")
 write_csv(probs_df_overall,"probs_df_overall.csv")
 
+##CDI prediction model
+
+set.seed(123)
+trainIndex <- createDataPartition(abx_combined[['CDI']], p = 0.8, list = FALSE, times = 1)
+abxTrain <- abx_combined[trainIndex, ]
+abxTest <- abx_combined[-trainIndex, ]
+predictor_columns <- colnames(abx_predictors)
+selected_columns <- intersect(predictor_columns, colnames(abxTrain))
+missing_cols <- setdiff(selected_columns, colnames(ur_abx_combined))
+ur_abx_combined[missing_cols] <- 0
+train_matrix <- xgb.DMatrix(data = as.matrix(abxTrain %>% select(all_of(selected_columns))), 
+                            label = abxTrain[['CDI']])
+test_matrix <- xgb.DMatrix(data = as.matrix(abxTest %>% select(all_of(selected_columns))), 
+                           label = abxTest[['CDI']])
+micro_matrix <- xgb.DMatrix(data = as.matrix(ur_abx_combined %>% select(all_of(selected_columns))), 
+                            label = ur_abx_combined[['CDI']])
+
+params <- list(
+  objective = "binary:logistic",
+  eval_metric = "auc",
+  eta = final_bestparams[[1]]$eta,
+  max_depth = final_bestparams[[1]]$max_depth,
+  min_child_weight = final_bestparams[[1]]$min_child_weight,
+  subsample = final_bestparams[[1]]$subsample,
+  colsample_bytree = final_bestparams[[1]]$colsample_bytree
+)
+
+print("Training...")
+
+xgb_model <- xgb.train(
+  params = params,
+  data = train_matrix,
+  nrounds = final_bestparams[[1]]$best_nrounds
+)
+
+print("Shapping...")
+
+shap_values <- predict(xgb_model, newdata = train_matrix, predcontrib = TRUE)
+shap_df <- as.data.frame(shap_values)
+shap_df <- shap_df[, -ncol(shap_df)]
+shap_summary <- data.frame(
+  Feature = colnames(shap_df),
+  MeanAbsSHAP = colMeans(abs(shap_df))
+)
+cdi_shap_summary <- shap_summary %>% filter(MeanAbsSHAP!=0)
+
+###Feature selection
+train_matrix <- xgb.DMatrix(data = as.matrix(abxTrain %>% select(shap_summary %>% pull(Feature))), 
+                            label = abxTrain[['CDI']])
+test_matrix <- xgb.DMatrix(data = as.matrix(abxTest %>% select(shap_summary %>% pull(Feature))), 
+                           label = abxTest[['CDI']])
+micro_matrix <- xgb.DMatrix(data = as.matrix(ur_abx_combined %>% select(shap_summary %>% pull(Feature))), 
+                            label = ur_abx_combined[['CDI']])
+
+###Run again with selected features
+xgb_model <- xgb.train(
+  params = params,
+  data = train_matrix,
+  nrounds = final_bestparams[[1]]$best_nrounds,
+)
+
+pred_prob_test <- predict(xgb_model, newdata = test_matrix)
+roc_result <- roc(abxTest[['CDI']], pred_prob_test)
+auc_value <- auc(roc_result)
+print(paste("AUC-ROC:", auc_value))
+pdf(glue("CDI_xg_roc.pdf"), width = 10, height = 10)
+plot(roc_result, main = glue("CDI ROC Curve"), col = "blue")
+dev.off()
+cdi_util_probs <- predict(xgb_model, newdata = micro_matrix)
+
+pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
+actual_test_class <- abxTest[['CDI']]
+
+cdi_confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
+cdi_accuracy <- confusion$overall['Accuracy']
+cdi_precision <- confusion$byClass['Precision']
+cdi_recall <- confusion$byClass['Recall']
+cdi_f1_score <- 2 * (precision * recall) / (precision + recall)
+probs_df_overall$prob_CDI <- cdi_util_probs
+write_csv(probs_df_overall,"probs_df_overall.csv")
+
+###Toxicity
+set.seed(123)
+trainIndex <- createDataPartition(abx_combined[['overall_tox']], p = 0.8, list = FALSE, times = 1)
+abxTrain <- abx_combined[trainIndex, ]
+abxTest <- abx_combined[-trainIndex, ]
+predictor_columns <- colnames(abx_predictors)
+selected_columns <- intersect(predictor_columns, colnames(abxTrain))
+missing_cols <- setdiff(selected_columns, colnames(ur_abx_combined))
+ur_abx_combined[missing_cols] <- 0
+train_matrix <- xgb.DMatrix(data = as.matrix(abxTrain %>% select(all_of(selected_columns))), 
+                            label = abxTrain[['overall_tox']])
+test_matrix <- xgb.DMatrix(data = as.matrix(abxTest %>% select(all_of(selected_columns))), 
+                           label = abxTest[['overall_tox']])
+micro_matrix <- xgb.DMatrix(data = as.matrix(ur_abx_combined %>% select(all_of(selected_columns))), 
+                            label = ur_abx_combined[['overall_tox']])
+
+params <- list(
+  objective = "binary:logistic",
+  eval_metric = "auc",
+  eta = final_bestparams[[1]]$eta,
+  max_depth = final_bestparams[[1]]$max_depth,
+  min_child_weight = final_bestparams[[1]]$min_child_weight,
+  subsample = final_bestparams[[1]]$subsample,
+  colsample_bytree = final_bestparams[[1]]$colsample_bytree
+)
+
+print("Training...")
+
+xgb_model <- xgb.train(
+  params = params,
+  data = train_matrix,
+  nrounds = final_bestparams[[1]]$best_nrounds
+)
+
+print("Shapping...")
+
+shap_values <- predict(xgb_model, newdata = train_matrix, predcontrib = TRUE)
+shap_df <- as.data.frame(shap_values)
+shap_df <- shap_df[, -ncol(shap_df)]
+shap_summary <- data.frame(
+  Feature = colnames(shap_df),
+  MeanAbsSHAP = colMeans(abs(shap_df))
+)
+overall_tox_shap_summary <- shap_summary %>% filter(MeanAbsSHAP!=0)
+
+###Feature selection
+train_matrix <- xgb.DMatrix(data = as.matrix(abxTrain %>% select(shap_summary %>% pull(Feature))), 
+                            label = abxTrain[['overall_tox']])
+test_matrix <- xgb.DMatrix(data = as.matrix(abxTest %>% select(shap_summary %>% pull(Feature))), 
+                           label = abxTest[['overall_tox']])
+micro_matrix <- xgb.DMatrix(data = as.matrix(ur_abx_combined %>% select(shap_summary %>% pull(Feature))), 
+                            label = ur_abx_combined[['overall_tox']])
+
+###Run again with selected features
+xgb_model <- xgb.train(
+  params = params,
+  data = train_matrix,
+  nrounds = final_bestparams[[1]]$best_nrounds,
+)
+
+pred_prob_test <- predict(xgb_model, newdata = test_matrix)
+roc_result <- roc(abxTest[['overall_tox']], pred_prob_test)
+auc_value <- auc(roc_result)
+print(paste("AUC-ROC:", auc_value))
+pdf(glue("overall_tox_xg_roc.pdf"), width = 10, height = 10)
+plot(roc_result, main = glue("overall_tox ROC Curve"), col = "blue")
+dev.off()
+overall_tox_util_probs <- predict(xgb_model, newdata = micro_matrix)
+
+pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
+actual_test_class <- abxTest[['overall_tox']]
+
+overall_tox_confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
+overall_tox_accuracy <- confusion$overall['Accuracy']
+overall_tox_precision <- confusion$byClass['Precision']
+overall_tox_recall <- confusion$byClass['Recall']
+overall_tox_f1_score <- 2 * (precision * recall) / (precision + recall)
+probs_df_overall$prob_tox <- overall_tox_util_probs
+write_csv(probs_df_overall,"probs_df_overall.csv")
