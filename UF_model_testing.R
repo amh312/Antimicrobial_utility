@@ -553,7 +553,8 @@ metrics_protchar_df <- metrics_protchar_df %>% mutate(Category = case_when(
   grepl("MALE",Characteristic)~"Gender",
   grepl("marital",Characteristic)~"Marital status",
   grepl("language",Characteristic)~"Language spoken",
-  grepl("race",Characteristic)~"Race"
+  grepl("race",Characteristic)~"Race",
+  grepl("^age",Characteristic)~"Age group"
 ),
 Characteristic=case_when(
   grepl("NONMARRIED",Characteristic)~"Non-married",
@@ -567,6 +568,14 @@ Characteristic=case_when(
   grepl("MALETRUE",Characteristic)~"Male",
   grepl("ENGLISH",Characteristic)~"English",
   grepl("NONENG",Characteristic)~"Non-English",
+  grepl("18",Characteristic)~"18-29",
+  grepl("30",Characteristic)~"30-39",
+  grepl("40",Characteristic)~"40-49",
+  grepl("50",Characteristic)~"50-59",
+  grepl("60",Characteristic)~"60-69",
+  grepl("70",Characteristic)~"70-79",
+  grepl("80",Characteristic)~"80-89",
+  grepl("90",Characteristic)~"≥ 90",
 )) %>% relocate(Category,.before = "Characteristic")
 write_csv(metrics_protchar_df,"fairness_metrics.csv")
 
@@ -677,7 +686,7 @@ for (outcome in colnames(urines5_outcomes)[1:13]) {
       
         }
         
-        metrics_medlist4[[seedpick]] <- metrics_litlist4
+        metrics_medlist4[[seedpick]] <- metrics_medmedlist4
         
       }
       
@@ -686,4 +695,39 @@ for (outcome in colnames(urines5_outcomes)[1:13]) {
   metrics_biglist4[[outcome]] <- metrics_medlist4
   
 }
+metrics_df4 <- data.frame(matrix(nrow=0,ncol=10))
+for (key in 1:length(names(metrics_biglist4))) {
+  for (i in 1:length(metrics_biglist4[[key]])) {
+    
+    for (j in 1:length(metrics_biglist4[[key]][[i]])) {
+      
+      for (k in 1:length(metrics_biglist4[[key]][[i]][[j]])) {
+        metrics_biglist4[[1]][[1]][[1]]
+        print(metrics_biglist4[[key]][[i]][[j]][[k]])
+        
+        results <- data.frame(
+          Antimicrobial = names(metrics_biglist4)[key],
+          Iteration = i,
+          Train_year = names(metrics_biglist4[[key]][[i]][[j]]),
+          AUC = metrics_biglist4[[key]][[i]][[j]][[k]]$AUC,
+          Accuracy = metrics_biglist4[[key]][[i]][[j]][[k]]$Accuracy,
+          Precision = metrics_biglist4[[key]][[i]][[j]][[k]]$Precision,
+          Recall = metrics_biglist4[[key]][[i]][[j]][[k]]$Recall,
+          F1_score = metrics_biglist4[[key]][[i]][[j]][[k]]$F1_Score,
+          Train_support = metrics_biglist4[[key]][[i]][[j]][[k]]$Train_support,
+          Test_support = metrics_biglist4[[key]][[i]][[j]][[k]]$Test_support)
+        
+        colnames(metrics_df4) <- colnames(results)
+        
+        metrics_df4 <- data.frame(
+          rbind(
+            metrics_df4,results
+          )
+        )
+        
+      }
+    }
+  }
+}
+rownames(metrics_df4) <- NULL
 
