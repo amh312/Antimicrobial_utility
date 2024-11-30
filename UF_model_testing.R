@@ -737,9 +737,19 @@ test_abx <- test_abx %>% factorise()
 abx <- data.frame(rbind(train_abx,test_abx))
 hadm_key <- hadm %>% select(subject_id,race,language,marital_status) %>% 
   distinct(subject_id,.keep_all=T)
-age_key <- pats %>% select(subject_id,anchor_age) %>% distinct(subject_id,.keep_all = T)
+age_key <- pats %>% select(subject_id,anchor_age) %>% mutate(anchor_age=case_when(
+  anchor_age<30~18,anchor_age>=30&anchor_age<40~30,
+  anchor_age>=40&anchor_age<50~40,
+  anchor_age>=50&anchor_age<60~50,
+  anchor_age>=60&anchor_age<70~60,
+  anchor_age>=70&anchor_age<80~70,
+  anchor_age>=80&anchor_age<90~80,
+  anchor_age>=90~90
+)) %>% distinct(subject_id,.keep_all = T)
 dems_key <- left_join(hadm_key,age_key,by="subject_id")
 abx <- abx %>% left_join(dems_key,by="subject_id")
+abx <- abx %>% mutate(marital_status=case_when(is.na(marital_status)~"UNKNOWN",
+                                                       TRUE~marital_status))
 abx_outcomes <- abx %>%
   select(CDI,overall_tox) %>% mutate(CDI=case_when(CDI==TRUE~1,TRUE~0),
                                      overall_tox=case_when(overall_tox==TRUE~1,TRUE~0))
@@ -1049,7 +1059,7 @@ rownames(metrics_df2) <- NULL
 write_csv(metrics_df2,"cdi_tox_fairness_metrics1.csv")
 
 ###Age (CDI tox)
-ages <- abx_combined %>% distinct(standard_age) %>% unlist() %>% sort()
+ages <- abx_combined %>% distinct(anchor_age) %>% unlist() %>% sort()
 metrics_biglist3 <- list()
 for (outcome in colnames(abx_outcomes)) {
   
@@ -1101,7 +1111,7 @@ for (outcome in colnames(abx_outcomes)) {
         
         if (sum(!is.na(abx_combined[[outcome]])) > 0) {
           
-          abxTest2 <- abxTest %>% filter(standard_age==ages[age])
+          abxTest2 <- abxTest %>% filter(anchor_age==ages[age])
           test_matrix2 <- xgb.DMatrix(data = as.matrix(abxTest2 %>% select(all_of(selected_columns))), 
                                       label = abxTest2[[outcome]])
           
@@ -1376,3 +1386,18 @@ for (key in 1:length(names(metrics_biglist4))) {
 rownames(metrics_df4) <- NULL
 write_csv(metrics_df4,"cdi_tox_time_sens_metrics.csv")
 
+metrics_dfA <- read_csv("stability_metrics.csv")
+metrics_df<- data.frame(rbind(metrics_dfA,metrics_df))
+metrics_df <- metrics_df %>% rename(Model="Antimicrobial")
+write_csv(metrics_df,"overall_stability_metrics.csv")
+
+metrics_protchar_dfA <- read_csv("fairness_metrics.csv")
+metrics_protchar_df <- read_csv("cdi_tox_fairness_metrics.csv")
+metrics_protchar_df<- data.frame(rbind(metrics_protchar_dfA,metrics_protchar_df))
+metrics_protchar_df <- metrics_protchar_df %>% rename(Model="Antimicrobial")
+write_csv(metrics_protchar_df,"overall_fairness_metrics.csv")
+
+metrics_df4a <- read_csv("time_sens_metrics.csv")
+metrics_df4 <- data.frame(rbind(metrics_df4a,metrics_df4))
+metrics_df4 <- metrics_df4 %>% rename(Model="Antimicrobial")
+write_csv(metrics_df4,"overall_time_sens_metrics.csv")
