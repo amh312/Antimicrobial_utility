@@ -954,6 +954,38 @@ write_csv(probs_df_overall,"probs_df_overall.csv")
 
 ##CDI prediction model
 
+train_abx <- train_abx %>% factorise()
+test_abx <- test_abx %>% factorise()
+abx <- data.frame(rbind(train_abx,test_abx))
+hadm_key <- hadm %>% select(subject_id,race,language,marital_status) %>% 
+  distinct(subject_id,.keep_all=T)
+age_key <- pats %>% select(subject_id,anchor_age) %>% distinct(subject_id,.keep_all = T)
+dems_key <- left_join(hadm_key,age_key,by="subject_id")
+abx <- abx %>% left_join(dems_key,by="subject_id")
+ur_xg <- ur_xg %>% left_join(age_key,by="subject_id")
+abx_outcomes <- abx %>%
+  select(CDI,overall_tox) %>% mutate(CDI=case_when(CDI==TRUE~1,TRUE~0),
+                                     overall_tox=case_when(overall_tox==TRUE~1,TRUE~0))
+abx_predictors <- abx %>% select(pHADM:pSEPSIS,temperature:dbp,pc_dyspnea:pc_fever,
+                                 abx_name_Ampicillin_Ceftriaxone:ob_freq,highCRP,race:anchor_age)
+ur_abx_outcomes <- ur_xg %>%
+  select(micro_specimen_id,CDI,overall_tox) %>% mutate(CDI=case_when(CDI==TRUE~1,TRUE~0),
+                                                       overall_tox=case_when(overall_tox==TRUE~1,TRUE~0))
+ur_abx_outcomes <- util_probs_df %>% left_join(ur_abx_outcomes,
+                                               relationship = 'many-to-one') %>% 
+  select(-c(id_no,I:subject_id))
+common_columns <- intersect(names(abx_predictors),names(ur_xg))
+ur_abx_predictors <- ur_xg %>% select(micro_specimen_id,all_of(common_columns))
+ur_abx_predictors <- util_probs_df %>% left_join(ur_abx_predictors,
+                                                 relationship = 'many-to-one') %>% 
+  select(-c(id_no:subject_id))
+
+ur_abx_combined <- data.frame(cbind(ur_abx_outcomes,ur_abx_predictors))
+set.seed(123)
+dummies <- dummyVars(" ~ .", data = abx_predictors)
+abx_predictors <- predict(dummies, newdata = abx_predictors)
+abx_combined <- as.data.frame(cbind(abx_outcomes, abx_predictors))
+
 set.seed(123)
 trainIndex <- createDataPartition(abx_combined[['CDI']], p = 0.8, list = FALSE, times = 1)
 abxTrain <- abx_combined[trainIndex, ]
