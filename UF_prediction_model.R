@@ -154,11 +154,21 @@ care_event_assigner <- function(df,search_df,search_term,search_column,feature_n
   
 }
 
+###Factorise training and testing datasets
+factorise <- function(df) {
+  df %>% mutate(CDI = factor(CDI),
+                overall_tox = factor(overall_tox),
+                sepsis_ae=factor(sepsis_ae))
+}
+
 ##Read-in
 
 train_abx <- read_csv("train_abx.csv")
+test_abx <- read_csv("test_abx.csv")
 urines5 <- read_csv("urines5.csv")
 ur_xg <- read_csv("interim_ur_util.csv")
+hadm <- read_csv("admissions.csv")
+pats <- read_csv("patients.csv")
 
 ##Model tuning
 
@@ -469,284 +479,6 @@ for (i in 1:length(final_bestparams)) {
   
 }
 
-##Feature tuning
-
-###Tuning time to last resistance
-urines_ref <- read_csv("urines_ref.csv")
-ur_util <- ur_xg_combined
-micro3 <- micro %>% rename(admittime = "charttime")
-time_list <- c(30,180,720,1e4)
-for (i in 1:length(time_list)) {
-  
-  antibiotics <- c("AMP", "SAM", "TZP", "CZO", "CRO", "CAZ", "FEP", "MEM", 
-                   "CIP", "GEN", "SXT", "NIT", "VAN", "AMPC", "TCY", "PEN", 
-                   "CLI", "LVX", "AMK", "TOB")
-  urines_ref <- prev_AST_applier(urines_ref,micro3,glue("r_{as.character(time_list[i])}"),"R",timeframe=time_list[i])
-  ur_util <- prev_AST_applier(ur_util,micro3,glue("r_{as.character(time_list[i])}"),"R",timeframe=time_list[i])
-  
-}
-new_r_cols <- urines_ref %>% select(pAMPr_30:pTOBr_10000)
-urines5_combined <- data.frame(cbind(urines5_combined,new_r_cols))
-time_list <- c(7,30,180,720,1e4)
-
-###Tuning time to last susceptibility
-for (i in 1:length(time_list)) {
-  
-  antibiotics <- c("AMP", "SAM", "TZP", "CZO", "CRO", "CAZ", "FEP", "MEM", 
-                   "CIP", "GEN", "SXT", "NIT", "VAN", "AMPC", "TCY", "PEN", 
-                   "CLI", "LVX", "AMK", "TOB")
-  urines_ref <- prev_AST_applier(urines_ref,micro3,glue("s_{as.character(time_list[i])}"),"S",timeframe=time_list[i])
-  ur_util <- prev_AST_applier(ur_util,micro3,glue("s_{as.character(time_list[i])}"),"S",timeframe=time_list[i])
-  
-}
-new_s_cols <- urines_ref %>% select(pAMPs_30:pTOBs_10000)
-urines5_combined <- data.frame(cbind(urines5_combined,new_s_cols))
-
-###Tuning time to last treatment
-antibiotics <- c("Ampicillin", "Amoxicillin", "Amoxicillin/clavulanic acid", "Ampicillin/sulbactam",
-                 "Piperacillin/tazobactam", "Cefazolin", "Cefalexin", "Cefpodoxime proxetil",
-                 "Ceftriaxone", "Ceftazidime", "Cefepime", "Meropenem", "Ertapenem",
-                 "Aztreonam", "Ciprofloxacin", "Levofloxacin", "Gentamicin", "Tobramycin",
-                 "Amikacin", "Rifampicin", "Trimethoprim/sulfamethoxazole", "Nitrofurantoin",
-                 "Erythromycin", "Clarithromycin", "Azithromycin", "Clindamycin", "Vancomycin",
-                 "Metronidazole", "Linezolid", "Daptomycin", "Doxycycline")
-suffixes <- c("AMPrx", "AMXrx", "AMCrx", "SAMrx", "TZPrx", "CZOrx", "CZOrx", "CZOrx",
-              "CROrx", "CAZrx", "FEPrx", "MEMrx", "ETPrx", "ATMrx", "CIPrx", "CIPrx",
-              "GENrx", "TOBrx", "AMKrx", "RIFrx", "SXTrx", "NITrx", "ERYrx", "CLRrx",
-              "AZMrx", "CLIrx", "VANrx", "MTRrx", "LNZrx", "DAPrx", "DOXrx")
-apply_prev_rx <- function(df, suffix, antibiotic,time_to_event=365) {
-  param_name <- paste0("p", suffix,"_",time_list[j])
-  df %>%
-    prev_rx_assign(!!sym(param_name), drugs, antibiotic, ab_name, time_to_event, 1)
-}
-time_list <- c(30,180,720,1e4)
-drugs$ab_name <- drugs$abx_name
-for (j in 1:length(time_list)) {
-  urines_ref <- reduce(seq_along(antibiotics), function(df, i) {
-    apply_prev_rx(df, suffixes[i], antibiotics[i],time_list[j])
-  }, .init = urines_ref) %>%
-    ungroup()
-  ur_util <- reduce(seq_along(antibiotics), function(df, i) {
-    apply_prev_rx(df, suffixes[i], antibiotics[i],time_list[j])
-  }, .init = ur_util) %>%
-    ungroup()
-}
-new_rx_cols <- urines_ref %>% select(pAMPrx_30:pDOXrx_10000)
-urines5_combined <- data.frame(cbind(urines5_combined,new_rx_cols))
-
-###2 episodes of resistance in the last year
-antibiotics <- c("AMP", "SAM", "TZP", "CZO", "CRO", "CAZ", "FEP", "MEM", 
-                 "CIP", "GEN", "SXT", "NIT", "VAN", "AMPC", "TCY", "PEN", 
-                 "CLI", "LVX", "AMK", "TOB")
-urines_ref <- prev_AST_applier(urines_ref,micro3,"r2","R",timeframe=365,n_events=2)
-ur_util <- prev_AST_applier(ur_util,micro3,"r2","R",timeframe=365,n_events = 2)
-
-new_2r_cols <- urines_ref %>% select(pAMPr2:pTOBr2)
-urines5_combined <- data.frame(cbind(urines5_combined,new_2r_cols))
-
-###2 antimicrobial courses in the last year
-antibiotics <- c("Ampicillin", "Amoxicillin", "Amoxicillin/clavulanic acid", "Ampicillin/sulbactam",
-                 "Piperacillin/tazobactam", "Cefazolin", "Cefalexin", "Cefpodoxime proxetil",
-                 "Ceftriaxone", "Ceftazidime", "Cefepime", "Meropenem", "Ertapenem",
-                 "Aztreonam", "Ciprofloxacin", "Levofloxacin", "Gentamicin", "Tobramycin",
-                 "Amikacin", "Rifampicin", "Trimethoprim/sulfamethoxazole", "Nitrofurantoin",
-                 "Erythromycin", "Clarithromycin", "Azithromycin", "Clindamycin", "Vancomycin",
-                 "Metronidazole", "Linezolid", "Daptomycin", "Doxycycline")
-suffixes <- c("AMPrx", "AMXrx", "AMCrx", "SAMrx", "TZPrx", "CZOrx", "CZOrx", "CZOrx",
-              "CROrx", "CAZrx", "FEPrx", "MEMrx", "ETPrx", "ATMrx", "CIPrx", "CIPrx",
-              "GENrx", "TOBrx", "AMKrx", "RIFrx", "SXTrx", "NITrx", "ERYrx", "CLRrx",
-              "AZMrx", "CLIrx", "VANrx", "MTRrx", "LNZrx", "DAPrx", "DOXrx")
-apply_prev_rx <- function(df, suffix, antibiotic,time_to_event=365,no_events=2) {
-  param_name <- paste0("p", suffix,"2")
-  df %>%
-    prev_rx_assign(!!sym(param_name), drugs, antibiotic, ab_name, time_to_event, no_events)
-}
-urines_ref <- reduce(seq_along(antibiotics), function(df, i) {
-  apply_prev_rx(df, suffixes[i], antibiotics[i],365,2)
-}, .init = urines_ref) %>%
-  ungroup()
-ur_util <- reduce(seq_along(antibiotics), function(df, i) {
-  apply_prev_rx(df, suffixes[i], antibiotics[i],365,2)
-}, .init = ur_util) %>%
-  ungroup()
-new_rx_cols <- urines_ref %>% select(pAMPrx2:pDOXrx2)
-urines5_combined <- data.frame(cbind(urines5_combined,new_rx_cols))
-
-###Tuning hospital admission
-time_list <- c(30,180,720,1e4)
-for (i in 1:length(time_list)) {
-  urines_ref <- urines_ref %>% 
-    prev_event_assign(pHADM2,hadm,hadm_id,time_list[i],1) %>%
-    ungroup()
-  colnames(urines_ref)[ncol(urines_ref)] <- glue("pHADM_{time_list[i]}")
-  ur_util <- ur_util %>% 
-    prev_event_assign(pHADM2,hadm,hadm_id,time_list[i],1) %>%
-    ungroup()
-  colnames(ur_util)[ncol(urines_ref)] <- glue("pHADM_{time_list[i]}")
-}
-new_hadm_cols <- urines_ref %>% select(pHADM_10000:pHADM_720)
-urines5_combined <- data.frame(cbind(urines5_combined,new_hadm_cols))
-urines_ref <- urines_ref %>% select(-pHADM_10000)
-write_csv(urines5_combined,"urines5_combined.csv")
-write_csv(ur_util,"ur_util_combined.csv")
-
-###2 hospital admissions in the last year
-ur_util <- ur_util %>% 
-  prev_event_assign(pHADM2,hadm,hadm_id,365,2) %>%
-  ungroup()
-urines_ref <- urines_ref %>% 
-  prev_event_assign(pHADM2,hadm,hadm_id,365,2) %>%
-  ungroup()
-hadm2 <- urines_ref %>% select(pHADM2)
-urines5_combined <- data.frame(cbind(urines5_combined,hadm2))
-
-###Tuning coded ICD-10 diagnosis
-diag_codes <- c("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", 
-                "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T",
-                "V", "W", "X", "Y", "Z")
-for (i in 1:length(time_list)) {
-  urines_ref <- urines_ref %>% prev_ICD_applier(diagnoses,glue("pDIAG{time_list[i]}_"),diag_codes,time_frame = time_list[i])
-  ur_util <- ur_util %>% prev_ICD_applier(diagnoses,glue("pDIAG{time_list[i]}_"),diag_codes,time_frame = time_list[i])
-}
-new_icd_cols <- urines_ref %>% select(pDIAG30_A:pDIAG10000_Z)
-urines5_combined <- data.frame(cbind(urines5_combined,new_icd_cols))
-
-###Tuning coded ICD-10 procedure
-proc_codes <- c("0", "3", "8", "5", "T", "4", "S", "A", "9", 
-                "H", "I", "B", "7", "G", "1", "R", "J", "Q", 
-                "K", "6", "M", "P", "L", "D", "F", "2", "N", 
-                "C", "E", "X", "O")
-for (i in 1:length(time_list)) {
-  urines_ref <- urines_ref %>% prev_ICD_applier(procedures,glue("pPROC{time_list[i]}_"),proc_codes,time_frame = time_list[i])
-  ur_util <- ur_util %>% prev_ICD_applier(procedures,glue("pPROC{time_list[i]}_"),proc_codes,time_frame = time_list[i])
-}
-new_proc_cols <- urines_ref %>% select(pPROC30_0:pPROC10000_O)
-urines5_combined <- data.frame(cbind(urines5_combined,new_proc_cols))
-
-###Tuning recent organism growth
-urine_df <- urine_df %>% mutate(admittime=charttime)
-organisms <- urine_df %>% count(org_fullname) %>% arrange(desc(n)) %>% 
-  dplyr::slice(1:10) %>% pull(org_fullname)
-for (j in 1:length(time_list)) {
-  urines_ref <- reduce(seq_along(organisms), function(df, i) {
-    apply_prev_event(df, paste0("pG", organisms[i],"Urine",as.character(time_list[j])), organisms[i],time_frame=time_list[j])
-  }, .init = urines_ref) %>%
-    ungroup()
-  ur_util <- reduce(seq_along(organisms), function(df, i) {
-    apply_prev_event(df, paste0("pG", organisms[i],"Urine",as.character(time_list[j])), organisms[i],time_frame=time_list[j])
-  }, .init = ur_util) %>%
-    ungroup()
-}
-new_org_cols <- urines_ref %>% select(`pGEscherichia coliUrine30`:`pGMorganella morganiiUrine10000`)
-urines5_combined <- data.frame(cbind(urines5_combined,new_org_cols))
-
-###Tuning other previous care events
-time_list1 <- c(7,365,720,1e4)
-time_list2 <- c(7,30,720,1e4)
-for (i in 1:length(time_list1)) {
-  
-  urines_ref <- urines_ref %>% 
-    care_event_assigner(poe,"DNR",field_value,pDNR2,"ordertime",time_list2[i])
-  colnames(urines_ref)[ncol(urines_ref)] <- glue("pDNR_{time_list2[i]}")
-  urines_ref <- urines_ref %>%   
-    care_event_assigner(poe,"Psychiatry",field_value,pPsych2,"ordertime",time_list2[i])
-  colnames(urines_ref)[ncol(urines_ref)] <- glue("pPsych_{time_list2[i]}")
-  urines_ref <- urines_ref %>% 
-    care_event_assigner(poe,"Nephrostomy",field_value,pNeph2,"ordertime",time_list2[i])
-  colnames(urines_ref)[ncol(urines_ref)] <- glue("pNeph_{time_list2[i]}")
-  urines_ref <- urines_ref %>% 
-    care_event_assigner(poe,"Surgery",field_value,pSURG2,"ordertime",time_list2[i])
-  colnames(urines_ref)[ncol(urines_ref)] <- glue("pSURG_{time_list2[i]}")
-  urines_ref <- urines_ref %>% 
-    care_event_assigner(poe,"Nutrition consult",order_subtype,pNUTR2,"ordertime",time_list2[i])
-  colnames(urines_ref)[ncol(urines_ref)] <- glue("pNUTR_{time_list2[i]}")
-  urines_ref <- urines_ref %>% 
-    care_event_assigner(poe,"Physical Therapy",order_subtype,pPhysio2,"ordertime",time_list2[i])
-  colnames(urines_ref)[ncol(urines_ref)] <- glue("pPhysio_{time_list2[i]}")
-  urines_ref <- urines_ref %>% 
-    care_event_assigner(poe,"Restraints",order_subtype,pRestr2,"ordertime",time_list2[i])
-  colnames(urines_ref)[ncol(urines_ref)] <- glue("pRestr_{time_list2[i]}")
-  urines_ref <- urines_ref %>% 
-    care_event_assigner(poe,"Occupational Therapy",order_subtype,pOT2,"ordertime",time_list2[i])
-  colnames(urines_ref)[ncol(urines_ref)] <- glue("pOT_{time_list2[i]}")
-  urines_ref <- urines_ref %>% 
-    care_event_assigner(poe,"Central TPN",order_subtype,pTPN2,"ordertime",time_list2[i])
-  colnames(urines_ref)[ncol(urines_ref)] <- glue("pTPN_{time_list2[i]}")
-  urines_ref <- urines_ref %>% 
-    care_event_assigner(poe,"cath",field_value,pCATH2,"ordertime",time_list1[i])
-  colnames(urines_ref)[ncol(urines_ref)] <- glue("pCATH_{time_list1[i]}")
-  urines_ref <- urines_ref %>% 
-    care_event_assigner(poe,"Discharge",field_value,pDISC2,"ordertime",time_list1[i])
-  colnames(urines_ref)[ncol(urines_ref)] <- glue("pDISC_{time_list1[i]}")
-  urines_ref <- urines_ref %>% 
-    care_event_assigner(poe,"ICU",field_value,pICU2,"ordertime",time_list1[i])
-  colnames(urines_ref)[ncol(urines_ref)] <- glue("pICU_{time_list1[i]}")
-  urines_ref <- urines_ref %>% 
-    care_event_assigner(poe,"NGT",field_value,pNGT2,"ordertime",time_list1[i])
-  colnames(urines_ref)[ncol(urines_ref)] <- glue("pNGT_{time_list1[i]}")
-  urines_ref <- urines_ref %>% 
-    care_event_assigner(poe,"Hydration",field_value,pHyd2,"ordertime",time_list1[i])
-  colnames(urines_ref)[ncol(urines_ref)] <- glue("pHyd_{time_list1[i]}")
-  urines_ref <- urines_ref %>% 
-    care_event_assigner(poe,"Chemo",field_value,pChemo2,"ordertime",time_list1[i])
-  colnames(urines_ref)[ncol(urines_ref)] <- glue("pChemo_{time_list1[i]}")
-  
-  ur_util <- ur_util %>% 
-    care_event_assigner(poe,"DNR",field_value,pDNR2,"ordertime",time_list2[i])
-  colnames(ur_util)[ncol(ur_util)] <- glue("pDNR_{time_list2[i]}")
-  ur_util <- ur_util %>%   
-    care_event_assigner(poe,"Psychiatry",field_value,pPsych2,"ordertime",time_list2[i])
-  colnames(ur_util)[ncol(ur_util)] <- glue("pPsych_{time_list2[i]}")
-  ur_util <- ur_util %>% 
-    care_event_assigner(poe,"Nephrostomy",field_value,pNeph2,"ordertime",time_list2[i])
-  colnames(ur_util)[ncol(ur_util)] <- glue("pNeph_{time_list2[i]}")
-  ur_util <- ur_util %>% 
-    care_event_assigner(poe,"Surgery",field_value,pSURG2,"ordertime",time_list2[i])
-  colnames(ur_util)[ncol(ur_util)] <- glue("pSURG_{time_list2[i]}")
-  ur_util <- ur_util %>% 
-    care_event_assigner(poe,"Nutrition consult",order_subtype,pNUTR2,"ordertime",time_list2[i])
-  colnames(ur_util)[ncol(ur_util)] <- glue("pNUTR_{time_list2[i]}")
-  ur_util <- ur_util %>% 
-    care_event_assigner(poe,"Physical Therapy",order_subtype,pPhysio2,"ordertime",time_list2[i])
-  colnames(ur_util)[ncol(ur_util)] <- glue("pPhysio_{time_list2[i]}")
-  ur_util <- ur_util %>% 
-    care_event_assigner(poe,"Restraints",order_subtype,pRestr2,"ordertime",time_list2[i])
-  colnames(ur_util)[ncol(ur_util)] <- glue("pRestr_{time_list2[i]}")
-  ur_util <- ur_util %>% 
-    care_event_assigner(poe,"Occupational Therapy",order_subtype,pOT2,"ordertime",time_list2[i])
-  colnames(ur_util)[ncol(ur_util)] <- glue("pOT_{time_list2[i]}")
-  ur_util <- ur_util %>% 
-    care_event_assigner(poe,"Central TPN",order_subtype,pTPN2,"ordertime",time_list2[i])
-  colnames(ur_util)[ncol(ur_util)] <- glue("pTPN_{time_list2[i]}")
-  ur_util <- ur_util %>% 
-    care_event_assigner(poe,"cath",field_value,pCATH2,"ordertime",time_list1[i])
-  colnames(ur_util)[ncol(ur_util)] <- glue("pCATH_{time_list1[i]}")
-  ur_util <- ur_util %>% 
-    care_event_assigner(poe,"Discharge",field_value,pDISC2,"ordertime",time_list1[i])
-  colnames(ur_util)[ncol(ur_util)] <- glue("pDISC_{time_list1[i]}")
-  ur_util <- ur_util %>% 
-    care_event_assigner(poe,"ICU",field_value,pICU2,"ordertime",time_list1[i])
-  colnames(ur_util)[ncol(ur_util)] <- glue("pICU_{time_list1[i]}")
-  ur_util <- ur_util %>% 
-    care_event_assigner(poe,"NGT",field_value,pNGT2,"ordertime",time_list1[i])
-  colnames(ur_util)[ncol(ur_util)] <- glue("pNGT_{time_list1[i]}")
-  ur_util <- ur_util %>% 
-    care_event_assigner(poe,"Hydration",field_value,pHyd2,"ordertime",time_list1[i])
-  colnames(ur_util)[ncol(ur_util)] <- glue("pHyd_{time_list1[i]}")
-  ur_util <- ur_util %>% 
-    care_event_assigner(poe,"Chemo",field_value,pChemo2,"ordertime",time_list1[i])
-  colnames(ur_util)[ncol(ur_util)] <- glue("pChemo_{time_list1[i]}")
-  
-}
-new_poe_cols <- urines_ref %>% select(pDNR_7:pChemo_10000)
-urines5_combined <- data.frame(cbind(urines5_combined,new_poe_cols))
-
-###Saving interim CSVs
-write_csv(urines5_combined,"urines5_combined.csv")
-write_csv(ur_util,"ur_util_combined.csv")
-write_csv(urines_ref,"urines_ref_combined.csv")
-
-
 ###Best iteration
 for (outcome in colnames(urines5_outcomes)) {
   
@@ -793,7 +525,6 @@ for (outcome in colnames(urines5_outcomes)) {
 
   }
 }
-
 for (i in 1:length(final_bestparams)) {
   
   param <- data.frame(final_bestparams[i])
@@ -802,9 +533,9 @@ for (i in 1:length(final_bestparams)) {
   
 }
 
-  
-
-##Final clinical prediction model
+###Saving interim CSVs
+write_csv(urines5_combined,"urines5_combined.csv")
+write_csv(urines_ref,"urines_ref_combined.csv")
 
 ###Model training, testing and microsimulation probability predictions
 test_probs_df <- data.frame(matrix(nrow=floor(nrow(urines5_combined)*0.2),ncol=0))
@@ -929,11 +660,6 @@ for (i in 1:length(metrics_list)) {
   
 }
 
-###Saving interim CSVs
-write_csv(micro_probs_df,"micro_xg_probs_df.csv")
-write_csv(test_probs_df,"test_xg_probs_df.csv")
-write_csv(aucs,"xg_aucs.csv")
-
 ###Microsimulation dataframe
 replace_values <- function(column, map) {
   flipped_map <- setNames(names(map), map)
@@ -952,8 +678,10 @@ probs_df_overall <- probs_df_overall %>% relocate(micro_specimen_id,.after = "NT
   relocate(id_no,.before="Antimicrobial")
 write_csv(probs_df_overall,"probs_df_overall.csv")
 
-##CDI prediction model
+##CDI and toxicity prediction models
 
+###Dataset preprocessing
+util_probs_df <- probs_df_overall
 train_abx <- train_abx %>% factorise()
 test_abx <- test_abx %>% factorise()
 abx <- data.frame(rbind(train_abx,test_abx))
@@ -966,7 +694,7 @@ ur_xg <- ur_xg %>% left_join(age_key,by="subject_id")
 abx_outcomes <- abx %>%
   select(CDI,overall_tox) %>% mutate(CDI=case_when(CDI==TRUE~1,TRUE~0),
                                      overall_tox=case_when(overall_tox==TRUE~1,TRUE~0))
-abx_predictors <- abx %>% select(pHADM:pSEPSIS,temperature:dbp,pc_dyspnea:pc_fever,
+abx_predictors <- abx %>% select(pHADM:age65,Nephrotoxic_agent:pSEPSIS,temperature:dbp,pc_dyspnea:pc_fever,
                                  abx_name_Ampicillin_Ceftriaxone:ob_freq,highCRP,race:anchor_age)
 ur_abx_outcomes <- ur_xg %>%
   select(micro_specimen_id,CDI,overall_tox) %>% mutate(CDI=case_when(CDI==TRUE~1,TRUE~0),
@@ -978,14 +706,314 @@ common_columns <- intersect(names(abx_predictors),names(ur_xg))
 ur_abx_predictors <- ur_xg %>% select(micro_specimen_id,all_of(common_columns))
 ur_abx_predictors <- util_probs_df %>% left_join(ur_abx_predictors,
                                                  relationship = 'many-to-one') %>% 
-  select(-c(id_no:subject_id))
-
+  select(-c(id_no,I:subject_id)) %>% rename(abx_name="Antimicrobial")
 ur_abx_combined <- data.frame(cbind(ur_abx_outcomes,ur_abx_predictors))
 set.seed(123)
 dummies <- dummyVars(" ~ .", data = abx_predictors)
 abx_predictors <- predict(dummies, newdata = abx_predictors)
 abx_combined <- as.data.frame(cbind(abx_outcomes, abx_predictors))
+dummies <- dummyVars(" ~ .", data = ur_abx_predictors)
+ur_abx_predictors <- predict(dummies, newdata = ur_abx_predictors)
+ur_abx_combined <- as.data.frame(cbind(ur_abx_outcomes, ur_abx_predictors))
+colnames(ur_abx_combined)[grepl("abx_name",colnames(ur_abx_combined))] <- colnames(ur_abx_combined)[grepl("abx_name",colnames(ur_abx_combined))] %>% 
+  str_replace("abx_name","abx_name_") %>% 
+  str_replace_all("-",".")
 
+###First round of hyperparameter tuning (max tree depth and min child weight)
+num_samples <- 10
+max_depth_range <- c(2,9)
+min_child_weight_range <- c(1, 10)
+lhs_sample <- randomLHS(num_samples, 2)
+max_depth <- round(lhs_sample[, 1] * (max_depth_range[2] - max_depth_range[1]) + max_depth_range[1])
+min_child_weight <- round(lhs_sample[, 2] * (min_child_weight_range[2] - min_child_weight_range[1]) + min_child_weight_range[1])
+parameter_grid <- data.frame(max_depth = max_depth, min_child_weight = min_child_weight)
+print(parameter_grid)
+cdi_tox_max_child_bestparams <- c()
+best_auc <- 0
+for (outcome in colnames(abx_outcomes)) {
+  
+  if (sum(!is.na(abx_combined[[outcome]])) > 0) {
+    
+    set.seed(123)
+    trainIndex <- createDataPartition(abx_combined[[outcome]], p = .8, list = FALSE, times = 1)
+    abxTrain <- abx_combined[trainIndex, ]
+    abxTest <- abx_combined[-trainIndex, ]
+    
+    predictor_columns <- colnames(abx_predictors)
+    selected_columns <- intersect(predictor_columns, colnames(abxTrain))
+    missing_cols <- setdiff(selected_columns, colnames(ur_abx_combined))
+    ur_abx_combined[missing_cols] <- 0
+    train_matrix <- xgb.DMatrix(data = as.matrix(abxTrain %>% select(all_of(selected_columns))), 
+                                label = abxTrain[[outcome]])
+    test_matrix <- xgb.DMatrix(data = as.matrix(abxTest %>% select(all_of(selected_columns))), 
+                               label = abxTest[[outcome]])
+    micro_matrix <- xgb.DMatrix(data = as.matrix(ur_abx_combined %>% select(all_of(selected_columns))), 
+                                label = ur_abx_combined[[outcome]])
+    
+    for (i in 1:nrow(parameter_grid)) {
+      
+      print(glue("Running CV {i} for {outcome}..."))
+      
+      params <- list(
+        objective = "binary:logistic",
+        eval_metric = "auc",
+        eta = 0.05,
+        max_depth = parameter_grid %>% select(max_depth) %>% dplyr::slice(i) %>% unlist(),
+        min_child_weight = parameter_grid %>% select(min_child_weight) %>% dplyr::slice(i) %>% unlist(),
+        subsample = 0.8,
+        colsample_bytree = 0.8
+      )
+      
+      cv_model <- xgb.cv(
+        params = params,
+        data = train_matrix,
+        nrounds = 50,
+        nfold = 5,
+        early_stopping_rounds = 50,
+        verbose = 1,
+      )
+      
+      best_iteration_index <- which.max(cv_model$evaluation_log$test_auc_mean)
+      best_iteration_auc <- cv_model$evaluation_log$test_auc_mean[best_iteration_index]
+      cv_model$evaluation_log$test_logloss_mean
+      if (best_iteration_auc > best_auc) {
+        best_auc <- best_iteration_auc
+        best_params <- params
+        best_nrounds <- best_iteration_index
+      }
+      
+    }
+    
+    cdi_tox_max_child_bestparams[[outcome]] <- best_params
+    
+  }
+}
+for (outcome in 1:ncol(abx_outcomes)) {
+  
+  maxy <- data.frame(cdi_tox_max_child_bestparams[outcome])
+  
+  write_csv(maxy,glue("max_child_{names(abx_outcomes)[outcome]}.csv"))
+  
+}
+
+###Second round of hyperparameter tuning (subsample and colsample_bytree)
+num_samples <- 10
+subsample_range <- c(0.5,1)
+colsample_bytree_range <- c(0.5, 1)
+lhs_sample <- randomLHS(num_samples, 2)
+subsample <- round(lhs_sample[, 1] * (subsample_range[2] - subsample_range[1]) + subsample_range[1],2)
+colsample_bytree <- round(lhs_sample[, 2] * (colsample_bytree_range[2] - colsample_bytree_range[1]) + colsample_bytree_range[1],2)
+parameter_grid <- data.frame(subsample = subsample, colsample_bytree = colsample_bytree)
+print(parameter_grid)
+cdi_tox_col_sub_bestparams <- c()
+best_auc <- 0
+for (outcome in colnames(abx_outcomes)) {
+  
+  if (sum(!is.na(abx_combined[[outcome]])) > 0) {
+    
+    set.seed(123)
+    trainIndex <- createDataPartition(abx_combined[[outcome]], p = .8, list = FALSE, times = 1)
+    abxTrain <- abx_combined[trainIndex, ]
+    abxTest <- abx_combined[-trainIndex, ]
+    
+    predictor_columns <- colnames(abx_predictors)
+    selected_columns <- intersect(predictor_columns, colnames(abxTrain))
+    missing_cols <- setdiff(selected_columns, colnames(ur_abx_combined))
+    ur_abx_combined[missing_cols] <- 0
+    train_matrix <- xgb.DMatrix(data = as.matrix(abxTrain %>% select(all_of(selected_columns))), 
+                                label = abxTrain[[outcome]])
+    test_matrix <- xgb.DMatrix(data = as.matrix(abxTest %>% select(all_of(selected_columns))), 
+                               label = abxTest[[outcome]])
+    micro_matrix <- xgb.DMatrix(data = as.matrix(ur_abx_combined %>% select(all_of(selected_columns))), 
+                                label = ur_abx_combined[[outcome]])
+    
+    for (i in 1:nrow(parameter_grid)) {
+      
+      print(glue("Running CV {i} for {outcome}..."))
+      
+      params <- list(
+        objective = "binary:logistic",
+        eval_metric = "auc",
+        eta = 0.05,
+        max_depth = cdi_tox_max_child_bestparams[[outcome]]$max_depth,
+        min_child_weight = cdi_tox_max_child_bestparams[[outcome]]$min_child_weight,
+        subsample = parameter_grid %>% select(subsample) %>% dplyr::slice(i) %>% unlist(),
+        colsample_bytree = parameter_grid %>% select(colsample_bytree) %>% dplyr::slice(i) %>% unlist()
+      )
+      
+      cv_model <- xgb.cv(
+        params = params,
+        data = train_matrix,
+        nrounds = 50,
+        nfold = 5,
+        early_stopping_rounds = 50,
+        verbose = 1,
+      )
+      
+      best_iteration_index <- which.max(cv_model$evaluation_log$test_auc_mean)
+      best_iteration_auc <- cv_model$evaluation_log$test_auc_mean[best_iteration_index]
+      cv_model$evaluation_log$test_logloss_mean
+      if (best_iteration_auc > best_auc) {
+        best_auc <- best_iteration_auc
+        best_params <- params
+        best_nrounds <- best_iteration_index
+      }
+      
+    }
+    
+    cdi_tox_col_sub_bestparams[[outcome]] <- best_params
+    
+  }
+}
+for (outcome in 1:ncol(abx_outcomes)) {
+  
+  coly <- data.frame(cdi_tox_col_sub_bestparams[outcome])
+  
+  write_csv(coly,glue("cdi_tox_col_sub_{names(abx_outcomes)[outcome]}.csv"))
+  
+}
+
+###Third round of hyperparameter tuning (learning rate)
+parameter_list <- c(0.1,0.05,0.01,0.001)
+best_auc <- 0
+cdi_tox_final_bestparams <- c()
+for (outcome in colnames(abx_outcomes)) {
+  
+  if (sum(!is.na(abx_combined[[outcome]])) > 0) {
+    
+    set.seed(123)
+    trainIndex <- createDataPartition(abx_combined[[outcome]], p = .8, list = FALSE, times = 1)
+    abxTrain <- abx_combined[trainIndex, ]
+    abxTest <- abx_combined[-trainIndex, ]
+    
+    predictor_columns <- colnames(abx_predictors)
+    selected_columns <- intersect(predictor_columns, colnames(abxTrain))
+    missing_cols <- setdiff(selected_columns, colnames(ur_abx_combined))
+    ur_abx_combined[missing_cols] <- 0
+    train_matrix <- xgb.DMatrix(data = as.matrix(abxTrain %>% select(all_of(selected_columns))), 
+                                label = abxTrain[[outcome]])
+    test_matrix <- xgb.DMatrix(data = as.matrix(abxTest %>% select(all_of(selected_columns))), 
+                               label = abxTest[[outcome]])
+    micro_matrix <- xgb.DMatrix(data = as.matrix(ur_abx_combined %>% select(all_of(selected_columns))), 
+                                label = ur_abx_combined[[outcome]])
+    
+    for (i in 1:length(parameter_list)) {
+      
+      print(glue("Running CV {i} for {outcome}..."))
+      
+      params <- list(
+        objective = "binary:logistic",
+        eval_metric = "auc",
+        eta = parameter_list[i],
+        max_depth = cdi_tox_max_child_bestparams[[outcome]]$max_depth,
+        min_child_weight = cdi_tox_max_child_bestparams[[outcome]]$min_child_weight,
+        subsample = cdi_tox_col_sub_bestparams[[outcome]]$subsample,
+        colsample_bytree = cdi_tox_col_sub_bestparams[[outcome]]$colsample_bytree
+      )
+      
+      cv_model <- xgb.cv(
+        params = params,
+        data = train_matrix,
+        nrounds = 1000,
+        nfold = 5,
+        early_stopping_rounds = 50,
+        verbose = 1,
+      )
+      
+      best_iteration_index <- which.max(cv_model$evaluation_log$test_auc_mean)
+      best_iteration_auc <- cv_model$evaluation_log$test_auc_mean[best_iteration_index]
+      cv_model$evaluation_log$test_logloss_mean
+      if (best_iteration_auc > best_auc) {
+        best_auc <- best_iteration_auc
+        best_params <- params
+        best_nrounds <- best_iteration_index
+      }
+      
+    }
+    
+    cdi_tox_final_bestparams[[outcome]] <- best_params
+    
+  }
+}
+for (outcome in 1:ncol(abx_outcomes)) {
+  
+  param <- data.frame(cdi_tox_final_bestparams[outcome])
+  
+  write_csv(param,glue("cdi_tox_final_params_{names(abx_outcomes)[outcome]}.csv"))
+  
+}
+
+###Best iteration
+for (outcome in colnames(abx_outcomes)) {
+  
+  if (sum(!is.na(abx_combined[[outcome]])) > 0) {
+    
+    set.seed(123)
+    trainIndex <- createDataPartition(abx_combined[[outcome]], p = .8, list = FALSE, times = 1)
+    abxTrain <- abx_combined[trainIndex, ]
+    abxTest <- abx_combined[-trainIndex, ]
+    
+    predictor_columns <- colnames(abx_predictors)
+    selected_columns <- intersect(predictor_columns, colnames(abxTrain))
+    missing_cols <- setdiff(selected_columns, colnames(ur_abx_combined))
+    ur_abx_combined[missing_cols] <- 0
+    train_matrix <- xgb.DMatrix(data = as.matrix(abxTrain %>% select(all_of(selected_columns))), 
+                                label = abxTrain[[outcome]])
+    test_matrix <- xgb.DMatrix(data = as.matrix(abxTest %>% select(all_of(selected_columns))), 
+                               label = abxTest[[outcome]])
+    micro_matrix <- xgb.DMatrix(data = as.matrix(ur_abx_combined %>% select(all_of(selected_columns))), 
+                                label = ur_abx_combined[[outcome]])
+    
+    params <- list(
+      objective = "binary:logistic",
+      eval_metric = "auc",
+      eta = cdi_tox_final_bestparams[[outcome]]$eta,
+      max_depth = cdi_tox_final_bestparams[[outcome]]$max_depth,
+      min_child_weight = cdi_tox_final_bestparams[[outcome]]$min_child_weight,
+      subsample = cdi_tox_final_bestparams[[outcome]]$subsample,
+      colsample_bytree = cdi_tox_final_bestparams[[outcome]]$colsample_bytree
+    )
+    
+    print("Running CV...")
+    
+    cv_model <- xgb.cv(
+      params = params,
+      data = train_matrix,
+      nrounds = 1000,
+      nfold = 5,
+      early_stopping_rounds = 50,
+      verbose = 1,
+    )
+    
+    cdi_tox_final_bestparams[[outcome]]$best_nrounds <- cv_model$best_iteration
+    
+  }
+}
+for (outcome in 1:ncol(abx_outcomes)) {
+  
+  param <- data.frame(cdi_tox_final_bestparams[outcome])
+  
+  write_csv(param,glue("cdi_tox_final_params_{names(abx_outcomes)[outcome]}.csv"))
+  
+}
+
+###Read-in chosen model parameters (resistance prediction)
+file_names <- glue("cdi_tox_final_params_{colnames(abx_outcomes)}.csv")
+cdi_tox_final_bestparams <- lapply(file_names, function(file) {
+  read_csv(file)
+})
+namelist <- c("eta","max_depth","min_child_weight","subsample","colsample_bytree",
+              "best_nrounds")
+for (i in 1:length(cdi_tox_final_bestparams)) {
+  names(cdi_tox_final_bestparams[[i]])[3:8] <- namelist
+}
+names(cdi_tox_final_bestparams) <- colnames(abx_outcomes)
+
+###Saving interim CSVs
+write_csv(abx_combined,"abx_combined.csv")
+write_csv(ur_abx_combined,"ur_abx_combined.csv")
+
+###CDI final model run
 set.seed(123)
 trainIndex <- createDataPartition(abx_combined[['CDI']], p = 0.8, list = FALSE, times = 1)
 abxTrain <- abx_combined[trainIndex, ]
@@ -1004,11 +1032,11 @@ micro_matrix <- xgb.DMatrix(data = as.matrix(ur_abx_combined %>% select(all_of(s
 params <- list(
   objective = "binary:logistic",
   eval_metric = "auc",
-  eta = final_bestparams[[1]]$eta,
-  max_depth = final_bestparams[[1]]$max_depth,
-  min_child_weight = final_bestparams[[1]]$min_child_weight,
-  subsample = final_bestparams[[1]]$subsample,
-  colsample_bytree = final_bestparams[[1]]$colsample_bytree
+  eta = cdi_tox_final_bestparams[['CDI']]$eta,
+  max_depth = cdi_tox_final_bestparams[['CDI']]$max_depth,
+  min_child_weight = cdi_tox_final_bestparams[['CDI']]$min_child_weight,
+  subsample = cdi_tox_final_bestparams[['CDI']]$subsample,
+  colsample_bytree = cdi_tox_final_bestparams[['CDI']]$colsample_bytree
 )
 
 print("Training...")
@@ -1016,7 +1044,7 @@ print("Training...")
 xgb_model <- xgb.train(
   params = params,
   data = train_matrix,
-  nrounds = final_bestparams[[1]]$best_nrounds
+  nrounds = cdi_tox_final_bestparams[['CDI']]$best_nrounds
 )
 
 print("Shapping...")
@@ -1028,9 +1056,10 @@ shap_summary <- data.frame(
   Feature = colnames(shap_df),
   MeanAbsSHAP = colMeans(abs(shap_df))
 )
+
 cdi_shap_summary <- shap_summary %>% filter(MeanAbsSHAP!=0)
 
-###Feature selection
+###CDI feature selection
 train_matrix <- xgb.DMatrix(data = as.matrix(abxTrain %>% select(shap_summary %>% pull(Feature))), 
                             label = abxTrain[['CDI']])
 test_matrix <- xgb.DMatrix(data = as.matrix(abxTest %>% select(shap_summary %>% pull(Feature))), 
@@ -1038,17 +1067,17 @@ test_matrix <- xgb.DMatrix(data = as.matrix(abxTest %>% select(shap_summary %>% 
 micro_matrix <- xgb.DMatrix(data = as.matrix(ur_abx_combined %>% select(shap_summary %>% pull(Feature))), 
                             label = ur_abx_combined[['CDI']])
 
-###Run again with selected features
+###CDI run again with selected features
 xgb_model <- xgb.train(
   params = params,
   data = train_matrix,
-  nrounds = final_bestparams[[1]]$best_nrounds,
+  nrounds = cdi_tox_final_bestparams[['CDI']]$best_nrounds,
 )
 
 pred_prob_test <- predict(xgb_model, newdata = test_matrix)
 roc_result <- roc(abxTest[['CDI']], pred_prob_test)
-auc_value <- auc(roc_result)
-print(paste("AUC-ROC:", auc_value))
+cdi_auc_value <- auc(roc_result)
+print(paste("AUC-ROC:", cdi_auc_value))
 pdf(glue("CDI_xg_roc.pdf"), width = 10, height = 10)
 plot(roc_result, main = glue("CDI ROC Curve"), col = "blue")
 dev.off()
@@ -1058,14 +1087,26 @@ pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
 actual_test_class <- abxTest[['CDI']]
 
 cdi_confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
-cdi_accuracy <- confusion$overall['Accuracy']
-cdi_precision <- confusion$byClass['Precision']
-cdi_recall <- confusion$byClass['Recall']
-cdi_f1_score <- 2 * (precision * recall) / (precision + recall)
+cdi_accuracy <- cdi_confusion$overall['Accuracy']
+cdi_precision <- cdi_confusion$byClass['Precision']
+cdi_recall <- cdi_confusion$byClass['Recall']
+cdi_f1_score <- 2 * (cdi_precision * cdi_recall) / (cdi_precision + cdi_recall)
 probs_df_overall$prob_CDI <- cdi_util_probs
 write_csv(probs_df_overall,"probs_df_overall.csv")
 
-###Toxicity
+write_csv(cdi_shap_summary,glue("SHAP_CDI.csv"))
+
+cdi_metrics_list <- data.frame(
+  AUC = cdi_auc_value,
+  Accuracy = cdi_accuracy,
+  Precision = cdi_precision,
+  Recall = cdi_recall,
+  F1_Score = cdi_f1_score
+)
+
+write_csv(cdi_metrics_list,glue("metrics_CDI.csv"))
+
+###Toxicity data partitioning
 set.seed(123)
 trainIndex <- createDataPartition(abx_combined[['overall_tox']], p = 0.8, list = FALSE, times = 1)
 abxTrain <- abx_combined[trainIndex, ]
@@ -1084,11 +1125,11 @@ micro_matrix <- xgb.DMatrix(data = as.matrix(ur_abx_combined %>% select(all_of(s
 params <- list(
   objective = "binary:logistic",
   eval_metric = "auc",
-  eta = final_bestparams[[1]]$eta,
-  max_depth = final_bestparams[[1]]$max_depth,
-  min_child_weight = final_bestparams[[1]]$min_child_weight,
-  subsample = final_bestparams[[1]]$subsample,
-  colsample_bytree = final_bestparams[[1]]$colsample_bytree
+  eta = cdi_tox_final_bestparams[['overall_tox']]$eta,
+  max_depth = cdi_tox_final_bestparams[['overall_tox']]$max_depth,
+  min_child_weight = cdi_tox_final_bestparams[['overall_tox']]$min_child_weight,
+  subsample = cdi_tox_final_bestparams[['overall_tox']]$subsample,
+  colsample_bytree = cdi_tox_final_bestparams[['overall_tox']]$colsample_bytree
 )
 
 print("Training...")
@@ -1096,7 +1137,7 @@ print("Training...")
 xgb_model <- xgb.train(
   params = params,
   data = train_matrix,
-  nrounds = final_bestparams[[1]]$best_nrounds
+  nrounds = cdi_tox_final_bestparams[['overall_tox']]$best_nrounds
 )
 
 print("Shapping...")
@@ -1110,7 +1151,7 @@ shap_summary <- data.frame(
 )
 overall_tox_shap_summary <- shap_summary %>% filter(MeanAbsSHAP!=0)
 
-###Feature selection
+###Toxicity feature selection
 train_matrix <- xgb.DMatrix(data = as.matrix(abxTrain %>% select(shap_summary %>% pull(Feature))), 
                             label = abxTrain[['overall_tox']])
 test_matrix <- xgb.DMatrix(data = as.matrix(abxTest %>% select(shap_summary %>% pull(Feature))), 
@@ -1118,17 +1159,17 @@ test_matrix <- xgb.DMatrix(data = as.matrix(abxTest %>% select(shap_summary %>% 
 micro_matrix <- xgb.DMatrix(data = as.matrix(ur_abx_combined %>% select(shap_summary %>% pull(Feature))), 
                             label = ur_abx_combined[['overall_tox']])
 
-###Run again with selected features
+###Toxicity run again with selected features
 xgb_model <- xgb.train(
   params = params,
   data = train_matrix,
-  nrounds = final_bestparams[[1]]$best_nrounds,
+  nrounds = cdi_tox_final_bestparams[['overall_tox']]$best_nrounds,
 )
 
 pred_prob_test <- predict(xgb_model, newdata = test_matrix)
 roc_result <- roc(abxTest[['overall_tox']], pred_prob_test)
-auc_value <- auc(roc_result)
-print(paste("AUC-ROC:", auc_value))
+overall_tox_auc_value <- auc(roc_result)
+print(paste("AUC-ROC:", overall_tox_auc_value))
 pdf(glue("overall_tox_xg_roc.pdf"), width = 10, height = 10)
 plot(roc_result, main = glue("overall_tox ROC Curve"), col = "blue")
 dev.off()
@@ -1138,9 +1179,21 @@ pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
 actual_test_class <- abxTest[['overall_tox']]
 
 overall_tox_confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
-overall_tox_accuracy <- confusion$overall['Accuracy']
-overall_tox_precision <- confusion$byClass['Precision']
-overall_tox_recall <- confusion$byClass['Recall']
-overall_tox_f1_score <- 2 * (precision * recall) / (precision + recall)
+overall_tox_accuracy <- overall_tox_confusion$overall['Accuracy']
+overall_tox_precision <- overall_tox_confusion$byClass['Precision']
+overall_tox_recall <- overall_tox_confusion$byClass['Recall']
+overall_tox_f1_score <- 2 * (overall_tox_precision * overall_tox_recall) / (overall_tox_precision + overall_tox_recall)
 probs_df_overall$prob_tox <- overall_tox_util_probs
 write_csv(probs_df_overall,"probs_df_overall.csv")
+write_csv(overall_tox_shap_summary,glue("SHAP_toxicity.csv"))
+
+tox_metrics_list <- data.frame(
+  AUC = overall_tox_auc_value,
+  Accuracy = overall_tox_accuracy,
+  Precision = overall_tox_precision,
+  Recall = overall_tox_recall,
+  F1_Score = overall_tox_f1_score
+)
+
+write_csv(tox_metrics_list,glue("metrics_toxicity.csv"))
+
