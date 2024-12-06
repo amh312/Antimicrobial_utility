@@ -761,6 +761,18 @@ dummies <- dummyVars(" ~ .", data = abx_predictors)
 abx_predictors <- predict(dummies, newdata = abx_predictors)
 abx_combined <- as.data.frame(cbind(abx_outcomes, abx_predictors))
 
+###Read-in chosen model parameters (resistance prediction)
+file_names <- glue("cdi_tox_final_params_{combined_antimicrobial_map}.csv")
+cdi_tox_final_bestparams <- lapply(file_names, function(file) {
+  read_csv(file)
+})
+namelist <- c("eta","max_depth","min_child_weight","subsample","colsample_bytree",
+              "best_nrounds")
+for (i in 1:length(cdi_tox_final_bestparams)) {
+  names(cdi_tox_final_bestparams[[i]])[3:8] <- namelist
+}
+names(cdi_tox_final_bestparams) <- colnames(abx_outcomes)
+
 ###Model stability analysis (CDI and toxicity prediction)
 
 ###Iterate training and testing over training dataset sizes (CDI tox)
@@ -798,11 +810,11 @@ for (outcome in colnames(abx_outcomes)) {
         params <- list(
           objective = "binary:logistic",
           eval_metric = "auc",
-          eta = final_bestparams[[1]]$eta,
-          max_depth = final_bestparams[[1]]$max_depth,
-          min_child_weight = final_bestparams[[1]]$min_child_weight,
-          subsample = final_bestparams[[1]]$subsample,
-          colsample_bytree = final_bestparams[[1]]$colsample_bytree
+          eta = cdi_tox_final_bestparams[[outcome]]$eta,
+          max_depth = cdi_tox_final_bestparams[[outcome]]$max_depth,
+          min_child_weight = cdi_tox_final_bestparams[[outcome]]$min_child_weight,
+          subsample = cdi_tox_final_bestparams[[outcome]]$subsample,
+          colsample_bytree = cdi_tox_final_bestparams[[outcome]]$colsample_bytree
         )
         
         print("Training...")
@@ -810,7 +822,7 @@ for (outcome in colnames(abx_outcomes)) {
         xgb_model <- xgb.train(
           params = params,
           data = train_matrix,
-          nrounds = final_bestparams[[1]]$best_nrounds
+          nrounds = cdi_tox_final_bestparams[[outcome]]$best_nrounds
         )
         
         pred_prob_test <- predict(xgb_model, newdata = test_matrix)
@@ -938,11 +950,11 @@ for (outcome in colnames(abx_outcomes)) {
       params <- list(
         objective = "binary:logistic",
         eval_metric = "auc",
-        eta = final_bestparams[[1]]$eta,
-        max_depth = final_bestparams[[1]]$max_depth,
-        min_child_weight = final_bestparams[[1]]$min_child_weight,
-        subsample = final_bestparams[[1]]$subsample,
-        colsample_bytree = final_bestparams[[1]]$colsample_bytree
+        eta = cdi_tox_final_bestparams[[outcome]]$eta,
+        max_depth = cdi_tox_final_bestparams[[outcome]]$max_depth,
+        min_child_weight = cdi_tox_final_bestparams[[outcome]]$min_child_weight,
+        subsample = cdi_tox_final_bestparams[[outcome]]$subsample,
+        colsample_bytree = cdi_tox_final_bestparams[[outcome]]$colsample_bytree
       )
       
       print("Training...")
@@ -950,7 +962,7 @@ for (outcome in colnames(abx_outcomes)) {
       xgb_model <- xgb.train(
         params = params,
         data = train_matrix,
-        nrounds = final_bestparams[[1]]$best_nrounds
+        nrounds = cdi_tox_final_bestparams[[outcome]]$best_nrounds
       )
       
       metrics_litlist2 <- list()
@@ -1085,11 +1097,11 @@ for (outcome in colnames(abx_outcomes)) {
       params <- list(
         objective = "binary:logistic",
         eval_metric = "auc",
-        eta = final_bestparams[[1]]$eta,
-        max_depth = final_bestparams[[1]]$max_depth,
-        min_child_weight = final_bestparams[[1]]$min_child_weight,
-        subsample = final_bestparams[[1]]$subsample,
-        colsample_bytree = final_bestparams[[1]]$colsample_bytree
+        eta = cdi_tox_final_bestparams[[outcome]]$eta,
+        max_depth = cdi_tox_final_bestparams[[outcome]]$max_depth,
+        min_child_weight = cdi_tox_final_bestparams[[outcome]]$min_child_weight,
+        subsample = cdi_tox_final_bestparams[[outcome]]$subsample,
+        colsample_bytree = cdi_tox_final_bestparams[[outcome]]$colsample_bytree
       )
       
       print("Training...")
@@ -1097,7 +1109,7 @@ for (outcome in colnames(abx_outcomes)) {
       xgb_model <- xgb.train(
         params = params,
         data = train_matrix,
-        nrounds = final_bestparams[[1]]$best_nrounds
+        nrounds = cdi_tox_final_bestparams[[outcome]]$best_nrounds
       )
       
       metrics_litlist3 <- list()
@@ -1287,11 +1299,11 @@ for (outcome in colnames(abx_outcomes)) {
           params <- list(
             objective = "binary:logistic",
             eval_metric = "auc",
-            eta = final_bestparams[[1]]$eta,
-            max_depth = final_bestparams[[1]]$max_depth,
-            min_child_weight = final_bestparams[[1]]$min_child_weight,
-            subsample = final_bestparams[[1]]$subsample,
-            colsample_bytree = final_bestparams[[1]]$colsample_bytree
+            eta = cdi_tox_final_bestparams[[outcome]]$eta,
+            max_depth = cdi_tox_final_bestparams[[outcome]]$max_depth,
+            min_child_weight = cdi_tox_final_bestparams[[outcome]]$min_child_weight,
+            subsample = cdi_tox_final_bestparams[[outcome]]$subsample,
+            colsample_bytree = cdi_tox_final_bestparams[[outcome]]$colsample_bytree
           )
           
           print("Training...")
@@ -1299,7 +1311,7 @@ for (outcome in colnames(abx_outcomes)) {
           xgb_model <- xgb.train(
             params = params,
             data = train_matrix,
-            nrounds = final_bestparams[[1]]$best_nrounds
+            nrounds = cdi_tox_final_bestparams[[outcome]]$best_nrounds
           )
           
           pred_prob_test <- predict(xgb_model, newdata = test_matrix)
