@@ -1,0 +1,246 @@
+---
+title: "Automating antibiotic treatment choice using clinical prediction modelling: a microsimulation study"
+format:
+  docx:
+    reference-doc: doc_template.docx
+bibliography: UF_references.bib
+csl: /Users/alexhoward/Zotero/styles/the-lancet-infectious-diseases.csl
+editor: visual
+---
+
+Alex Howard\*\
+\*corresponding author alexander.howard\@liverpool.ac.uk\
+\*\*joint senior author
+
+# Summary
+
+## Background
+
+Antibiotic prescribing is a key driver of antimicrobial resistance. Machine learning can help predict antimicrobial resistance – to enable AI-driven personalised antibiotic decision making that is implementable in real-world settings, these predictions need to be tied to a measure of drug value (or utility) that reflects real-world clinical priorities and evolving antimicrobial resistance patterns. Here, we used the results of a structured antibiotic ranking tool undertaken by real-world prescribers to develop and test utility functions that facilitate the development of artificial intelligence algorithms for directing antibiotic treatment and antimicrobial susceptibility testing – the aim of this approach was to maximise the projected benefits and practicality of antibiotic treatment for urinary tract infection while minimising harm and generation of antimicrobial resistance.
+
+## Methods
+
+Logistic regression models were trained, tested and validated to predict the risk of antimicrobial resistance, sepsis adverse outcomes, Clostridioides difficile diarrhoea, and drug toxicity for a range of antimicrobial agents in patients with culture-positive urine specimens using open-source real-world pseudonymised electronic healthcare records. Prescribers from a range of primary and secondary care settings undertook a ranking exercise with fictional antimicrobial agents – a ranked logit method was used to determine the relative importance of different antimicrobial characteristics (e.g., oral bioavailability, toxicity, antimicrobial resistance risk) to prescribers. Two utility functions were written that combined these importance weights with probabilities from the logistic regression models to produce an antimicrobial utility value for each patient – one for antimicrobial susceptibility testing, another for antimicrobial treatment. These utility values were then used to provide recommendations for urinary tract infection antimicrobial treatment and susceptibility testing in a microsimulation study design – the antimicrobial choices, resistance patterns, available routes of administration, and World Health Organisation Access, Watch, Reserve category of these recommendations were compared against a standard formulary treatment approach. Sensitivity analyses were performed to examine the performance of the utility function across a range of parameters and clinical settings.
+
+## Findings
+
+2,646 patients who had a urine specimen sent between 2009 and 2018 were assessed in the microsimulation study. The treatment utility function recommended nitrofurantoin as first-line treatment in 92.6% (n=2,451) of cases, a WHO Access agent in 99.8% (n=2,642) of cases, an orally-bioavailable agent in 98.2% (n=2,599) of cases, and an intravenously-administrable agent in 7.3% (n=194) of cases, resulting in coverage of 72.4% (n=1,915) of urine isolates that were subsequently grown. Increasing the importance weight of predicted resistance caused the utility function to recommend piperacillin-tazobactam as first-line treatment in 59.6% (n=1,733) of cases, a WHO Access category agent in 27.7% (n=733) of cases, an orally-bioavailable agent in 30.7% (n=813) of cases, and an intravenously-administrable agent in 93.4% (n=2,471) of cases, resulting in coverage of 87.5% (n=2,316) of urine isolates subsequently grown. Simulating an increase in nitrofurantoin resistance rates to 99.3% caused the utility function to recommend trimethoprim-sulfamethoxazole as first-line treatment in 48.6% (n=1,286) of cases, a WHO Access category agent in 99.9% (n=2,643) of cases, an orally-bioavailable agent in 96.1% (n=2,544) of cases, and an intravenously-administrable agent in 100.0% (n=2,646) of cases, resulting in coverage of 64.0% (n=1,693) of urine isolates subsequently grown. On average, the antimicrobial susceptibility testing utility function provided one more susceptible result per 6-agent panel for WHO Access category agents (median 4 \[IQR 3-5\] versus median 3 \[IQR 1-3\]) than a standard panel approach, provided at least one susceptible result for an Access agent in 95.9% (n=2538) of cases, at least one susceptible result of any kind in 97.1% (n=2,569) of cases, and a result of any kind for the antimicrobial agent the patient was currently prescribed in 72.8% (n=485) of prescriptions.
+
+## Interpretation
+
+Our prescribed-derived antimicrobial utility functions could enable true AI-driven decision making in antimicrobial treatment and susceptibility testing and help nations meet the United Nations target of 70% WHO Access agent prescribing without compromising on treatment efficacy. The prescriber-derived approach is flexible enough to be adaptable to a range of healthcare settings by allowing local clinician factors such as cost and patient cohort to influence the weights of different factors, as well as local epidemiology of resistance, toxicity, C difficile, and sepsis outcomes. Strengthening the prediction model by incorporating more healthcare data from local settings is likely to further improve performance.
+
+## Funding
+
+This research was funded in part by the Wellcome Trust grant ref: 226691/Z/22/Z. For the purpose of open access, the author has applied a CC BY public copyright licence to any Author Accepted Manuscript version arising from this submission. Office for Life Sciences Data-Action Accelerator award also supported this work. The funders had no role in the conceptualisation, design, data collection, analysis, decision to publish or preparation of the manuscript.
+
+# Introduction
+
+## Background
+
+Functioning antibiotics underpin functioning healthcare systems - antimicrobial resistance (AMR) is therefore a significant threat to the delivery of global healthcare. In September 2024, the United Nations General Assembly (UNGA) committed to ensuring that the safest, cheapest antibiotics with the lowest AMR risk (World Health Organisation \[WHO\] Access Category antibiotics) make up 70% of global antibiotic use in healthcare by 2030. The challenge in achieving this goal is determining when it is safe to empirically use Access agents, which often have relatively narrow spectra of activity and will therefore be avoided in favour of more harmful Watch category agents to ensure treatment efficacy where there is doubt about the presence of resistance and/or perceived high stakes (e.g., systemically unwell patients).
+
+Automating antimicrobial treatment choice using machine learning is therefore attractive because algorithms can better quantify the probability of resistance and treatment outcomes using clinical prediction models built on drug, patient, and pathogen characteristics. Algorithms, however, cannot judge the subjective value (or cost) of treatment outcomes to patients, populations, and healthcare systems. To make good antibiotic treatment decisions, algorithms need a mechanism to quantify the value of antibiotic treatment mathematically - a so-called utility function. An automated system that makes antibiotic treatment choices using such a utility function could give prescribers the confidence to use Access category antibiotics when safe to do so, while compromising on Access antibiotic use in situations where treatment efficacy needs to be prioritised (e.g., where risk of resistance and/or clinical deterioration from untreated infection is high).
+
+Here, we describe a utility function that combines clinical prediction models with prescriber-informed outcome values/costs to automate the process of antibiotic treatment choice for urinary tract infection (UTI) to help meet the UNGA 70% global Access antibiotic target without compromising individual patient safety.
+
+# Methods
+
+## Data Sources and Participants
+
+The study complied with the MIMIC-IV dataset Data Use Agreement 1.5.0 and Health Data License. Approval was also obtained for the discrete choice experiment from the NHS Health Research Authority (HRA). A proportionate review was undertaken by a UK Research Ethics Committee (REC), which determined that full REC approval was not required. Clinical prediction models were developed using the open-source PhysioNet dataset MIMIC (Medical Information Mart for Intensive Care)-IV version 2.2, a pseudonymised inpatient and outpatient electronic healthcare record dataset for patients over the age of 18 who were admitted to intensive care or the emergency department between 2008 and 2019 at Beth Israel Deaconess Medical Center (BIDMC - Boston, MA) (<https://physionet.org/content/mimiciv/2.2/>).
+
+Prediction models of antibiotic resistance were developed on urine specimen results with bacterial growth from the 'microbiologyevents' dataset, and prediction models of antibiotic outcomes were made using prescription data from the 'prescriptions' dataset. Sample size was determined by the size of the available dataset, and provided a sufficient number of cases per independent variable in the model to reduce the probability of overfitting \[ref\]. Antibiotic financial cost was determined using the lowest procurement/tender award price for each agent in U.S. dollars as listed on the U.S. Department of Veterans Affairs National Acquisition Center (<https://www.vendorportal.ecms.va.gov/NAC/>) when accessed in November 2024.
+
+Antibiotic treatment value was determined using a discrete choice experiment survey completed online between June 1st 2024 and October 31st 2024 by antibiotic prescribers from general practice (GP), pharmacy, medicine, surgery, intensive care, and infectious diseases/medical microbiology working for healthcare providers serviced by diagnostic laboratories at Liverpool University Hospitals NHS Foundation Trust (Liverpool Clinical Laboratories). Sample size was determined by the number of respondents in the 4-month survey period, and provided a sufficient number of cases per independent variable in the model to reduce the probability of overfitting \[ref\].
+
+## Data preparation
+
+Data preprocessing and quality checking was performed in a similar way across sociodemographic groups using RStudio version 2023.12.1+402, and followed a similar pattern to our previous work with the dataset with some additions \[ref\]. For the MIMIC-IV dataset, drug and organism terminology was standardised using the 'AMR: Antimicrobial Resistance Data Analysis' package version 2.1.1 (<https://cran.r-project.org/web/packages/AMR/index.html>). For urine specimens, the dataset was filtered to the most recent urine specimen for each patient to avoid cross-contamination of training and validation datasets. Specimens with non-uropathogenic organisms and those not recognised by the AMR package were removed.
+
+Antimicrobial susceptibility results were transposed from rows to columns with S/I/R (susceptible/susceptible at increased exposure/resistant) interpretations for each antimicrobial agent. These interpretations are likely to be based on Clinical Laboratory Standards Institute clinical breakpoints given the U.S. setting \[ref\]. I results were subsequently reclassified as S given that antimicrobial exposure in urine is likely to be sufficient for I organisms. Meropenem and co-trimoxazole results for *Enterococcus* spp. were imputed as R given the lack of available clinical breakpoints. Intrinsic resistance patterns were imputed using the AMR package's eucast_rules() function. Expected susceptible phenotypes and results missing with inferable reasons likely to be related to testing practice (cefazolin for *Proteus mirabilis*, ciprofloxacin for *Enterococcus* spp., and piperacillin-tazobactam for common Enterobacterales) were imputed based on available specimen susceptibility prevalence using a Bayes theorem with author-chosen priors \[BEAR ref\].
+
+Antimicrobial susceptibility columns with more than five percent missing data were removed, leaving results for 13 agents (ampicillin, ampicillin-sulbactam, piperacillin-tazobactam, cefazolin, ceftriaxone, cefepime, meropenem, ciprofloxacin, gentamicin, co-trimoxazole, nitrofurantoin, and vancomycin). Specimens with antimicrobial results that were missing in less than five percent of cases were removed given that they were likely to be missing completely at random. Specimens with growth of multiple organisms were collapsed into a single row, with resistant results taking priority over susceptible results (i.e., if either organism was resistant to the agent, it was classified as R). Combination susceptibility variables were created for all combinations of two agents, with susceptible results taking priority over resistant results (i.e., if the organism was susceptible to either agent in the combination it was classified as S).
+
+The prescription dataset was filtered to exclude topically-administered antimicrobial agents. If two agents were co-administered for more than 24 hours they were collapsed into a single row representing a course of combination treatment. Antimicrobial prescriptions with co-administration of 3 or more agents for more than 24 hours were removed from the dataset. Data were quality checked at each stage throughout preprocessing using counts of organism species, results, antimicrobial names, missing data, numbers of rows and numbers of columns to detect preprocessing errors. The urine specimen dataset was split at random without replacement into a model training dataset (82% of patients), model validation dataset (18% of patients), and a microsimulation dataset (10% of patients). The prescription dataset was split at random without replacement into a model training dataset (80% of patients) and model validation dataset (20% of patients). No blinding to allocation was implemented at any stage.
+
+## Outcomes
+
+Clearly define the outcome that is being predicted and the time horizon, including how and when assessed, the rationale for choosing this outcome, and whether the method of outcome assessment is consistent across sociodemographic groups
+
+If outcome assessment requires subjective interpretation, describe the qualifications and demographic characteristics of the outcome assessors
+
+Report any actions to blind assessment of the outcome to be predicted
+
+## Predictors
+
+Describe the choice of initial predictors (eg, literature, previous models, all available predictors) and any pre-selection of predictors before model building
+
+Clearly define all predictors, including how and when they were measured (and any actions to blind assessment of predictors for the outcome and other predictors)
+
+If predictor measurement requires subjective interpretation, describe the qualifications and demographic characteristics of the predictor assessors
+
+## Analytical methods
+
+Describe how the data were used (eg, for development and evaluation of model performance) in the analysis, including whether the data were partitioned, considering any sample size requirements
+
+Depending on the type of model, describe how predictors were handled in the analyses (functional form, rescaling, transformation, or any standardisation)
+
+Specify the type of model, rationale, all model building steps, including any hyperparameter tuning, and method for internal validation
+
+Describe if and how any heterogeneity in estimates of model parameter values and model performance was handled and quantified across clusters (eg, hospitals, countries). See TRIPOD-Cluster for additional considerations
+
+Specify all measures and plots used (and their rationale) to evaluate model performance (eg, discrimination, calibration, clinical utility) and, if relevant, to compare multiple models
+
+Describe any model updating (eg, recalibration) arising from the model evaluation, either overall or for particular sociodemographic groups or settings
+
+For model evaluation, describe how the model predictions were calculated (eg, formula, code, object, application programming interface)
+
+## Class imbalance
+
+If class imbalance methods were used, state why and how this was done, and any subsequent methods to recalibrate the model or the model predictions
+
+## Fairness
+
+Describe any approaches that were used to address model fairness and their rationale
+
+## Model output
+
+Specify the output of the prediction model (eg, probabilities, classification). Provide details and rationale for any classification and how the thresholds were identified
+
+## Training versus evaluation
+
+Identify any differences between the development and evaluation data in healthcare setting, eligibility criteria, outcome, and predictors
+
+## Microsimulation study design
+
+Describe the design and outcomes of interest of the microsimulation study
+
+## Ethical approval
+
+## Setting and ethics
+
+## Participants
+
+## Descriptive data and statistical modelling
+
+R version 4.3.2 (<https://cran.r-project.org>) was used for data cleaning, the majority of statistical analyses/data visualisation, and clinical prediction model development for *C difficile*, drug toxicity, and adverse outcomes from sepsis. AMR package version 2.1.1 was used to standardise organism and susceptibility data. \[package used for clinical prediction models\]. Python version 3.12.0 (<https://www.python.org/downloads/release/python-3120/>) was used for developing AMR clinical prediction models (building on approaches from our previous work - Nature Comms ref) and the remaining statistical analyses/data visualisation.
+
+156 AMR clinical prediction models were trained, tested, and validated - one model for each antimicrobial agent, and one model for each possible combination of antimicrobial agents. The model development data were randomly split stratified by the outcome variable into subsets for training and hyperparameter optimisation (80% of the data) and validation (20% of the data). Ten iterations of k-fold cross-validation (six folds) with random shuffling were used to fit models, select features, and tune hyperparameters. The final selected model for each of the 156 antimicrobial combinations was validated once.
+
+Three binary logistic regression clinical prediction models were also developed based on linked antimicrobial prescription data for patients in the model development dataset - these models predicted the probability of a positive *C difficile* stool result in the 3 months after antimicrobial treatment, the probability of renal, haematological, or hepatic derangement (representing possible drug toxicity) in the seven days following antimicrobial treatment, and the probability of sepsis with a hospital stay of more than seven days, intensive care admission, or death in the 28 days (representing possible adverse outcomes from sepsis) following antimicrobial treatment. The *C difficile* and toxicity models included the specific agent used as a predictor variable, and the sepsis adverse outcomes model did not.
+
+## Clinical prediction model statistics and reproducibility
+
+Scikit-Learn package version 1.4.1 (<https://scikit-learn.org/stable/>) and Mlxtend version 0.23.1 13 were used to train, test, and validate the 156 AMR binary logistic regression models. Models were trained using maximum likelihood estimation, with susceptible results as positives and resistant results as negatives. The model predicted the probability of a susceptibile result for each urine specimen. Regularisation using a least absolute shrinkage and selection operator (LASSO, or L1) was used to prevent overfitting and remove predictor variables that did not improve predictions. Hyperparameter tuning with grid search cross-validation controlled strength of regularisation to optimise AUC-ROC. Model performance on the validation data was assessed using the scikit-learn roc_auc_score function and classification_report methods to calculate AUC-ROC, precision, recall, accuracy, and 50% decision-threshold f1-score for both susceptible and resistant classes.
+
+## Microsimulation study design
+
+Figure 8 summarises the study design for the microsimulation (individual patient-level simulation) study.
+
+**Figure 8**: **Design of the microsimulation study.** For each specimen in the microsimulation study dataset, a personalised panel was composed using prediction modelling and a test prioritisation function to maximise the probability of susceptible (‘S’) results for Access agents, and failing that, susceptible results for other agents – the results for agents in this panel were then populated by actual results for those agents in the dataset. The number of susceptible results for Access agents and all agents that would have been provided by using this panel was then compared against a standard panel based on international UTI treatment guidelines. Created in BioRender. Howard, A. (2024) BioRender.com/k67g601.
+
+The microsimulation study was performed by interfacing R version 4.3.2 and Python version 3.12.0 using the R package reticulate version 1.36.0 (<https://cran.r-project.org/web/packages/reticulate/index.html>).^25^ For each specimen, six of the 12 agents were selected as the simulated personalised testing panel, by prioritising based on probability of susceptibility – WHO Access agents with \>50% probability of susceptibility were tested automatically, then the rest of the six-agent testing panel was filled with remaining agents that had the highest probabilities of susceptibility (regardless of whether they were Access or Watch category agents). The personalised panel for each specimen was then compared with a standard non-personalised testing panel composed of four antimicrobial agents recommended for UTI by the WHO essential medicines list (nitrofurantoin, trimethoprim/sulfamethoxazole, ceftriaxone, and ciprofloxacin) and two agents recommended by European Association of Urology guidelines (gentamicin and piperacillin/tazobactam).^26,27^
+
+## Outcome variables
+
+The outcomes of interest were:
+
+·      The number of susceptible results per specimen six-agent panel
+
+·      The number of susceptible results for Access agents per specimen six-agent panel
+
+·      The proportion of specimen six-agent panels with no susceptible results
+
+·      The proportion of specimen six-agent panels with no susceptible results for Access agents
+
+## Microsimulation study statistics and reproducibility
+
+Numbers of susceptible results per panel were compared between the personalised and standard fixed panel on each specimen using a Wilcoxon two-sample paired signed rank test with continuity correction – results are presented as effect size (calculated by dividing the test’s Z statistic by the square root of the number of specimens).^28^ Medians and interquartile ranges of the number of susceptible results per panel were calculated for data visualisation purposes. Proportions of specimens with panels with at least one susceptible result were compared using a chi-squared test – results are reported as proportions for the two groups and 95% confidence interval. For both analyses, a significance threshold of 5% was used. A sensitivity analysis was also performed for the test prioritisation function, where the analysis was repeated across nine different susceptibility probability thresholds for automatic inclusion of Access agents on the personalised panel (from \> 10% probability of susceptibility to \> 90%). This sensitivity analysis was then repeated after also repeating the modelling and panel selection steps, but with all intermediate (I) results classified as resistant instead of susceptible.
+
+# Results
+
+## Participants
+
+Describe the flow of participants through the study, including the number of participants with and without the outcome and, if applicable, a summary of the follow-up time. A diagram may be helpful
+
+Report the characteristics overall and, where applicable, for each data source or setting, including the key dates, key predictors (including demographics), treatments received, sample size, number of outcome events, follow-up time, and amount of missing data. A table may be helpful. Report any differences across key demographic groups
+
+For model evaluation, show a comparison with the development data of the distribution of important predictors (demographics, predictors, and outcome)
+
+## Model development
+
+Specify the number of participants and outcome events in each analysis (eg, for model development, hyperparameter tuning, model evaluation)
+
+## Model specification
+
+Provide details of the full prediction model (eg, formula, code, object, application programming interface) to allow predictions in new individuals and to enable third party evaluation and implementation, including any restrictions to access or reuse (eg, freely available, proprietary)¶
+
+## Model performance
+
+Report model performance estimates with confidence intervals, including for any key subgroups (eg, sociodemographic). Consider plots to aid presentation
+
+If examined, report results of any heterogeneity in model performance across clusters. See TRIPOD-Cluster for additional details
+
+## Model updating
+
+Report the results from any model updating, including the updated model and subsequent performance
+
+# Discussion
+
+## Interpretation
+
+Give an overall interpretation of the main results, including issues of fairness in the context of the objectives and previous studies
+
+## Limitations
+
+Discuss any limitations of the study (such as a non-representative sample, sample size, overfitting, missing data) and their effects on any biases, statistical uncertainty, and generalisability
+
+## Usability of the model in the context of current care
+
+Describe how poor quality or unavailable input data (eg, predictor values) should be assessed and handled when implementing the prediction model
+
+Specify whether users will be required to interact in the handling of the input data or use of the model, and what level of expertise is required of users
+
+Discuss any next steps for future research, with a specific view to applicability and generalisability of the model
+
+# References
+
+::: {#refs}
+:::
+
+# Open science
+
+## Funding
+
+This research was funded in part by the Wellcome Trust grant ref: 226691/Z/22/Z. For the purpose of open access, the author has applied a CC BY public copyright licence to any Author Accepted Manuscript version arising from this submission. Office for Life Sciences Data-Action Accelerator award also supported this work. The funders had no role in the conceptualisation, design, data collection, analysis, decision to publish or preparation of the manuscript.
+
+# Acknowledgements
+
+## Conflicts of interest
+
+Alex Howard declares personal consulting work for Pfizer outside the submitted work, and a donation from Pfizer to the University of Liverpool for a public and professional engagement project outside the submitted work.
+
+## Protocol
+
+Indicate where the study protocol can be accessed or state that a protocol was not prepared
+
+## Registration
+
+Provide registration information for the study, including register name and registration number, or state that the study was not registered
+
+## Data sharing
+
+The MIMIC-IV version 2.2 data set is publicly accessible as a credentialed PhysioNet user at https://physionet.org/content/mimiciv/2.2/ once mandated training is completed, and the data use agreement is signed. Additional aggregate-level data can be provided by the authors if requests to do so are in line with legal and ethical data use regulations. Open-source code written for this study will be made available upon publication.
+
+## Code sharing
+
+Provide details of the availability of the analytical code
+
+## Contributions
+
+AH conceived the study, performed data engineering and mathematical modelling, and wrote the manuscript including diagrams.
+
+## Patient and public involvement
+
+Provide details of any patient and public involvement during the design, conduct, reporting, interpretation, or dissemination of the study or state no involvement
