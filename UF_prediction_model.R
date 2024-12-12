@@ -2,158 +2,6 @@
 
 ##Functions
 
-###Search for previous event across multiple variables
-apply_prev_event <- function(df, param,organism) {
-  df %>%
-    prev_event_type_assign(!!sym(param), urine_df, org_fullname,organism, 365, 1)
-}
-
-###Applying previous AST result search across multiple result types
-prev_AST_applier <- function(df1,micro_data,suffix,result,timeframe=365,n_events=1) {
-  
-  params <- paste0("p", antibiotics, suffix)
-  
-  apply_prev_event <- function(df, param, antibiotic) {
-    df %>%
-      prev_event_type_assign(!!sym(param), micro_data, !!sym(antibiotic), result, timeframe, n_events)
-  }
-  df1 <- reduce(seq_along(antibiotics), function(df, i) {
-    apply_prev_event(df, params[i], antibiotics[i])
-  }, .init = df1) %>%
-    ungroup()
-  
-}
-
-###Applying previous AST result search across multiple result types
-prev_AST_applier <- function(df1,micro_data,suffix,result,timeframe=365,n_events=1) {
-  
-  params <- paste0("p", antibiotics, suffix)
-  
-  apply_prev_event <- function(df, param, antibiotic) {
-    df %>%
-      prev_event_type_assign(!!sym(param), micro_data, !!sym(antibiotic), result, timeframe, n_events)
-  }
-  df1 <- reduce(seq_along(antibiotics), function(df, i) {
-    apply_prev_event(df, params[i], antibiotics[i])
-  }, .init = df1) %>%
-    ungroup()
-  
-}
-
-###Assigning previous event type feature variable
-prev_event_type_assign <- function(df,B_var,event_df,event_var,event_type,no_days,no_events) {
-  
-  df <- df %>% mutate(charttime=as.POSIXct(charttime,format='%Y-%m-%d %H:%M:%S'))
-  
-  event_df %>%
-    mutate(event = {{event_var}}) %>% 
-    select('subject_id', "event", charttime = 'admittime') %>% 
-    mutate(charttime=as.POSIXct(charttime,format='%Y-%m-%d %H:%M:%S')) %>% 
-    filter(grepl(event_type, event)) %>%
-    bind_rows(df) %>% 
-    mutate(event = case_when(!is.na(event) ~ "Yes",
-                             TRUE ~ "No")) %>% 
-    MIMER::check_previous_events(cols="event", sort_by_col='charttime',
-                                 patient_id_col='subject_id', event_indi_value='Yes',
-                                 new_col_prefix="pr_",
-                                 time_period_in_days = no_days, minimum_prev_events = no_events,
-                                 default_na_date = '9999-12-31 00:00:00') %>% 
-    mutate({{B_var}} := case_when(pr_event==TRUE ~ TRUE,
-                                  TRUE ~ FALSE)) %>%
-    mutate(event = NULL, pr_event=NULL) %>% 
-    filter(grepl('URINE', spec_type_desc))
-  
-  
-}
-
-###Assigning previous treatment
-prev_rx_assign <- function(df, B_var, drug_df, abx, abx_groupvar,no_days,no_events) {
-  
-  ur_df <- df %>% mutate(charttime=as.POSIXct(charttime,format='%Y-%m-%d %H:%M:%S'))
-  
-  abx_groupvar <- enquo(abx_groupvar)
-  
-  drug_df %>%
-    select('subject_id', ab_name,charttime='starttime') %>%
-    mutate(charttime=as.POSIXct(charttime,format='%Y-%m-%d %H:%M:%S')) %>% 
-    filter(grepl(glue("{abx}"), !!abx_groupvar)) %>% 
-    bind_rows(ur_df) %>% 
-    mutate(abx_treatment = case_when(!is.na(ab_name) ~ "Yes",
-                                     TRUE ~ "No")) %>% 
-    MIMER::check_previous_events(cols="abx_treatment", sort_by_col='charttime',
-                                 patient_id_col='subject_id', event_indi_value='Yes',
-                                 new_col_prefix="pr_rx_",
-                                 time_period_in_days = no_days, minimum_prev_events = no_events,
-                                 default_na_date = '9999-12-31 00:00:00') %>% 
-    mutate({{B_var}} := case_when(pr_rx_abx_treatment==TRUE ~ TRUE,
-                                  TRUE ~ FALSE)) %>% 
-    mutate(abx_treatment=NULL,pr_rx_abx_treatment=NULL) %>% 
-    filter(grepl('URINE', spec_type_desc))
-  
-}
-
-###Applying ICD-1O code search across multiple ICD-10 code prefixes
-prev_ICD_applier <- function(df,icd_df,prefix,codes,time_frame) {
-  
-  apply_prev_event_assignments <- function(df, code) {
-    param_name <- paste0(prefix, code)
-    df %>%
-      prev_event_type_assign(!!sym(param_name), icd_df, icd_group, code, time_frame, 1)
-  }
-  
-  df <- reduce(codes, function(df, code) {
-    apply_prev_event_assignments(df, code)
-  }, .init = df) %>%
-    mutate(pDIAG_U = FALSE) %>%
-    ungroup()
-  
-}
-
-###Assigning previous event feature variable
-prev_event_assign <- function(df,B_var,event_df,event_var,no_days,no_events) {
-  
-  df <- df %>% mutate(charttime=as.POSIXct(charttime,format='%Y-%m-%d %H:%M:%S'))
-  
-  event_df %>%
-    mutate(event = {{event_var}}) %>% 
-    select('subject_id', "event", charttime = 'admittime') %>% 
-    mutate(charttime=as.POSIXct(charttime,format='%Y-%m-%d %H:%M:%S')) %>% 
-    filter(!is.na(event)) %>% 
-    bind_rows(df) %>% 
-    mutate(event = case_when(!is.na(event) ~ "Yes",
-                             TRUE ~ "No")) %>% 
-    MIMER::check_previous_events(cols="event", sort_by_col='charttime',
-                                 patient_id_col='subject_id', event_indi_value='Yes',
-                                 new_col_prefix="pr_",
-                                 time_period_in_days = no_days, minimum_prev_events = no_events,
-                                 default_na_date = '9999-12-31 00:00:00') %>% 
-    mutate({{B_var}} := case_when(pr_event==TRUE ~ TRUE,
-                                  TRUE ~ FALSE)) %>%
-    mutate(event = NULL, pr_event=NULL) %>% 
-    filter(grepl('URINE', spec_type_desc))
-  
-}
-
-###Search for previous event across multiple variables
-apply_prev_event <- function(df, param,organism,time_frame=365,no_events=1) {
-  df %>%
-    prev_event_type_assign(!!sym(param), urine_df, org_fullname,organism, time_frame, no_events)
-}
-
-###Checking for previous care events
-care_event_assigner <- function(df,search_df,search_term,search_column,feature_name,event_date_col,timeframe,n_events=1) {
-  
-  feature_name <- enquo(feature_name)
-  search_column <- enquo(search_column)
-  
-  care_event <- search_df %>% filter(grepl(search_term,!!search_column,ignore.case=T)) %>% mutate(
-    !!search_column:=search_term) %>% rename(admittime=event_date_col)
-  df %>% 
-    prev_event_type_assign(!!feature_name,care_event,!!search_column,search_term,timeframe,n_events) %>%
-    ungroup()
-  
-}
-
 ###Factorise training and testing datasets
 factorise <- function(df) {
   df %>% mutate(CDI = factor(CDI),
@@ -694,7 +542,7 @@ ur_xg <- ur_xg %>% left_join(age_key,by="subject_id")
 abx_outcomes <- abx %>%
   select(CDI,overall_tox) %>% mutate(CDI=case_when(CDI==TRUE~1,TRUE~0),
                                      overall_tox=case_when(overall_tox==TRUE~1,TRUE~0))
-abx_predictors <- abx %>% select(pHADM:age65,Nephrotoxic_agent:pSEPSIS,temperature:dbp,pc_dyspnea:pc_fever,
+abx_predictors <- abx %>% select(pHADM:age65,prAKI:pDIAB,pCARD:pSEPSIS,temperature:dbp,pc_dyspnea:pc_fever,
                                  abx_name_Ampicillin_Ceftriaxone:ob_freq,highCRP,race:anchor_age)
 ur_abx_outcomes <- ur_xg %>%
   select(micro_specimen_id,CDI,overall_tox) %>% mutate(CDI=case_when(CDI==TRUE~1,TRUE~0),
@@ -997,7 +845,7 @@ for (outcome in 1:ncol(abx_outcomes)) {
   
 }
 
-###Read-in chosen model parameters (resistance prediction)
+###Read-in chosen model parameters (CDI/toxicity prediction)
 file_names <- glue("cdi_tox_final_params_{colnames(abx_outcomes)}.csv")
 cdi_tox_final_bestparams <- lapply(file_names, function(file) {
   read_csv(file)
