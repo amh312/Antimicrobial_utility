@@ -9,6 +9,98 @@ factorise <- function(df) {
                 sepsis_ae=factor(sepsis_ae))
 }
 
+###Time sens plot
+stability_plot <- function(df,metric,perf_metric) {
+  
+  metric <- enquo(metric)
+  
+  df <- df %>% mutate(Model=case_when(Model=="overall_tox"~"Toxicity",
+                                      Model=="CDI"~"CDI",
+                                      TRUE~ab_name(Model)))
+  df <- df %>% rename(`Training dataset size`="Training_size")
+  model_levels <- ab_name(all_singles) %>% append(c("Vancomycin","CDI","Toxicity")) %>% rev()
+  df$Model <- factor(df$Model,levels=model_levels)
+  df$`Training dataset size` <- as.character(df$`Training dataset size`)
+  dfplot <- ggplot(df, aes(x=!!metric,y=Model,group=`Training dataset size`,color=`Training dataset size`)) +
+    geom_point()+
+    theme_minimal()+
+    ggtitle(glue("{perf_metric} after 50 XGBoost training rounds using different\ntraining dataset proportions"))+
+    theme(
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor.x = element_blank()
+    )+
+    xlim(0,1)
+  
+  ggsave(glue("stability_{perf_metric}.pdf"), plot = dfplot, device = "pdf", width = 12, height = 8,
+         path="/Users/alexhoward/Documents/Projects/UDAST_code")
+  
+  print(dfplot)
+  
+}
+
+###Fairness plot
+protchar_plot <- function(df,prot_char,metric,perf_metric,title_bit) {
+  
+  metric <- enquo(metric)
+  
+  df <- df %>% filter(grepl(prot_char,Category)) %>% 
+    mutate(Model=case_when(Model=="overall_tox"~"Toxicity",
+                           Model=="CDI"~"CDI",
+                           TRUE~ab_name(Model)))
+  model_levels <- ab_name(all_singles) %>% append(c("Vancomycin","CDI","Toxicity")) %>% rev()
+  df$Model <- factor(df$Model,levels=model_levels)
+  df$Characteristic <- factor(df$Characteristic,
+                              levels=df %>% filter(grepl(prot_char,Category)) %>% 
+                                distinct(Characteristic) %>% unlist())
+  dfplot <- ggplot(df, aes(x=!!metric,y=Model,group=Characteristic,color=Characteristic)) +
+    geom_point()+
+    theme_minimal()+
+    ggtitle(glue("{perf_metric} after 50 XGBoost training rounds for different\n{title_bit}"))+
+    theme(
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor.x = element_blank()
+    )+
+    xlim(0,1)
+  
+  ggsave(glue("protchar_{prot_char}_{perf_metric}.pdf"), plot = dfplot, device = "pdf", width = 12, height = 8,
+         path="/Users/alexhoward/Documents/Projects/UDAST_code")
+  
+  print(dfplot)
+  
+}
+
+###Time plot
+timesens_plot <- function(df,tr_yr,metric,perf_metric) {
+  
+  metric <- enquo(metric)
+  
+  df <- df %>% filter(grepl(tr_yr,Train_year)) %>% 
+    mutate(Model=case_when(Model=="overall_tox"~"Toxicity",
+                           Model=="CDI"~"CDI",
+                           TRUE~ab_name(Model)))
+  model_levels <- ab_name(all_singles) %>% append(c("Vancomycin","CDI","Toxicity")) %>% rev()
+  df$Model <- factor(df$Model,levels=model_levels)
+  df$Test_year <- factor(df$Test_year,
+                         levels=df %>% filter(grepl(tr_yr,Train_year)) %>% 
+                           distinct(Test_year) %>% unlist())
+  df <- df %>% rename(`Test year range`="Test_year")
+  dfplot <- ggplot(df, aes(x=!!metric,y=Model,group=`Test year range`,color=`Test year range`)) +
+    geom_point()+
+    theme_minimal()+
+    ggtitle(glue("{perf_metric} after 50 XGBoost training rounds for different\ntesting timeframes when trained on {tr_yr}"))+
+    theme(
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor.x = element_blank()
+    )+
+    xlim(0,1)
+  
+  ggsave(glue("timesens_{tr_yr}_{perf_metric}.pdf"), plot = dfplot, device = "pdf", width = 12, height = 8,
+         path="/Users/alexhoward/Documents/Projects/UDAST_code")
+  
+  print(dfplot)
+  
+}
+
 ##Read-in and mapping lists
 
 ###Read-in
@@ -753,7 +845,7 @@ abx <- abx %>% mutate(marital_status=case_when(is.na(marital_status)~"UNKNOWN",
 abx_outcomes <- abx %>%
   select(CDI,overall_tox) %>% mutate(CDI=case_when(CDI==TRUE~1,TRUE~0),
                                      overall_tox=case_when(overall_tox==TRUE~1,TRUE~0))
-abx_predictors <- abx %>% select(pHADM:pSEPSIS,temperature:dbp,pc_dyspnea:pc_fever,
+abx_predictors <- abx %>% select(pHADM:age65,prAKI:pDIAB,pCARD:pSEPSIS,temperature:dbp,pc_dyspnea:pc_fever,
                                  abx_name_Ampicillin_Ceftriaxone:ob_freq,highCRP,
                                  race:anchor_age)
 set.seed(123)
@@ -761,8 +853,8 @@ dummies <- dummyVars(" ~ .", data = abx_predictors)
 abx_predictors <- predict(dummies, newdata = abx_predictors)
 abx_combined <- as.data.frame(cbind(abx_outcomes, abx_predictors))
 
-###Read-in chosen model parameters (resistance prediction)
-file_names <- glue("cdi_tox_final_params_{combined_antimicrobial_map}.csv")
+###Read-in chosen model parameters (CDI/toxicity)
+file_names <- glue("cdi_tox_final_params_{colnames(abx_outcomes)}.csv")
 cdi_tox_final_bestparams <- lapply(file_names, function(file) {
   read_csv(file)
 })
@@ -1404,12 +1496,55 @@ metrics_df <- metrics_df %>% rename(Model="Antimicrobial")
 write_csv(metrics_df,"overall_stability_metrics.csv")
 
 metrics_protchar_dfA <- read_csv("fairness_metrics.csv")
-metrics_protchar_df <- read_csv("cdi_tox_fairness_metrics.csv")
 metrics_protchar_df<- data.frame(rbind(metrics_protchar_dfA,metrics_protchar_df))
 metrics_protchar_df <- metrics_protchar_df %>% rename(Model="Antimicrobial")
 write_csv(metrics_protchar_df,"overall_fairness_metrics.csv")
 
 metrics_df4a <- read_csv("time_sens_metrics.csv")
+metrics_df4 <- read_csv("cdi_tox_fairness_metrics.csv")
 metrics_df4 <- data.frame(rbind(metrics_df4a,metrics_df4))
 metrics_df4 <- metrics_df4 %>% rename(Model="Antimicrobial")
 write_csv(metrics_df4,"overall_time_sens_metrics.csv")
+
+##Model testing plots
+
+###Stability analysis
+stability_plot(metrics_df,AUC,"AUC-ROC")
+stability_plot(metrics_df,Accuracy,"Accuracy")
+stability_plot(metrics_df,Precision,"Precision")
+stability_plot(metrics_df,Recall,"Recall")
+stability_plot(metrics_df,F1_score,"F1 score")
+
+###Fairness analysis
+protchar_plot(metrics_protchar_df,"Age group",AUC,"AUC-ROC","age groups")
+protchar_plot(metrics_protchar_df,"(Gender|Language|Marital)",AUC,"AUC-ROC",
+              "genders, languages, and marital statuses")
+protchar_plot(metrics_protchar_df,"Race",AUC,"AUC-ROC","racial groups")
+protchar_plot(metrics_protchar_df,"Age group",Accuracy,"Accuracy","age groups")
+protchar_plot(metrics_protchar_df,"(Gender|Language|Marital)",Accuracy,"Accuracy",
+              "genders, languages, and marital statuses")
+protchar_plot(metrics_protchar_df,"Race",Accuracy,"Accuracy","racial groups")
+protchar_plot(metrics_protchar_df,"Age group",Precision,"Precision","age groups")
+protchar_plot(metrics_protchar_df,"(Gender|Language|Marital)",Precision,"Precision",
+              "genders, languages, and marital statuses")
+protchar_plot(metrics_protchar_df,"Race",Precision,"Precision","racial groups")
+protchar_plot(metrics_protchar_df,"Age group",Recall,"Recall","age groups")
+protchar_plot(metrics_protchar_df,"(Gender|Language|Marital)",Recall,"Recall",
+              "genders, languages, and marital statuses")
+protchar_plot(metrics_protchar_df,"Race",Recall,"Recall","racial groups")
+protchar_plot(metrics_protchar_df,"Age group",F1_score,"F1 score","age groups")
+protchar_plot(metrics_protchar_df,"(Gender|Language|Marital)",F1_score,"F1 score",
+              "genders, languages, and marital statuses")
+protchar_plot(metrics_protchar_df,"Race",F1_score,"F1 score","racial groups")
+
+###Time sensitivity analysis
+yearlist <- c("2008 - 2010","2011 - 2013","2014 - 2016","2017 - 2019")
+for (i in seq_along(yearlist)) {
+
+  timesens_plot(metrics_df4,yearlist[i],AUC,"AUC-ROC")
+  timesens_plot(metrics_df4,yearlist[i],Accuracy,"Accuracy")
+  timesens_plot(metrics_df4,yearlist[i],Precision,"Precision")
+  timesens_plot(metrics_df4,yearlist[i],Recall,"Recall")
+  timesens_plot(metrics_df4,yearlist[i],F1_score,"F1 score")
+  
+}
