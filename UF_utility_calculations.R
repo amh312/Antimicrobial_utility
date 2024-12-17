@@ -565,6 +565,32 @@ R_util_sens <- function(df,probs_df,uf,min_val,max_val) {
                util_highcost = abs_calc(value_highcost,Highcost_agent),
                single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE))
       
+      probs_df_2 <- probs_df_2 %>% left_join(auc_df,by="Antimicrobial")
+      probs_df_2$CDI_AUC <- auc_df %>% filter(Antimicrobial=="CDI") %>%
+        select(AUC) %>% unlist
+      probs_df_2$tox_AUC <- auc_df %>% filter(Antimicrobial=="toxicity") %>%
+        select(AUC) %>% unlist
+      probs_df_2 <- probs_df_2 %>% left_join(recall_df,by="Antimicrobial")
+      probs_df_2$CDI_recall <- recall_df %>% filter(Antimicrobial=="CDI") %>%
+        select(recall) %>% unlist
+      probs_df_2$tox_recall <- recall_df %>% filter(Antimicrobial=="toxicity") %>%
+        select(recall) %>% unlist
+      probs_df_2 <- probs_df_2 %>% left_join(precision_df,by="Antimicrobial")
+      probs_df_2$CDI_precision <- precision_df %>% filter(Antimicrobial=="CDI") %>%
+        select(precision) %>% unlist
+      probs_df_2$tox_precision <- precision_df %>% filter(Antimicrobial=="toxicity") %>%
+        select(precision) %>% unlist
+      probs_df_2 <- probs_df_2 %>% left_join(accuracy_df,by="Antimicrobial")
+      probs_df_2$CDI_accuracy <- accuracy_df %>% filter(Antimicrobial=="CDI") %>%
+        select(accuracy) %>% unlist
+      probs_df_2$tox_accuracy <- accuracy_df %>% filter(Antimicrobial=="toxicity") %>%
+        select(accuracy) %>% unlist
+      probs_df_2 <- probs_df_2 %>% left_join(f1_score_df,by="Antimicrobial")
+      probs_df_2$CDI_f1_score <- f1_score_df %>% filter(Antimicrobial=="CDI") %>%
+        select(f1_score) %>% unlist
+      probs_df_2$tox_f1_score <- f1_score_df %>% filter(Antimicrobial=="toxicity") %>%
+        select(f1_score) %>% unlist
+      
       ###Calculate overall utility score
       probs_df_2 <- probs_df_2 %>% calculate_utilities(MEWS=R_wt_value,R_weight = 1)
       
@@ -836,6 +862,32 @@ util_sens <- function(df,probs_df,uf,variable_criterion,min_val,max_val) {
                value_highcost = cost_value,
                util_highcost = abs_calc(value_highcost,Highcost_agent),
                single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE))
+      
+      probs_df_2 <- probs_df_2 %>% left_join(auc_df,by="Antimicrobial")
+      probs_df_2$CDI_AUC <- auc_df %>% filter(Antimicrobial=="CDI") %>%
+        select(AUC) %>% unlist
+      probs_df_2$tox_AUC <- auc_df %>% filter(Antimicrobial=="toxicity") %>%
+        select(AUC) %>% unlist
+      probs_df_2 <- probs_df_2 %>% left_join(recall_df,by="Antimicrobial")
+      probs_df_2$CDI_recall <- recall_df %>% filter(Antimicrobial=="CDI") %>%
+        select(recall) %>% unlist
+      probs_df_2$tox_recall <- recall_df %>% filter(Antimicrobial=="toxicity") %>%
+        select(recall) %>% unlist
+      probs_df_2 <- probs_df_2 %>% left_join(precision_df,by="Antimicrobial")
+      probs_df_2$CDI_precision <- precision_df %>% filter(Antimicrobial=="CDI") %>%
+        select(precision) %>% unlist
+      probs_df_2$tox_precision <- precision_df %>% filter(Antimicrobial=="toxicity") %>%
+        select(precision) %>% unlist
+      probs_df_2 <- probs_df_2 %>% left_join(accuracy_df,by="Antimicrobial")
+      probs_df_2$CDI_accuracy <- accuracy_df %>% filter(Antimicrobial=="CDI") %>%
+        select(accuracy) %>% unlist
+      probs_df_2$tox_accuracy <- accuracy_df %>% filter(Antimicrobial=="toxicity") %>%
+        select(accuracy) %>% unlist
+      probs_df_2 <- probs_df_2 %>% left_join(f1_score_df,by="Antimicrobial")
+      probs_df_2$CDI_f1_score <- f1_score_df %>% filter(Antimicrobial=="CDI") %>%
+        select(f1_score) %>% unlist
+      probs_df_2$tox_f1_score <- f1_score_df %>% filter(Antimicrobial=="toxicity") %>%
+        select(f1_score) %>% unlist
       
       ###Calculate overall utility score
       probs_df_2 <- probs_df_2 %>% calculate_utilities(R_weight=R_wt_value)
@@ -1147,6 +1199,32 @@ cdi_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
                util_highcost = abs_calc(value_highcost,Highcost_agent),
                single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE))
       
+      probs_df_3 <- probs_df_3 %>% left_join(auc_df,by="Antimicrobial")
+      probs_df_3$CDI_AUC <- auc_df %>% filter(Antimicrobial=="CDI") %>%
+        select(AUC) %>% unlist
+      probs_df_3$tox_AUC <- auc_df %>% filter(Antimicrobial=="toxicity") %>%
+        select(AUC) %>% unlist
+      probs_df_3 <- probs_df_3 %>% left_join(recall_df,by="Antimicrobial")
+      probs_df_3$CDI_recall <- recall_df %>% filter(Antimicrobial=="CDI") %>%
+        select(recall) %>% unlist
+      probs_df_3$tox_recall <- recall_df %>% filter(Antimicrobial=="toxicity") %>%
+        select(recall) %>% unlist
+      probs_df_3 <- probs_df_3 %>% left_join(precision_df,by="Antimicrobial")
+      probs_df_3$CDI_precision <- precision_df %>% filter(Antimicrobial=="CDI") %>%
+        select(precision) %>% unlist
+      probs_df_3$tox_precision <- precision_df %>% filter(Antimicrobial=="toxicity") %>%
+        select(precision) %>% unlist
+      probs_df_3 <- probs_df_3 %>% left_join(accuracy_df,by="Antimicrobial")
+      probs_df_3$CDI_accuracy <- accuracy_df %>% filter(Antimicrobial=="CDI") %>%
+        select(accuracy) %>% unlist
+      probs_df_3$tox_accuracy <- accuracy_df %>% filter(Antimicrobial=="toxicity") %>%
+        select(accuracy) %>% unlist
+      probs_df_3 <- probs_df_3 %>% left_join(f1_score_df,by="Antimicrobial")
+      probs_df_3$CDI_f1_score <- f1_score_df %>% filter(Antimicrobial=="CDI") %>%
+        select(f1_score) %>% unlist
+      probs_df_3$tox_f1_score <- f1_score_df %>% filter(Antimicrobial=="toxicity") %>%
+        select(f1_score) %>% unlist
+      
       ###calculate overall utility score
       probs_df_3 <- probs_df_3 %>% calculate_utilities()
       
@@ -1330,6 +1408,32 @@ tox_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
                util_highcost = abs_calc(value_highcost,Highcost_agent),
                single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE))
       
+      probs_df_3 <- probs_df_3 %>% left_join(auc_df,by="Antimicrobial")
+      probs_df_3$CDI_AUC <- auc_df %>% filter(Antimicrobial=="CDI") %>%
+        select(AUC) %>% unlist
+      probs_df_3$tox_AUC <- auc_df %>% filter(Antimicrobial=="toxicity") %>%
+        select(AUC) %>% unlist
+      probs_df_3 <- probs_df_3 %>% left_join(recall_df,by="Antimicrobial")
+      probs_df_3$CDI_recall <- recall_df %>% filter(Antimicrobial=="CDI") %>%
+        select(recall) %>% unlist
+      probs_df_3$tox_recall <- recall_df %>% filter(Antimicrobial=="toxicity") %>%
+        select(recall) %>% unlist
+      probs_df_3 <- probs_df_3 %>% left_join(precision_df,by="Antimicrobial")
+      probs_df_3$CDI_precision <- precision_df %>% filter(Antimicrobial=="CDI") %>%
+        select(precision) %>% unlist
+      probs_df_3$tox_precision <- precision_df %>% filter(Antimicrobial=="toxicity") %>%
+        select(precision) %>% unlist
+      probs_df_3 <- probs_df_3 %>% left_join(accuracy_df,by="Antimicrobial")
+      probs_df_3$CDI_accuracy <- accuracy_df %>% filter(Antimicrobial=="CDI") %>%
+        select(accuracy) %>% unlist
+      probs_df_3$tox_accuracy <- accuracy_df %>% filter(Antimicrobial=="toxicity") %>%
+        select(accuracy) %>% unlist
+      probs_df_3 <- probs_df_3 %>% left_join(f1_score_df,by="Antimicrobial")
+      probs_df_3$CDI_f1_score <- f1_score_df %>% filter(Antimicrobial=="CDI") %>%
+        select(f1_score) %>% unlist
+      probs_df_3$tox_f1_score <- f1_score_df %>% filter(Antimicrobial=="toxicity") %>%
+        select(f1_score) %>% unlist
+      
       ###calculate overall utility score
       probs_df_3 <- probs_df_3 %>% calculate_utilities()
       
@@ -1505,6 +1609,32 @@ sepsisae_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,
                value_highcost = cost_value,
                util_highcost = abs_calc(value_highcost,Highcost_agent),
                single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE))
+      
+      probs_df_3 <- probs_df_3 %>% left_join(auc_df,by="Antimicrobial")
+      probs_df_3$CDI_AUC <- auc_df %>% filter(Antimicrobial=="CDI") %>%
+        select(AUC) %>% unlist
+      probs_df_3$tox_AUC <- auc_df %>% filter(Antimicrobial=="toxicity") %>%
+        select(AUC) %>% unlist
+      probs_df_3 <- probs_df_3 %>% left_join(recall_df,by="Antimicrobial")
+      probs_df_3$CDI_recall <- recall_df %>% filter(Antimicrobial=="CDI") %>%
+        select(recall) %>% unlist
+      probs_df_3$tox_recall <- recall_df %>% filter(Antimicrobial=="toxicity") %>%
+        select(recall) %>% unlist
+      probs_df_3 <- probs_df_3 %>% left_join(precision_df,by="Antimicrobial")
+      probs_df_3$CDI_precision <- precision_df %>% filter(Antimicrobial=="CDI") %>%
+        select(precision) %>% unlist
+      probs_df_3$tox_precision <- precision_df %>% filter(Antimicrobial=="toxicity") %>%
+        select(precision) %>% unlist
+      probs_df_3 <- probs_df_3 %>% left_join(accuracy_df,by="Antimicrobial")
+      probs_df_3$CDI_accuracy <- accuracy_df %>% filter(Antimicrobial=="CDI") %>%
+        select(accuracy) %>% unlist
+      probs_df_3$tox_accuracy <- accuracy_df %>% filter(Antimicrobial=="toxicity") %>%
+        select(accuracy) %>% unlist
+      probs_df_3 <- probs_df_3 %>% left_join(f1_score_df,by="Antimicrobial")
+      probs_df_3$CDI_f1_score <- f1_score_df %>% filter(Antimicrobial=="CDI") %>%
+        select(f1_score) %>% unlist
+      probs_df_3$tox_f1_score <- f1_score_df %>% filter(Antimicrobial=="toxicity") %>%
+        select(f1_score) %>% unlist
       
       ###calculate overall utility score
       probs_df_3 <- probs_df_3 %>% calculate_utilities()
@@ -1846,6 +1976,32 @@ df <- df %>%
          util_highcost = abs_calc(value_highcost,Highcost_agent),
          single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE)
   ) %>% left_join(Rval_key,by="micro_specimen_id")
+
+df <- df %>% left_join(auc_df,by="Antimicrobial")
+df$CDI_AUC <- auc_df %>% filter(Antimicrobial=="CDI") %>%
+  select(AUC) %>% unlist
+df$tox_AUC <- auc_df %>% filter(Antimicrobial=="toxicity") %>%
+  select(AUC) %>% unlist
+df <- df %>% left_join(recall_df,by="Antimicrobial")
+df$CDI_recall <- recall_df %>% filter(Antimicrobial=="CDI") %>%
+  select(recall) %>% unlist
+df$tox_recall <- recall_df %>% filter(Antimicrobial=="toxicity") %>%
+  select(recall) %>% unlist
+df <- df %>% left_join(precision_df,by="Antimicrobial")
+df$CDI_precision <- precision_df %>% filter(Antimicrobial=="CDI") %>%
+  select(precision) %>% unlist
+df$tox_precision <- precision_df %>% filter(Antimicrobial=="toxicity") %>%
+  select(precision) %>% unlist
+df <- df %>% left_join(accuracy_df,by="Antimicrobial")
+df$CDI_accuracy <- accuracy_df %>% filter(Antimicrobial=="CDI") %>%
+  select(accuracy) %>% unlist
+df$tox_accuracy <- accuracy_df %>% filter(Antimicrobial=="toxicity") %>%
+  select(accuracy) %>% unlist
+df <- df %>% left_join(f1_score_df,by="Antimicrobial")
+df$CDI_f1_score <- f1_score_df %>% filter(Antimicrobial=="CDI") %>%
+  select(f1_score) %>% unlist
+df$tox_f1_score <- f1_score_df %>% filter(Antimicrobial=="toxicity") %>%
+  select(f1_score) %>% unlist
 
 ###Calculate overall utility score
 df <- df %>% calculate_utilities(R_weight = R_wt_value)
