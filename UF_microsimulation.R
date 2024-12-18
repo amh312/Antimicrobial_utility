@@ -11,11 +11,11 @@ number_results_per_panel <- function(df,start_col,end_col,which_abs,result_1,res
   for(i in 1:nrow(df)) {
     
     n_ac_s <- sum((df %>%
-                     select(all_of(intersect(df %>% select(!!start_col:!!end_col) %>%slice(i) %>% unlist(),which_abs))) %>% 
-                     slice(i)) == result_1 |
+                     select(all_of(intersect(df %>% select(!!start_col:!!end_col) %>%dplyr::slice(i) %>% unlist(),which_abs))) %>% 
+                     dplyr::slice(i)) == result_1 |
                     (df %>%
-                       select(all_of(intersect(df %>% select(!!start_col:!!end_col) %>%slice(i) %>% unlist(),which_abs))) %>% 
-                       slice(i)) == result_2)
+                       select(all_of(intersect(df %>% select(!!start_col:!!end_col) %>%dplyr::slice(i) %>% unlist(),which_abs))) %>% 
+                       dplyr::slice(i)) == result_2)
     
     n_all_s <- n_all_s %>% append(n_ac_s)
     
@@ -165,12 +165,12 @@ number_ab_results <- function(df,start_col,end_col,which_abs,result_1,result_2) 
   for(i in 1:nrow(df)) {
     
     all_s <- df %>%
-      select(all_of(intersect(df %>% select(!!start_col:!!end_col) %>%slice(i) %>% unlist(),all_abs))) %>% 
-      slice(i) %>% t() %>% data.frame() %>% filter(. ==result_1) %>% rownames()
+      select(all_of(intersect(df %>% select(!!start_col:!!end_col) %>%dplyr::slice(i) %>% unlist(),all_abs))) %>% 
+      dplyr::slice(i) %>% t() %>% data.frame() %>% filter(. ==result_1) %>% rownames()
     
     all_i <- df %>%
-      select(all_of(intersect(df %>% select(!!start_col:!!end_col) %>%slice(i) %>% unlist(),all_abs))) %>% 
-      slice(i) %>% t() %>% data.frame() %>% filter(. ==result_2) %>% rownames()
+      select(all_of(intersect(df %>% select(!!start_col:!!end_col) %>%dplyr::slice(i) %>% unlist(),all_abs))) %>% 
+      dplyr::slice(i) %>% t() %>% data.frame() %>% filter(. ==result_2) %>% rownames()
     
     ac_si <- all_s %>% append(all_i)
     
@@ -333,25 +333,25 @@ abs_df_assemble <- function(pd_df,standard_df) {
     df %>% filter(ind==ab_name(abx)) %>% arrange(Approach) %>% select(values)
     
     if(nrow(abs_df %>% filter(ind==ab_name(abx)) %>% select(1)) ==2 &
-       abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% slice(1) =="PDAST") {
+       abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% dplyr::slice(1) =="PDAST") {
       
-      abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(1) -
-        abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(2)
+      abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(1) -
+        abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(2)
       
     } else if (nrow(abs_df %>% filter(ind==ab_name(abx)) %>% select(1)) ==2 &
-               abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% slice(1) =="Standard"){
+               abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% dplyr::slice(1) =="Standard"){
       
-      -(abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(1) -
-          abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(2))
+      -(abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(1) -
+          abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(2))
       
     } else if (nrow(abs_df %>% filter(ind==ab_name(abx)) %>% select(1)) ==1 &
-               abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% slice(1) =="PDAST") {
+               abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% dplyr::slice(1) =="PDAST") {
       
-      abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(1)
+      abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(1)
       
     } else {
       
-      -(abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% slice(1))
+      -(abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(1))
       
     }
     
@@ -556,7 +556,9 @@ ab_result_graph <- function(df,line,route,title_height,title_width) {
 ###Uploads
 ur_util <- read_csv("ur_util_final.csv")
 urines_abx <- read_csv("ur_util_final.csv")
-abx <- read_csv("abx_ref_all_combos.csv")
+abx <- read_csv("interim_abx.csv")
+urines5_desc <- read_csv("urines5_ref.csv")
+pats <- read_csv("patients.csv")
 
 ###Reference lists
 all_singles <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
@@ -578,6 +580,257 @@ all_access <- c(access_singles, access_combos)
 watch_singles <- c("CRO","CAZ","FEP","MEM","TZP","CIP","VAN")
 watch_combos <- combn(watch_singles, 2, FUN = function(x) paste(x, collapse = "_"))
 all_watch <- c(watch_singles, watch_combos)
+
+##Sample size calculation for chi-squared test
+
+###Pooled proportion
+prop_1 <- 0.7 #expected standard
+prop_2 <- 0.75 #expected intervention
+pooled_prop <- (prop_1+prop_2)/2
+
+###Effect size
+ef_size <- sqrt((prop_1-prop_2)^2/(pooled_prop*(1-pooled_prop)))
+
+###Z values
+Za <- 1.96 #5% sig level
+Zb <- 0.84 #80% power
+
+###Sample size
+samp_size <- (Za+Zb)^2/ef_size^2
+glue("sample size requirement for chi-squared test = {samp_size}")
+
+##Descriptive data
+abx %>% distinct(subject_id,.keep_all = T) %>% count(CDI)
+
+###Table 1: Patient/specimen characteristics
+yearkey <- pats %>% distinct(subject_id,.keep_all = T) %>% select(subject_id,anchor_year_group)
+agekey <- pats %>% distinct(subject_id,.keep_all = T) %>% select(subject_id,anchor_age) %>% 
+  mutate(standard_age = case_when(
+    anchor_age<30~18,
+    anchor_age>=30&anchor_age<40~30,
+    anchor_age>=40&anchor_age<50~40,
+    anchor_age>=50&anchor_age<60~50,
+    anchor_age>=60&anchor_age<70~60,
+    anchor_age>=70&anchor_age<80~70,
+    anchor_age>=80&anchor_age<90~80,
+    anchor_age>=90~90,
+  )) %>% select(-anchor_age)
+hadmkey <- hadm %>% distinct(subject_id,.keep_all = T) %>% select(subject_id,race,marital_status,language,insurance)
+
+urines5_desc %>% tab_mutater("Urine model") %>% print(n=100)
+tab_mutater <- function(df,dataset,patient_level="Y") {
+  
+  supercounter_1 <- function(df) {
+    
+    counter <- function(df,charac) {
+      
+      charac <- enquo(charac)
+      
+      df %>% count(!!charac) %>% arrange(desc(n)) %>% 
+        mutate(Characteristic=names(.)[1],
+               `n (%)`=glue("{n} ({round((n/nrow(df))*100,1)})")) %>% 
+        rename(Subtype = 1) %>% select(-n)
+      
+    }
+    
+    tibble(rbind(
+      df %>% counter(Gender),
+      df %>% counter(Race),
+      df %>% counter(`Age group`),
+      df %>% counter(`Marital status`),
+      df %>% counter(`Language spoken`),
+      df %>% counter(Insurance),
+      df %>% counter(`Year group`),
+      df %>% counter(`Ampicillin result`),
+      df %>% counter(`Ampicillin/sulbactam result`),
+      df %>% counter(`Piperacillin/tazobactam result`),
+      df %>% counter(`Cefazolin result`),
+      df %>% counter(`Ceftriaxone result`),
+      df %>% counter(`Ceftazidime result`),
+      df %>% counter(`Cefepime result`),
+      df %>% counter(`Meropenem result`),
+      df %>% counter(`Ciprofloxacin result`),
+      df %>% counter(`Gentamicin result`),
+      df %>% counter(`Trimethoprim/sulfamethoxazole result`),
+      df %>% counter(`Nitrofurantoin result`),
+      df %>% counter(`Vancomycin result`)
+    )) %>% relocate(Characteristic,.before = "Subtype")
+    
+  }
+
+  supercounter_2 <- function(df) {
+    
+    counter <- function(df,charac) {
+      
+      charac <- enquo(charac)
+      
+      df %>% count(!!charac) %>% arrange(desc(n)) %>% 
+        mutate(Characteristic=names(.)[1],
+               `n (%)`=glue("{n} ({round((n/nrow(df))*100,1)})")) %>% 
+        rename(Subtype = 1) %>% select(-n)
+      
+    }
+    
+    tibble(rbind(
+      df %>% counter(Gender),
+      df %>% counter(Race),
+      df %>% counter(`Age group`),
+      df %>% counter(`Marital status`),
+      df %>% counter(`Language spoken`),
+      df %>% counter(Insurance),
+      df %>% counter(`Year group`),
+      df %>% counter(CDI),
+      df %>% counter(Toxicity)
+    )) %>% relocate(Characteristic,.before = "Subtype")
+    
+  }
+  
+  if (patient_level=="Y") {
+    
+    df <- df
+    
+  } else {
+    
+    df <- df %>% distinct(subject_id,.keep_all = T)
+    
+  }
+  
+  if ("micro_specimen_id" %in% colnames(df)) {
+  
+df1 <- df %>% mutate(
+  Gender = case_when(MALE ~ "M", TRUE~"F"),
+  Race = case_when(
+    grepl("WHITE",race)~"White",
+    grepl("BLACK",race)~"Black",
+    grepl("ASIAN",race)~"Asian",
+    grepl("HISPANIC",race)~"Hispanic",
+    grepl("UNKNOWN",race)~"Unknown",
+    TRUE~"Other"
+  ),
+  `Marital status` = case_when(
+    grepl("^MARRIED$",marital_status)~"Married",
+    TRUE~"Unmarried/unknown"
+  ),
+  `Age group` = case_when(
+    grepl("18",standard_age)~"18-29",
+    grepl("30",standard_age)~"30-39",
+    grepl("40",standard_age)~"40-49",
+    grepl("50",standard_age)~"50-59",
+    grepl("60",standard_age)~"60-69",
+    grepl("70",standard_age)~"70-79",
+    grepl("80",standard_age)~"80-89",
+    grepl("90",standard_age)~"≥ 90",
+  ),
+  `Language spoken`=case_when(
+    grepl("ENGLISH",language)~"English",
+    TRUE~"Other/unknown",
+  ),
+  Insurance = case_when(
+    grepl("(UNKNOWN|Other)",insurance)~"Other/unknown",
+    TRUE~insurance
+  ),
+  `Genus grown`=case_when(grepl("(Raoul|Haf|Staph)",org_genus)~"Other",
+                          TRUE~org_genus),
+  `Ampicillin result`=AMP,
+  `Ampicillin/sulbactam result`=SAM,
+  `Piperacillin/tazobactam result`=TZP,
+ `Cefazolin result`=CZO,
+ `Ceftriaxone result`=CRO,
+ `Ceftazidime result`=CAZ,
+ `Cefepime result`=FEP,
+ `Meropenem result`=MEM,
+ `Ciprofloxacin result`=CIP,
+ `Gentamicin result`=GEN,
+  `Trimethoprim/sulfamethoxazole result`=SXT,
+ `Nitrofurantoin result`=NIT,
+ `Vancomycin result`=VAN
+) %>% left_join(yearkey) %>% 
+  rename(`Year group`="anchor_year_group") %>% 
+  filter(`Year group`!="2020 - 2022") %>% 
+  supercounter_1()
+
+  } else {
+  
+    df1 <- df %>% left_join(hadmkey) %>% left_join(agekey) %>% 
+      mutate(
+      Gender = case_when(MALE ~ "M", TRUE~"F"),
+      Race = case_when(
+        grepl("WHITE",race)~"White",
+        grepl("BLACK",race)~"Black",
+        grepl("ASIAN",race)~"Asian",
+        grepl("HISPANIC",race)~"Hispanic",
+        grepl("UNKNOWN",race)~"Unknown",
+        TRUE~"Other"
+      ),
+      `Marital status` = case_when(
+        grepl("^MARRIED$",marital_status)~"Married",
+        TRUE~"Unmarried/unknown"
+      ),
+      `Age group` = case_when(
+        grepl("18",standard_age)~"18-29",
+        grepl("30",standard_age)~"30-39",
+        grepl("40",standard_age)~"40-49",
+        grepl("50",standard_age)~"50-59",
+        grepl("60",standard_age)~"60-69",
+        grepl("70",standard_age)~"70-79",
+        grepl("80",standard_age)~"80-89",
+        grepl("90",standard_age)~"≥ 90",
+      ),
+      `Language spoken`=case_when(
+        grepl("ENGLISH",language)~"English",
+        TRUE~"Other/unknown",
+      ),
+      Insurance = case_when(
+        grepl("(UNKNOWN|Other)",insurance)~"Other/unknown",
+        TRUE~insurance
+      ),
+      CDI = case_when(CDI~"CDI",TRUE~NA),
+      Toxicity = case_when(overall_tox~"Toxicity",
+                           TRUE~NA)
+    ) %>% left_join(yearkey) %>% 
+      rename(`Year group`="anchor_year_group") %>% 
+      filter(`Year group`!="2020 - 2022") %>% 
+      supercounter_2() %>% filter(!is.na(Subtype)) %>% 
+      mutate(Characteristic=case_when(grepl("(CDI|Toxicity)",Characteristic)~"Antibiotic outcome",
+                                      TRUE~Characteristic)
+             )
+    
+}
+
+colnames(df1)[3] <- glue("{dataset} {colnames(df1)[3]}")
+
+return(df1)
+
+}
+
+desc_tab <-  abx %>% tab_mutater("Prescription model","N") %>% 
+  full_join(urines5_desc %>% tab_mutater("Urine model")) %>% 
+  left_join(ur_util %>% tab_mutater("Urine microsimulation"))
+totals <- list("Total","Patients",
+               glue("{as.character(nrow(abx %>% distinct(subject_id)))} (100)"),
+               glue("{as.character(nrow(urines5_desc))} (100)"),
+               glue("{as.character(nrow(ur_util))} (100)")
+            )
+desc_tab[nrow(desc_tab)+1,] <- totals
+desc_tab <- desc_tab %>% mutate(Characteristic=case_when(
+  Characteristic==lag(Characteristic)~"",
+  TRUE~Characteristic
+))
+
+write_csv(desc_tab,"uf_desctab.csv")
+
+###Table 2: Prescription characteristics
+
+ab_tab <- abx %>% mutate(abx_name=str_replace_all(abx_name,"_"," & ")) %>% count(abx_name) %>% 
+  arrange(desc(n)) %>% mutate(abx_name=case_when(
+    n/nrow(abx)<0.0025~"Other",TRUE~abx_name
+  )) %>% group_by(abx_name) %>%
+  summarise(n=sum(n)) %>% ungroup() %>% print(n=100) %>% 
+  arrange(desc(n)) %>% 
+  mutate(n=glue("{n} ({round((n/nrow(abx))*100,1)})")) %>%
+  rename(`n (%)`="n",`Antibiotic(s)`="abx_name")
+
+write_csv(ab_tab,"ab_tab.csv")
 
 ##AST performance analysis - number of results per panel
 
@@ -615,11 +868,6 @@ standard_all_singles_r <- ur_util %>% number_ab_results(STANDARD_AST_1,STANDARD_
 abs_df <- abs_df_assemble(pdast_all_singles,standard_all_singles)
 write_csv(abs_df,"s_uf_sourcedata_abs_cleveplot.csv")
 s_results_by_ab <- abs_df %>% cleveland_ab_plot("susceptible")
-
-###Assemble data frame for 'R' dot plot data visualisation
-abs_df_r <- abs_df_assemble(pdast_all_singles_r,standard_all_singles_r)
-write_csv(abs_df_r,"r_uf_sourcedata_abs_cleveplot.csv")
-r_results_by_ab <- abs_df_r %>% cleveland_ab_plot("resistant")
 
 ###Join current antimicrobial prescription to urines dataframe
 ab_key <- abx %>% filter(is_abx) %>% 
@@ -684,7 +932,7 @@ abx_graph$abx_name <- factor(abx_graph$abx_name,
                                distinct(abx_name) %>% unlist())
 max_count <- ceiling(abx_graph1 %>% select(-Panel,-Result) %>% 
                        group_by(abx_name) %>% mutate(n=sum(n)) %>% arrange(desc(n)) %>%
-                       ungroup() %>% slice(1) %>% select(n) %>% unlist() /25) * 25
+                       ungroup() %>% dplyr::slice(1) %>% select(n) %>% unlist() /25) * 25
 
 write_csv(abx_graph,"uf_sourcedata_prescr_abx.csv")
 
@@ -709,8 +957,8 @@ abx_prescribed <- ggplot(abx_graph, aes(x = abx_name, y = if_else(Panel == "Stan
   scale_x_discrete(expand = expansion(mult = c(0.1, 0.2))) +
   geom_hline(yintercept = 0,linetype="solid",color="black") +
   ggtitle("Results provided for the antimicrobial agent prescribed (inpatients)") +
-  geom_text(x=14.5,y=-100,label="Standard approach",color="#3C3C3C",size=4) +
-  geom_text(x=14.5,y=100,label="Personalised approach",color="#3C3C3C",size=4) +
+  geom_text(x=13.5,y=-100,label="Standard approach",color="#3C3C3C",size=4) +
+  geom_text(x=13.5,y=100,label="Personalised approach",color="#3C3C3C",size=4) +
   theme(plot.title = element_text(size = 16, margin = margin(b = 20)),
         panel.grid.minor.y = element_blank(),
         panel.grid.minor.x = element_blank(),
@@ -727,6 +975,7 @@ Standard_total <- totaller("Standard")
 glue("The personalised approach provided {PDAST_total} results for antimicrobial
      agents patients were currently prescribed, versus {Standard_total} results
      provided by the standard panel")
+ur_util %>% filter(!is.na(abx_name)) %>% nrow()
 
 ###Counting the total number of S and R results for prescribed agents per panel by AWaRe category
 abx_graph <- abx_graph %>% 
@@ -869,6 +1118,7 @@ ur_util <- ur_util %>%
          STPORx_2_result = get(STANDARD_PO_2)) %>%
   ungroup()
 
+all_res <- nrow(ur_util %>% filter(PDRx_1_result=='R'))
 iv_res <- nrow(ur_util %>% filter(PDIVRx_1_result=='R'))
 po_res <- nrow(ur_util %>% filter(PDPORx_1_result=='R'))
 
@@ -880,6 +1130,9 @@ glue("Where an IV agent was required, the personalised approach recommended a sw
      prescribed Watch category agent to an effective Access category agent in 
      {round((sum(urines_abx$Wa_Ac_S_PO)/nrow(urines_abx))*100,1)}% (n={sum(urines_abx$Wa_Ac_S_PO)}) of prescriptions.
      
+     Overall, the personalised approach recommended an agent with a subsequent resistant result in
+     {round(all_res/nrow(ur_util)*100,1)}% (n={all_res}) of cases where urine culture was sent.
+     
      Where an IV agent was required, the personalised approach recommended an agent with a subsequent resistant result in
      {round(iv_res/nrow(ur_util)*100,1)}% (n={iv_res}) of cases where urine culture was sent.
      
@@ -888,7 +1141,9 @@ glue("Where an IV agent was required, the personalised approach recommended a sw
      
      ")
 
+ur_util %>% filter(PDRx_1_result=="S") %>% nrow()/nrow(ur_util)
 urines_abx %>% filter(PDPORx_1_result=="R") %>% filter(org_fullname=="Escherichia coli") %>% count(Oral_1) %>% arrange(desc(n))
 urines_abx %>% filter(PDIVRx_1_result=="R") %>% count(Intravenous_1) %>% arrange(desc(n))
-
+ur_util %>% filter(PDRx_1%in%access_singles) %>% nrow()/nrow(ur_util)
 write_csv(ur_util,"ur_util_microsim.csv")
+
