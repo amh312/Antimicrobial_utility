@@ -56,7 +56,7 @@ Antibiotic treatment value was determined using a discrete choice experiment sur
 
 ## Data preparation
 
-Data preprocessing and quality checking was performed in a similar way across sociodemographic groups using RStudio version 2023.12.1+402, and followed a similar pattern to our previous work with the dataset with some additions \[ref\]. The preprocessing workflow is summarised in Appendix x. Data were quality checked at each stage throughout preprocessing using counts of organism species, results, antimicrobial names, missing data, numbers of rows and numbers of columns to detect preprocessing errors. Choices of predictor variables and their time horizons were based on indirect or direct causal plausibility and/or association with outcome variables \[ref\]. The predictor variables used in each model are listed in Appendix x.
+Data preprocessing and quality checking was performed in a similar way across sociodemographic groups using RStudio version 2023.12.1+402, and followed a similar pattern to our previous work with the dataset with some additions \[ref\]. The preprocessing workflow is summarised in Appendix 1. Data were quality checked at each stage throughout preprocessing using counts of organism species, results, antimicrobial names, missing data, numbers of rows and numbers of columns to detect preprocessing errors. Choices of predictor variables and their time horizons were based on indirect or direct causal plausibility and/or association with outcome variables \[ref\].
 
 39 outcomes were required for 39 individual models - 13 individual antibiotic susceptibility prediction models and 24 antibiotic combination resistance models on the urines dataset, and a CDI prediction model and antibiotic toxicity prediction model on the prescriptions dataset. The outcome for all antibiotic susceptibility prediction models was an 'S' result indicating susceptibility of the organism grown in that urine specimen to that antibiotic or antibiotic combination. The outcome for a *Clostridioides difficile* infection (CDI) prediction model was a positive *C. difficile* stool result within 3 months of the start date/time of an antibiotic or antibiotic combination. The outcome for an antibiotic toxicity prediction model was a composite outcome of either stage 3 acute kidney injury (a new increase in serum creatinine to at least three times baseline or at least 3.54µmol/dL in the absence of co-administration of nephrotoxic drugs as defined by the British National Formulary \[ref\] or intravenous contrast during the associated hospital admission), deranged liver function tests (a result newly above the upper end of the normal range for alanine aminotransferase, aspartate aminotransferase, or alkaline phosphatase in the absence of previous coded chronic liver disease or biliary instrumentation in the associated hospital admission), marrow suppression (new anaemia, leukopenia, or thrombocytopenia in the absence of co-administration of cytotoxic drugs as defined by the British National Formulary \[ref\]) or coded bleeding diagnosis in the associated hospital admission) in the seven days following the start date of an antibiotic or a coded antibiotic adverse event for the associated hospital admission. The selection process for predictor and outcome variables was undertaken by the lead author (AH \[Consultant in Medical Microbiology, male, 30s, white British\]) and reviewed by medically-qualified co-authors (CB \[Consultant in Medical Microbiology, female, 30s, white British\], AG \[Consultant in Medical Microbiology, male, 30s, Maltese\], WH \[Consultant in Medical Microbiology, male, 50s, white Australian\], IB \[Consultant in Public Health, male, 50s, white British\]). Outcome and predictor variables were selected consistently across sociodemographic groups. No blinding to allocation or predictor/outcome assessment was implemented at any stage.
 
@@ -64,9 +64,9 @@ Data preprocessing and quality checking was performed in a similar way across so
 
 We have described clinical prediction models of resistance for 12 of the 13 antimicrobial agents using logistic regression in our previous work \[ref\]. For this study, XGBoost (an ensemble method that improves predictive accuracy by sequentially combining multiple decision trees) was used instead because it was found to achieve higher initial area under the receiver operating characteristic curve (AUROC) values for the majority of the 12 clinical prediction models when trained and validated on the same datasets. The same XGBoost technique was used for all 39 models. The output of each model was the probability of the binary outcome's positive class (an 'S' result, CDI, or antibiotic toxicity).
 
-XGBoost models were trained and tuned on the training datasets using L2 regularisation (ridge penalty) to control overfitting. AUROC was used as the model evaluation metric. Hyperparameter tuning was performed sequentially for each of the 39 models across parameters in 3 stages. 10 sets of paired values for maximum tree depth (selecting values between two and nine inclusive) and minimum child weight (selecting values between one and 10 inclusive) were randomly selected using latin hypercube sampling with `randomLHS()` from the `lhs` package \[ref\] - a 5-fold cross-validation was then performed across 50 boosting rounds for each of these 10 pairs of values, with a default learning rate of 0.05, a proportion of cases used for each decision tree (subsample rows ratio) of 0.8, and a proportion of predictors used for each decision tree (subsample columns ratio) of 0.8. The maximum tree depth and minimum child weight values that produced the highest AUROC were carried forward to another set of 5-fold cross-validations with 50 boosting rounds across 10 paired subsample rows and columns ratios (again randomly selected using `randomLHS`, with both values sampling from a range between 0.5 and 1 inclusive) with a learning rate of 0.05. The subsample rows and columns ratios that produced the highest AUROC were carried forward to a final set of 5-fold cross-validations across four learning rates (0.1, 0.05, 0.01, and 0.001), with a maximum number of boosting rounds of 1000 and early stopping if AUROC did not improve for 50 rounds. The learning rate and the round number at which the best AUROC value occurred (forming the new total number of rounds parameter) were then taken forward as parameters for training the final model. Class imbalance methods (e.g., class weighting) were not used to avoid inflating the probability of rare occurrences (e.g., CDI) that would subsequently be used to inform the utility function. The final model parameters for each model are listed in Appendix x.
+XGBoost models were trained and tuned on the training datasets using L2 regularisation (ridge penalty) to control overfitting. AUROC was used as the model evaluation metric. Hyperparameter tuning was performed sequentially for each of the 39 models across parameters in 3 stages. 10 sets of paired values for maximum tree depth (selecting values between two and nine inclusive) and minimum child weight (selecting values between one and 10 inclusive) were randomly selected using latin hypercube sampling with `randomLHS()` from the `lhs` package \[ref\] - a 5-fold cross-validation was then performed across 50 boosting rounds for each of these 10 pairs of values, with a default learning rate of 0.05, a proportion of cases used for each decision tree (subsample rows ratio) of 0.8, and a proportion of predictors used for each decision tree (subsample columns ratio) of 0.8. The maximum tree depth and minimum child weight values that produced the highest AUROC were carried forward to another set of 5-fold cross-validations with 50 boosting rounds across 10 paired subsample rows and columns ratios (again randomly selected using `randomLHS`, with both values sampling from a range between 0.5 and 1 inclusive) with a learning rate of 0.05. The subsample rows and columns ratios that produced the highest AUROC were carried forward to a final set of 5-fold cross-validations across four learning rates (0.1, 0.05, 0.01, and 0.001), with a maximum number of boosting rounds of 1000 and early stopping if AUROC did not improve for 50 rounds. The learning rate and the round number at which the best AUROC value occurred (forming the new total number of rounds parameter) were then taken forward as parameters for training the final model. Class imbalance methods (e.g., class weighting) were not used to avoid inflating the probability of rare occurrences (e.g., CDI) that would subsequently be used to inform the utility function.
 
-Predictor variable contributions to predictive value in model training were measured using Shapley values with `predict(predcontrib=TRUE)` from the `stats` package \[ref\]. Predictor variables with Shapley values of zero were then excluded from models for the final training round. A single validation run was then performed with the final model on the validation dataset, measuring AUROC, accuracy, precision, recall, and F1 score (decision threshold 0.5) using coded formulae for each model. A model stability analysis was performed for each model excluding the 24 antibiotic combination models (15 models in total) in view of the computational time required, where training and validation of the final model was performed in six random train-test splits without replacement for each four smaller train-test dataset size ratios (2:98%, 6:94%, 8:92%, and 12:88%) - AUC, accuracy, precision, recall, and F1 score were measured for each of these validations, and metric distributions were plotted using dot plots to assess heterogeneity in performance. A model fairness analysis was performed where each of the same 15 trained models was validated separately across a range of protected characteristics (race, age, marital status, first language, and gender), with six random-train-test splits per characteristic - AUC, accuracy, precision, recall, and F1 score (decision threshold 0.5) were again measured for each of these validations, and metric distributions plotted using dot plots. A time cluster analysis was performed to assess out-of-sample performance, where the 15 models were trained on one of four time periods (2008-2010, 2011-2013, 2014-16, and 2017-2019), then validated on that period and the other four time periods, measuring AUC, accuracy, precision, recall, and F1 score (decision threshold 0.5) - this was repeated with six random train-test splits for each pair of time periods, and metrics distributions were plotted using dot plots.
+Predictor variable contributions to predictive value in model training were measured using Shapley values with `predict(predcontrib=TRUE)` from the `stats` package \[ref\]. Predictor variables with Shapley values of zero were then excluded from models for the final training round. A single validation run was then performed with the final model on the validation dataset, measuring AUROC, accuracy, precision, recall, and F1 score (decision threshold 0.5) using coded formulae for each model. A model stability analysis was performed for each model excluding the 24 antibiotic combination models (15 models in total) in view of the computational time required, where training and validation of the final model was performed in six random train-test splits without replacement for each four smaller train-test dataset size ratios (2:98%, 6:94%, 8:92%, and 12:88%) - AUC, accuracy, precision, recall, and F1 score were measured for each of these validations, and metric distributions were plotted using dot plots to assess heterogeneity in performance. A model fairness analysis was performed where each of the same 15 trained models was validated separately across a range of protected characteristics (race, age, marital status, first language, and gender), with six random-train-test splits per characteristic - AUC, accuracy, precision, recall, and F1 score (decision threshold 0.5) were again measured for each of these validations, and metric distributions plotted using dot plots. Threshold recalibration for fairness was not performed because the output of the models were probabilities rather than classifications. A time cluster analysis was performed to assess out-of-sample performance, where the 15 models were trained on one of four time periods (2008-2010, 2011-2013, 2014-16, and 2017-2019), then validated on that period and the other four time periods, measuring AUC, accuracy, precision, recall, and F1 score (decision threshold 0.5) - this was repeated with six random train-test splits for each pair of time periods, and metrics distributions were plotted using dot plots.
 
 ## Prescriber discrete choice experiment
 
@@ -84,7 +84,7 @@ Treatment utility was calculated individually for each patient/urine specimen in
 
 3.  Financial cost was calculated for each antibiotic using the lowest available cost of an antibiotic in U.S. dollars as listed on the U.S. Department of Veterans Affairs National Acquisition Center - these costs were divided by the highest cost including combinations of antibiotics, producing normalised costs between 0 and 1 ($v_h$).
 
-4.  A personalised utility value was calculated for each antibiotic for each patient using a bespoke mathematical expression (see Appendix x) that performs two functions: firstly, it weights the values for each antimicrobial characteristic from steps 1-3 using their respective weights from the discrete choice experiment ($w_c$, $w_t$, $w_u$, $w_o$, $w_i$, $w_a$, $w_r$); secondly, it incorporates an illness severity variable that weights the contribution of antibiotic susceptibility probability and intravenous administration to overall utility more heavily as it increases.
+4.  A personalised utility value was calculated for each antibiotic for each patient using a bespoke mathematical expression (see Appendix 2) that performs two functions: firstly, it weights the values for each antimicrobial characteristic from steps 1-3 using their respective weights from the discrete choice experiment ($w_c$, $w_t$, $w_u$, $w_o$, $w_i$, $w_a$, $w_r$); secondly, it incorporates an illness severity variable that weights the contribution of antibiotic susceptibility probability and intravenous administration to overall utility more heavily as it increases.
 
 The distributions of utility values were plotted across the microsimulation dataset for each antibiotic and antibiotic combination using a box and whisker plot. Sensitivity analyses where the utility distribution was repeatedly calculated on the microsimulation dataset across a range of zero to one for susceptibility probability, CDI probability, toxicity probability and normalised cost, and a range of minus two to two for characteristic weights - changes in overall utility distribution in the microsimulation dataset across these ranges were then plotted for all antibiotics using line plots.
 
@@ -100,73 +100,46 @@ The single antibiotic with the highest utility value for each patient in the mic
 
 4.  The proportion of organisms grown in urine that were susceptible to a recommended first-line antibiotic with an intravenous route of administration
 
-Proportions were compared against a standard first-line option for systemically well patients (nitrofurantoin) and for critically ill patients (piperacillin-tazobactam) - these agents were selected as comparators because they were the oral and intravenous antibiotics respectively that had the highest rates of susceptibility in the dataset. A chi-squared test was used as a significance test for the comparisons with a significance threshold of 5% – results are reported as proportions for the two groups with 95% confidence intervals. Sensitivity analyses were performed to assess the effect of increasing the illness severity weight from zero up to 30 on the four outcomes listed above (for first-line single antibiotics, then for two-agent combinations, then for second-line antibiotics) and the antibiotics recommended - these results were plotted using area and line plots respectively. This analysis was then repeated to assess the potential effect of improved probability predictions by taking the mean of the predicted probability and the actual outcome denoted by one or zero, then again plotting outcomes and antibiotics recommended across illness severity using an area and line chart respectively. A similar sensitivity analysis was then performed to assess the effect of increasing nitrofurantoin resistance probability from zero up to one on the four outcomes listed above and antibiotics resommenced, plotting the results using an area and line chart respectively.
+Proportions were compared against a standard first-line option for systemically well patients (nitrofurantoin) and for critically ill patients (piperacillin-tazobactam) - these agents were selected as comparators because they were the oral and intravenous antibiotics respectively that had the highest rates of susceptibility in the dataset. A chi-squared test was used as a significance test for the comparisons with a significance threshold of 5% – results are reported as proportions for the two groups with 95% confidence intervals. A sample size calculation was performed for the chi-squared test based on expected proportions of 0.7 and 0.75 with a power of 80%.
 
-## Analytical methods
-
-Describe how the data were used (eg, for development and evaluation of model performance) in the analysis, including whether the data were partitioned, considering any sample size requirements
-
-Describe any model updating (eg, recalibration) arising from the model evaluation, either overall or for particular sociodemographic groups or settings
-
-## Ethical approval
-
-## Setting and ethics
-
-## Participants
-
-## Descriptive data and statistical modelling
-
-R version 4.3.2 (<https://cran.r-project.org>) was used for data cleaning, the majority of statistical analyses/data visualisation, and clinical prediction model development for *C difficile*, drug toxicity, and adverse outcomes from sepsis. AMR package version 2.1.1 was used to standardise organism and susceptibility data. \[package used for clinical prediction models\]. Python version 3.12.0 (<https://www.python.org/downloads/release/python-3120/>) was used for developing AMR clinical prediction models (building on approaches from our previous work - Nature Comms ref) and the remaining statistical analyses/data visualisation.
-
-156 AMR clinical prediction models were trained, tested, and validated - one model for each antimicrobial agent, and one model for each possible combination of antimicrobial agents. The model development data were randomly split stratified by the outcome variable into subsets for training and hyperparameter optimisation (80% of the data) and validation (20% of the data). Ten iterations of k-fold cross-validation (six folds) with random shuffling were used to fit models, select features, and tune hyperparameters. The final selected model for each of the 156 antimicrobial combinations was validated once.
-
-Three binary logistic regression clinical prediction models were also developed based on linked antimicrobial prescription data for patients in the model development dataset - these models predicted the probability of a positive *C difficile* stool result in the 3 months after antimicrobial treatment, the probability of renal, haematological, or hepatic derangement (representing possible drug toxicity) in the seven days following antimicrobial treatment, and the probability of sepsis with a hospital stay of more than seven days, intensive care admission, or death in the 28 days (representing possible adverse outcomes from sepsis) following antimicrobial treatment. The *C difficile* and toxicity models included the specific agent used as a predictor variable, and the sepsis adverse outcomes model did not.
-
-## Clinical prediction model statistics and reproducibility
-
-Scikit-Learn package version 1.4.1 (<https://scikit-learn.org/stable/>) and Mlxtend version 0.23.1 13 were used to train, test, and validate the 156 AMR binary logistic regression models. Models were trained using maximum likelihood estimation, with susceptible results as positives and resistant results as negatives. The model predicted the probability of a susceptibile result for each urine specimen. Regularisation using a least absolute shrinkage and selection operator (LASSO, or L1) was used to prevent overfitting and remove predictor variables that did not improve predictions. Hyperparameter tuning with grid search cross-validation controlled strength of regularisation to optimise AUC-ROC. Model performance on the validation data was assessed using the scikit-learn roc_auc_score function and classification_report methods to calculate AUC-ROC, precision, recall, accuracy, and 50% decision-threshold f1-score for both susceptible and resistant classes.
-
-## Microsimulation study design
-
-Figure 8 summarises the study design for the microsimulation (individual patient-level simulation) study.
-
-**Figure 8**: **Design of the microsimulation study.** For each specimen in the microsimulation study dataset, a personalised panel was composed using prediction modelling and a test prioritisation function to maximise the probability of susceptible (‘S’) results for Access agents, and failing that, susceptible results for other agents – the results for agents in this panel were then populated by actual results for those agents in the dataset. The number of susceptible results for Access agents and all agents that would have been provided by using this panel was then compared against a standard panel based on international UTI treatment guidelines. Created in BioRender. Howard, A. (2024) BioRender.com/k67g601.
-
-The microsimulation study was performed by interfacing R version 4.3.2 and Python version 3.12.0 using the R package reticulate version 1.36.0 (<https://cran.r-project.org/web/packages/reticulate/index.html>).^25^ For each specimen, six of the 12 agents were selected as the simulated personalised testing panel, by prioritising based on probability of susceptibility – WHO Access agents with \>50% probability of susceptibility were tested automatically, then the rest of the six-agent testing panel was filled with remaining agents that had the highest probabilities of susceptibility (regardless of whether they were Access or Watch category agents). The personalised panel for each specimen was then compared with a standard non-personalised testing panel composed of four antimicrobial agents recommended for UTI by the WHO essential medicines list (nitrofurantoin, trimethoprim/sulfamethoxazole, ceftriaxone, and ciprofloxacin) and two agents recommended by European Association of Urology guidelines (gentamicin and piperacillin/tazobactam).^26,27^
-
-## Outcome variables
-
-The outcomes of interest were:
-
-·      The number of susceptible results per specimen six-agent panel
-
-·      The number of susceptible results for Access agents per specimen six-agent panel
-
-·      The proportion of specimen six-agent panels with no susceptible results
-
-·      The proportion of specimen six-agent panels with no susceptible results for Access agents
-
-## Microsimulation study statistics and reproducibility
-
-Numbers of susceptible results per panel were compared between the personalised and standard fixed panel on each specimen using a Wilcoxon two-sample paired signed rank test with continuity correction – results are presented as effect size (calculated by dividing the test’s Z statistic by the square root of the number of specimens).^28^ Medians and interquartile ranges of the number of susceptible results per panel were calculated for data visualisation purposes. Proportions of specimens with panels with at least one susceptible result were compared using a chi-squared test – results are reported as proportions for the two groups and 95% confidence interval. For both analyses, a significance threshold of 5% was used. A sensitivity analysis was also performed for the test prioritisation function, where the analysis was repeated across nine different susceptibility probability thresholds for automatic inclusion of Access agents on the personalised panel (from \> 10% probability of susceptibility to \> 90%). This sensitivity analysis was then repeated after also repeating the modelling and panel selection steps, but with all intermediate (I) results classified as resistant instead of susceptible.
+Sensitivity analyses were performed to assess the effect of increasing the illness severity weight from zero up to 30 on the four outcomes listed above (for first-line single antibiotics, then for two-agent combinations, then for second-line antibiotics) and the antibiotics recommended - these results were plotted using area and line plots respectively. This analysis was then repeated to assess the potential effect of improved probability predictions by taking the mean of the predicted probability and the actual outcome denoted by one or zero, then again plotting outcomes and antibiotics recommended across illness severity using an area and line chart respectively. A further repeat of the analysis was performed to assess the effect of increased illness severity on the predicted CDI risk, toxicity risk, and minimum financial cost of first-line treatment recommendations. A similar sensitivity analysis was then performed to assess the effect of increasing nitrofurantoin resistance probability from zero up to one on the four outcomes listed above and antibiotics resommenced, plotting the results using an area and line chart respectively.
 
 # Results
 
 ## Participants
 
-Describe the flow of participants through the study, including the number of participants with and without the outcome and, if applicable, a summary of the follow-up time. A diagram may be helpful
+The characteristics of patients, antimicrobial agents, and specimens in the model development and microsimulation datasets are summarised in Table 1.
 
-Report the characteristics overall and, where applicable, for each data source or setting, including the key dates, key predictors (including demographics), treatments received, sample size, number of outcome events, follow-up time, and amount of missing data. A table may be helpful. Report any differences across key demographic groups
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
-Identify any differences between the development and evaluation data in healthcare setting, eligibility criteria, outcome, and predictors
+library(tidyverse)
+library(knitr)
 
-For model evaluation, show a comparison with the development data of the distribution of important predictors (demographics, predictors, and outcome)
+desc_tab <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/uf_desctab.csv")
 
-## Model development
+desc_tab$Characteristic[is.na(desc_tab$Characteristic)] <- "··"
 
-Specify the number of participants and outcome events in each analysis (eg, for model development, hyperparameter tuning, model evaluation)
+knitr::kable(desc_tab,
+             caption = "Table 1: Patient compositions of the model development and microsimulation datasets.")
+
+```
+
+The proportion of all patient/specimen characteristics between the urine model development dataset and microsimulation dataset were comparable. A higher proportion specimens in both urine datasets came from females than males, while the number of prescriptions for all indications in the prescription dataset was approximately equal between males and females. 60-69 was the most prevalent age group in the prescription dataset, while 70-79 was the most prevalent age group in both urine datasets. A higher proportion of patients in the prescription dataset had English recorded as spoken language than in either urine dataset - this probably reflects the fact that the prescription dataset pertained only to inpatients (where more detailed data collection may have been performed), while the urine dataset pertained to both inpatients and outpatients. The numbers of different antibiotic types prescribed in the prescription dataset are summarised in Table 2.
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+
+ab_tab <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/ab_tab.csv")
+
+knitr::kable(ab_tab,
+             caption = "Table 2: Antibiotic courses in the prescription dataset, including two-combination administrations of more than 24 hours duration.")
+
+```
 
 ## Model specification
+
+Model hyperparameters (appendix)
+
+Feature contributions (appendix)
 
 Provide details of the full prediction model (eg, formula, code, object, application programming interface) to allow predictions in new individuals and to enable third party evaluation and implementation, including any restrictions to access or reuse (eg, freely available, proprietary)¶
 
@@ -238,3 +211,82 @@ AH conceived the study, performed data engineering and mathematical modelling, a
 ## Patient and public involvement
 
 Provide details of any patient and public involvement during the design, conduct, reporting, interpretation, or dissemination of the study or state no involvement
+
+# Appendix
+
+## Appendix 1: Data processing workflow
+
+
+## Appendix 2: Utility function
+
+Antibiotic treatment choice utility ($U$) is defined by:
+
+$$
+U^{(x)(n)} = w_s^{(x)}v_s^{(x)(n)}\left(  \sum_{k \in K} u\left(w_k, v_k^{(x)(n)}\right) + 
+\sum_{l \in L} u\left(w_l^{(x)}, v_l^{(x)(n)}\right) +
+u\left(w^{(n)}_i, v_i^{(x)}\right) \right)
+$$ {#eq-utility}
+
+where
+
+$$
+u(w, v) = 
+\begin{cases}
+    wp & \text{if } w \geq 0 \\
+    |w|(1-v) & \text{otherwise} \\
+\end{cases}
+$$
+
+$x$ is the antibiotic, $n$ is the patient, $K = \{u, a, o, r, h\}$, $L = \{c, t\}$, $v$ are values, and $w$ are weights. Weights $w_k$ in $K$ are defined solely by corresponding ranked logit coefficients from the clinician discrete choice experiment (DCE). Weight $w_s$ is defined solely by the area under the receiver operating characteristic (AUROC) value for the susceptibility clinical prediction model on the model validation dataset. Weights $w_l$ in $L$ are defined by:
+
+$$
+w_l^{(x)} = w_{l,1} + w_{l,2}^{(x)}
+$$
+
+where $w_{l,1}$ is the corresponding DCE ranked logit coefficient and $w_{l,2}$ is the validation AUROC value for the respective clinical prediction model.
+
+$w_i$ is defined by:
+
+$$
+w_i^{(n)} = w_{i,1} + w_{i,2}^{(n)}
+$$
+
+where $w_{i,1}$ is the corresponding DCE ranked logit coefficient and $w_{i,2}$ is an illness severity weight defined by the user.
+
+Values are defined as follows:
+
+$$
+v_s \in [0,1] \quad \text{(Probability of organism antimicrobial susceptibility)}
+$$
+
+$$
+v_u \in \{0,1\} \quad \text{(UTI-specific agent)}
+$$
+
+$$
+v_a \in \{0,1\} \quad \text{(WHO Access agent)}
+$$
+
+$$
+v_o \in \{0,1\} \quad \text{(Orally-administrable agent)}
+$$
+
+$$
+v_i \in \{0,1\} \quad \text{(Intravenously-administrable agent)}
+$$
+
+$$
+v_r \in \{0,1\} \quad \text{(WHO Reserve agent)}
+$$
+
+$$
+v_h \in [0,1] \quad \text{(Normalised agent cost)}
+$$
+
+$$
+v_c \in [0,1] \quad \text{(Probability of } \textit{Clostridiodes difficile} \text{ infection)}
+$$
+
+$$
+v_t \in [0,1] \quad \text{(Probability of agent toxicity)}
+$$
