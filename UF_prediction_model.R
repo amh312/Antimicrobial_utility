@@ -316,61 +316,8 @@ for (outcome in colnames(urines5_outcomes)) {
     }
     
     final_bestparams[[outcome]] <- best_params
+    final_bestparams[[outcome]]$best_nrounds <- best_nrounds
     
-  }
-}
-for (i in 1:length(final_bestparams)) {
-  
-  param <- data.frame(final_bestparams[i])
-  
-  write_csv(param,glue("final_params_{combined_antimicrobial_map[i]}.csv"))
-  
-}
-
-###Best iteration
-for (outcome in colnames(urines5_outcomes)) {
-  
-  if (sum(!is.na(urines5_combined[[outcome]])) > 0) {
-    
-    set.seed(123)
-    trainIndex <- createDataPartition(urines5_combined[[outcome]], p = .8, list = FALSE, times = 1)
-    urines5Train <- urines5_combined[trainIndex, ]
-    urines5Test <- urines5_combined[-trainIndex, ]
-    
-    predictor_columns <- colnames(urines5_predictors)
-    selected_columns <- intersect(predictor_columns, colnames(urines5Train))
-    missing_cols <- setdiff(selected_columns, colnames(ur_xg_combined))
-    ur_xg_combined[missing_cols] <- 0
-    train_matrix <- xgb.DMatrix(data = as.matrix(urines5Train %>% select(all_of(selected_columns))), 
-                                label = urines5Train[[outcome]])
-    test_matrix <- xgb.DMatrix(data = as.matrix(urines5Test %>% select(all_of(selected_columns))), 
-                               label = urines5Test[[outcome]])
-    micro_matrix <- xgb.DMatrix(data = as.matrix(ur_xg_combined %>% select(all_of(selected_columns))), 
-                                label = ur_xg_combined[[outcome]])
-    
-    params <- list(
-      objective = "binary:logistic",
-      eval_metric = "auc",
-      eta = final_bestparams[[outcome]]$eta,
-      max_depth = final_bestparams[[outcome]]$max_depth,
-      min_child_weight = final_bestparams[[outcome]]$min_child_weight,
-      subsample = final_bestparams[[outcome]]$subsample,
-      colsample_bytree = final_bestparams[[outcome]]$colsample_bytree
-    )
-    
-    print("Running CV...")
-    
-    cv_model <- xgb.cv(
-      params = params,
-      data = train_matrix,
-      nrounds = 1000,
-      nfold = 5,
-      early_stopping_rounds = 50,
-      verbose = 1,
-    )
-    
-    final_bestparams[[outcome]]$best_nrounds <- cv_model$best_iteration
-
   }
 }
 for (i in 1:length(final_bestparams)) {
@@ -721,7 +668,7 @@ for (outcome in 1:ncol(abx_outcomes)) {
   
 }
 
-###Third round of hyperparameter tuning (learning rate)
+###Third round of hyperparameter tuning (learning rate and best iteration)
 parameter_list <- c(0.1,0.05,0.01,0.001)
 best_auc <- 0
 cdi_tox_final_bestparams <- c()
@@ -780,60 +727,7 @@ for (outcome in colnames(abx_outcomes)) {
     }
     
     cdi_tox_final_bestparams[[outcome]] <- best_params
-    
-  }
-}
-for (outcome in 1:ncol(abx_outcomes)) {
-  
-  param <- data.frame(cdi_tox_final_bestparams[outcome])
-  
-  write_csv(param,glue("cdi_tox_final_params_{names(abx_outcomes)[outcome]}.csv"))
-  
-}
-
-###Best iteration
-for (outcome in colnames(abx_outcomes)) {
-  
-  if (sum(!is.na(abx_combined[[outcome]])) > 0) {
-    
-    set.seed(123)
-    trainIndex <- createDataPartition(abx_combined[[outcome]], p = .8, list = FALSE, times = 1)
-    abxTrain <- abx_combined[trainIndex, ]
-    abxTest <- abx_combined[-trainIndex, ]
-    
-    predictor_columns <- colnames(abx_predictors)
-    selected_columns <- intersect(predictor_columns, colnames(abxTrain))
-    missing_cols <- setdiff(selected_columns, colnames(ur_abx_combined))
-    ur_abx_combined[missing_cols] <- 0
-    train_matrix <- xgb.DMatrix(data = as.matrix(abxTrain %>% select(all_of(selected_columns))), 
-                                label = abxTrain[[outcome]])
-    test_matrix <- xgb.DMatrix(data = as.matrix(abxTest %>% select(all_of(selected_columns))), 
-                               label = abxTest[[outcome]])
-    micro_matrix <- xgb.DMatrix(data = as.matrix(ur_abx_combined %>% select(all_of(selected_columns))), 
-                                label = ur_abx_combined[[outcome]])
-    
-    params <- list(
-      objective = "binary:logistic",
-      eval_metric = "auc",
-      eta = cdi_tox_final_bestparams[[outcome]]$eta,
-      max_depth = cdi_tox_final_bestparams[[outcome]]$max_depth,
-      min_child_weight = cdi_tox_final_bestparams[[outcome]]$min_child_weight,
-      subsample = cdi_tox_final_bestparams[[outcome]]$subsample,
-      colsample_bytree = cdi_tox_final_bestparams[[outcome]]$colsample_bytree
-    )
-    
-    print("Running CV...")
-    
-    cv_model <- xgb.cv(
-      params = params,
-      data = train_matrix,
-      nrounds = 1000,
-      nfold = 5,
-      early_stopping_rounds = 50,
-      verbose = 1,
-    )
-    
-    cdi_tox_final_bestparams[[outcome]]$best_nrounds <- cv_model$best_iteration
+    cdi_tox_final_bestparams[[outcome]]$best_nrounds <- best_nrounds
     
   }
 }
@@ -1044,4 +938,12 @@ tox_metrics_list <- data.frame(
 )
 
 write_csv(tox_metrics_list,glue("metrics_toxicity.csv"))
+
+
+
+
+
+
+
+
 
