@@ -108,34 +108,11 @@ Sensitivity analyses were performed to assess the effect of increasing the illne
 
 ## Participants
 
-The characteristics of patients, antimicrobial agents, and specimens in the model development and microsimulation datasets are summarised in Table 1.
-
-```{r, echo=FALSE,message=FALSE,warning=FALSE}
-
-library(tidyverse)
-library(knitr)
-
-desc_tab <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/uf_desctab.csv")
-
-desc_tab$Characteristic[is.na(desc_tab$Characteristic)] <- "··"
-
-knitr::kable(desc_tab,
-             caption = "Table 1: Patient compositions of the model development and microsimulation datasets.")
-
-```
-
-The proportion of all patient/specimen characteristics between the urine model development dataset and microsimulation dataset were comparable. A higher proportion specimens in both urine datasets came from females than males, while the number of prescriptions for all indications in the prescription dataset was approximately equal between males and females. 60-69 was the most prevalent age group in the prescription dataset, while 70-79 was the most prevalent age group in both urine datasets. A higher proportion of patients in the prescription dataset had English recorded as spoken language than in either urine dataset - this probably reflects the fact that the prescription dataset pertained only to inpatients (where more detailed data collection may have been performed), while the urine dataset pertained to both inpatients and outpatients. The numbers of different antibiotic types prescribed in the prescription dataset are summarised in Table 2.
-
-```{r, echo=FALSE,message=FALSE,warning=FALSE}
-
-ab_tab <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/ab_tab.csv")
-
-knitr::kable(ab_tab,
-             caption = "Table 2: Antibiotic courses in the prescription dataset, including two-combination administrations of more than 24 hours duration.")
-
-```
+The characteristics of patients, antimicrobial agents, and specimens in the model development and microsimulation datasets are summarised in Appendix 2. The proportion of all patient/specimen characteristics between the urine model development dataset and microsimulation dataset were comparable. A higher proportion specimens in both urine datasets came from females than males, while the number of prescriptions for all indications in the prescription dataset was approximately equal between males and females. 60-69 was the most prevalent age group in the prescription dataset, while 70-79 was the most prevalent age group in both urine datasets. A higher proportion of patients in the prescription dataset had English recorded as spoken language than in either urine dataset - this probably reflects the fact that the prescription dataset pertained only to inpatients (where more detailed data collection may have been performed), while the urine dataset pertained to both inpatients and outpatients. The numbers of different antibiotic types prescribed in the prescription dataset are summarised in Appendix 3.
 
 ## Model specification
+
+Final training hyperparameters used for each model are summarised in Appendix 4.
 
 Model hyperparameters (appendix)
 
@@ -216,7 +193,10 @@ Provide details of any patient and public involvement during the design, conduct
 
 ## Appendix 1: Data processing workflow
 
-
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Data flow chart.pdf")
+#| fig.cap: "Appendix 1: Data processing workflow."
+```
 ## Appendix 2: Utility function
 
 Antibiotic treatment choice utility ($U$) is defined by:
@@ -290,3 +270,42 @@ $$
 $$
 v_t \in [0,1] \quad \text{(Probability of agent toxicity)}
 $$
+
+## Appendix 2
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+
+library(tidyverse)
+library(knitr)
+
+desc_tab <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/uf_desctab.csv")
+
+desc_tab$Characteristic[is.na(desc_tab$Characteristic)] <- "··"
+
+knitr::kable(desc_tab,
+             caption = "Table 1: Patient compositions of the model development and microsimulation datasets.")
+
+```
+
+##Appendix 3
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+
+ab_tab <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/ab_tab.csv")
+
+knitr::kable(ab_tab,
+             caption = "Table 2: Antibiotic courses in the prescription dataset, including two-combination administrations of more than 24 hours duration.")
+
+```
+
+
+## Appendix 4
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+
+hyp_tab <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/hyp_tab.csv")
+
+knitr::kable(hyp_tab,
+             caption = "Final training hyperparameters used for the 39 clinical prediction models.")
+
+```
