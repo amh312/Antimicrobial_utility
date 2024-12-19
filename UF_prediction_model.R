@@ -1118,7 +1118,8 @@ feat_table <- feat_table %>% mutate(Feature = case_when(
     grepl("RDW",Feature)~str_replace(Feature,"RDW","Most recent RDW"),
     grepl("No Male",Feature)~str_replace(Feature,"No","Not"),
     TRUE~Feature
-  ))
+  )) %>% mutate(`Shapley value`=round(`Shapley value`,3)) %>% 
+  mutate(Model=str_replace_all(Model,"_"," & "))
 
 write_csv(feat_table,"feat_table.csv")
 
