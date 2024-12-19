@@ -940,10 +940,185 @@ tox_metrics_list <- data.frame(
 write_csv(tox_metrics_list,glue("metrics_toxicity.csv"))
 
 
+##Feature contributions dataframe
+other_outcome_map <- list("CDI","toxicity")
+names(other_outcome_map) <- c("CDI","Toxicity")
+full_outcome_map <- c(combined_antimicrobial_map,other_outcome_map)
+feat_table <- data.frame(matrix(nrow=0,ncol=3))
+for (i in 1:length(full_outcome_map)) {
+  
+  to_bind <- read_csv(glue("SHAP_{full_outcome_map[i]}.csv"))
+  colnames(to_bind)[2] <- "Shapley value"
+  to_bind$Model <- names(full_outcome_map)[i]
+  to_bind <- to_bind %>% relocate(Model,.before = 1)
+  feat_table <- tibble(rbind(feat_table,to_bind))
+  
+}
 
+pc <- "pc_"
+true <- "TRUE"
+false <- "FALSE"
+provider_id <- "provider_id"
+pr <- "^pr"
+p <- "^p"
+r <- "r$"
+rx <- "rx$"
+d7 <- "^d7"
+prev_week <- "Previous week"
 
+feat_table <- feat_table %>% mutate(Feature = case_when(
+  grepl("pc",Feature)&grepl("TRUE",Feature)~glue("Admission complaint of {Feature %>% str_remove(pc)}"),
+  grepl("pc",Feature)&grepl("FALSE",Feature)~glue("admission complaint of {Feature %>% str_remove(pc)}"),
+  grepl("^provider",Feature)~glue("Provider ID {Feature %>% str_remove(provider_id)}"),
+  grepl("^pr",Feature)~glue("Previous {Feature %>% str_remove(pr)}"),
+  grepl("^p",Feature)~glue("Previous {Feature %>% str_remove(p)}"),
+  grepl("^d7",Feature)~glue("Previous week {Feature %>% str_remove(d7)}"),
+  TRUE~Feature
+)) %>% mutate(Feature=case_when(
+  grepl("FALSE$",Feature)~glue("No {Feature %>% str_remove(false)}"),
+                                grepl("TRUE$",Feature)~glue("{Feature %>% str_remove(true)}"),
+                                TRUE~Feature
+)) %>% 
+  mutate(Feature = case_when(
+  grepl("r$",Feature)&!grepl("(insur|Rest|fever)",Feature)~glue("{Feature %>% str_remove(r)} resistance"),
+  grepl("rx$",Feature)~glue("{Feature %>% str_remove(rx)} treatment"),
+  grepl("ICD_",Feature)~str_replace(Feature,"ICD_","ICD diagnosis category "),
+  grepl("PROC_",Feature)~str_replace(Feature,"PROC_","ICD procedure category "),
+  grepl("NUTR",Feature)~str_replace(Feature,"NUTR","nutrition input in the last year"),
+  grepl("CATH",Feature)~str_replace(Feature,"CATH","urinary catheter in the last 28 days"),
+  grepl("Surg",Feature)~str_replace(Feature,"Surg","surgery in the least year"),
+  grepl("DISC",Feature)~str_replace(Feature,"DISC","discharge in the last 28 days"),
+  grepl("Restr",Feature)~str_replace(Feature,"Restr","need for restraints in the last year"),
+  grepl("NH",Feature)~str_replace(Feature,"NH","discharge to nursing care"),
+  grepl("HADM",Feature)~str_replace(Feature,"HADM","hospital admission in the last year"),
+  grepl("Physio",Feature)~str_replace(Feature,"Physio","physiotherapy input in the last year"),
+  grepl("Social",Feature)~str_replace(Feature,"Social","social worker input in the last year"),
+  grepl("Obese",Feature)~str_replace(Feature,"Obese","obesity recorded in the last 3 years"),
+  grepl("TPN",Feature)~str_replace(Feature,"TPN","parenteral nutrition in the last year"),
+  grepl("Overweight",Feature)~str_replace(Feature,"Overweight","overweight BMI in the last 3 years"),
+  grepl("DNR",Feature)~str_replace(Feature,"DNR","'do not resuscitate' order in the last year"),
+  grepl("OT",Feature)&!grepl("OTHER",Feature)~str_replace(Feature,"OT","occupational therapy input in the last year"),
+  grepl("ICU",Feature)~str_replace(Feature,"ICU","intensive care admission in the last 28 days"),
+  grepl("NGT",Feature)~str_replace(Feature,"NGT","nasogastric tube in the last 28 days"),
+  grepl("Neph",Feature)~str_replace(Feature,"Neph","nephrostomy insertion in the last year"),
+  grepl("Underweight",Feature)~str_replace(Feature,"Underweight","underweight BMI in the last 3 years"),
+  grepl("DIAB",Feature)~str_replace(Feature,"DIAB","diabetes diagnosis in the last year"),
+  grepl("SEPSIS",Feature)~str_replace(Feature,"SEPSIS","sepsis in the last year"),
+  grepl("CDI",Feature)~str_replace(Feature,"CDI","CDI in the last year"),
+  grepl("AKI",Feature)~str_replace(Feature,"AKI","acute kidney injury"),
+  grepl("DIAB",Feature)~str_replace(Feature,"DIAB","diabetes diagnosis"),
+  grepl("CARD",Feature)~str_replace(Feature,"CARD","cardiovascular disease"),
+  grepl(" CA$",Feature)~str_replace(Feature," CA"," cancer "),
+  grepl("CKD",Feature)~str_replace(Feature,"CKD","chronic kidney disease"),
+  grepl("CVA",Feature)~str_replace(Feature,"CVA","stroke"),
+  grepl("standard_age",Feature)~str_replace(Feature,"standard_age","Age group"),
+  grepl("ob_freq",Feature)~str_replace(Feature,"ob_freq","Observation frequency on admission"),
+  grepl("language",Feature)~str_replace(Feature,"language","Language: "),
+  grepl("admission_location",Feature)~str_replace(Feature,"admission_location","Admitted from "),
+  grepl("insurance",Feature)~str_replace(Feature,"insurance","Insurance status: "),
+  grepl("marital_status",Feature)~str_replace(Feature,"marital_status","Marital status: "),
+  grepl("curr_service_",Feature)~str_replace(Feature,"curr_service_","Current inpatient service provider: "),
+  grepl("curr_service",Feature)~str_replace(Feature,"curr_service","Current inpatient service provider: "),
+  grepl("race",Feature)~str_replace(Feature,"race","Race: "),
+  grepl("age65",Feature)~str_replace(Feature,"age65","Over age 65"),
+  grepl("highCRP",Feature)~str_replace(Feature,"highCRP","Elevated CRP on admission"),
+  grepl("abx_name_",Feature)~str_replace(Feature,"abx_name_","Antibiotic(s): "),
+  grepl("anchor_age",Feature)~str_replace(Feature,"anchor_age","Age"),
+  grepl("`Alkaline Phosphatase`",Feature)~str_replace(Feature,"`Alkaline Phosphatase`","Alkaline Phosphatase"),
+  grepl("`Red blood Cells`",Feature)~str_replace(Feature,"`Red blood Cells`","Red blood Cell Count"),
+  grepl("`White Blood Cells`",Feature)~str_replace(Feature,"`White Blood Cells`","Leukocyte Count"),
+  grepl("`Platelet Count`",Feature)~str_replace(Feature,"`Platelet Count`","Platelet Count"),
+  grepl("`Bilirubin, Total`",Feature)~str_replace(Feature,"`Bilirubin, Total`","Bilirubin"),
+  grepl("`Lactate Dehydrogenase`",Feature)~str_replace(Feature,"`Lactate Dehydrogenase`","Lactate Dehydrogenase"),
+  grepl("`Alanine Aminotransferase`",Feature)~str_replace(Feature,"`Alanine Aminotransferase`","Alanine Aminotransferase"),
+  grepl("temperat",Feature)~str_replace(Feature,"temperature","Temperature on admission"),
+  grepl("heartrate",Feature)~str_replace(Feature,"heartrate","Heart rate on admission"),
+  grepl("resprate",Feature)~str_replace(Feature,"resprate","Respiratory rate on admission"),
+  grepl("abnormalWCC",Feature)~str_replace(Feature,"abnormalWCC","Abnormal white cell count on admission"),
+  grepl("o2sat",Feature)~str_replace(Feature,"o2sat","Oxygen saturation on admission"),
+  grepl("temperat",Feature)~str_replace(Feature,"temperature","Temperature on admission"),
+  grepl("arrival_transport",Feature)~str_replace(Feature,"arrival_transport","Means of arrival "),
+  grepl("MALE",Feature)~str_replace(Feature,"MALE","Male"),
+  grepl("^sbp",Feature)~str_replace(Feature,"sbp","Systolic blood pressure on admission"),
+  grepl("^dbp",Feature)~str_replace(Feature,"dbp","Diastolic blood pressure on admission"),
+  grepl("^acuity",Feature)~str_replace(Feature,"acuity","Mental acuity score on admission"),
+  grepl("disposition",Feature)~str_replace(Feature,"disposition","Transfer location: "),
+  grepl("^`",Feature)~str_replace(Feature,"^`","Admitted on "),
+  grepl("Multivitamins",Feature)~str_replace(Feature,"Multivitamins","Admitted on multivitamins"),
+  grepl("lowbp",Feature)~str_replace(Feature,"lowbp","hypotension"),
+  grepl("flankpain",Feature)~str_replace(Feature,"flankpain","flank pain"),
+  grepl("anemia",Feature)~str_replace(Feature,"anemia","anaemia"),
+  grepl("prbleed",Feature)~str_replace(Feature,"prbleed","PR bleeding"),
+  grepl("diarvom",Feature)~str_replace(Feature,"diarvom","diarrhoea & vomiting"),
+  grepl("dyspnea",Feature)~str_replace(Feature,"dyspnea","dyspnoea"),
+  grepl("diarrhea",Feature)~str_replace(Feature,"diarrhea","diarrhoea"),
+  grepl("backpain",Feature)~str_replace(Feature,"backpain","back pain"),
+  grepl("Hyd",Feature)~str_replace(Feature,"Hyd","hydration therapy"),
+  TRUE~Feature
+)) %>% 
+  mutate(
+    Feature=case_when(
+      grepl("\\?",Feature)~str_replace(Feature,"\\?","UNKNOWN"),
+      grepl("^No `",Feature)~str_replace(Feature,"No `","Not admitted on `"),
+      TRUE~Feature
+    )
+  ) %>% 
+  mutate(
+    Feature=case_when(
+      grepl("`",Feature)~str_replace_all(Feature,"`",""),
+      TRUE~Feature
+    )
+  ) %>% mutate(
+    Feature=case_when(
+      grepl("AMP",Feature)~str_replace(Feature,"AMP",ab_name("AMP")),
+      grepl("SAM",Feature)~str_replace(Feature,"SAM",ab_name("SAM")),
+      grepl("TZP",Feature)~str_replace(Feature,"TZP",ab_name("TZP")),
+      grepl("CZO",Feature)~str_replace(Feature,"CZO",ab_name("CZO")),
+      grepl("CRO",Feature)~str_replace(Feature,"CRO",ab_name("CRO")),
+      grepl("CAZ",Feature)~str_replace(Feature,"CAZ",ab_name("CAZ")),
+      grepl("FEP",Feature)~str_replace(Feature,"FEP",ab_name("FEP")),
+      grepl("MEM",Feature)~str_replace(Feature,"MEM",ab_name("MEM")),
+      grepl("CIP",Feature)~str_replace(Feature,"CIP",ab_name("CIP")),
+      grepl("GEN",Feature)~str_replace(Feature,"GEN",ab_name("GEN")),
+      grepl("SXT",Feature)~str_replace(Feature,"SXT",ab_name("SXT")),
+      grepl("NIT",Feature)~str_replace(Feature,"NIT",ab_name("NIT")),
+      grepl("VAN",Feature)~str_replace(Feature,"VAN",ab_name("VAN")),
+      grepl("MTR",Feature)~str_replace(Feature,"MTR",ab_name("MTR")),
+      grepl("AZM",Feature)~str_replace(Feature,"AZM",ab_name("AZM")),
+      grepl("ERY",Feature)~str_replace(Feature,"ERY",ab_name("ERY")),
+      TRUE~Feature
+    )
+  ) %>% mutate(
+    Feature = str_replace(Feature,"_"," & ")
+  ) %>% mutate(
+    Feature = str_replace(Feature,"\\.","/")
+  ) %>% mutate(Feature=case_when(
+    grepl("Previous week",Feature)~glue("{Feature %>% str_remove(prev_week)} in the last week"),
+    grepl("Ampicillinc",Feature)~str_replace(Feature,"Ampicillinc","AMPc beta-lactamase"),
+    grepl("No Over",Feature)~str_replace(Feature,"No Over","Not over"),
+    grepl("RDW",Feature)~str_replace(Feature,"RDW","Most recent RDW"),
+    grepl("Albumin",Feature)~str_replace(Feature,"Albumin","Most recent Albumin"),
+    grepl("PTT",Feature)~str_replace(Feature,"PTT","Most recent prothrombin time"),
+    grepl("Alkaline Phosphatase",Feature)~str_replace(Feature,"Alkaline Phosphatase","Most recent Alkaline Phosphatase"),
+    grepl("Red blood Cell Count",Feature)~str_replace(Feature,"Red blood Cell Count","Most recent Red blood Cell Count"),
+    grepl("Lymphocytes",Feature)~str_replace(Feature,"Lymphocytes","Most recent Lymphocyte Count"),
+    grepl("Leukocyte Count",Feature)~str_replace(Feature,"Leukocyte Count","Most recent Leukocyte Count"),
+    grepl("Hemoglobin",Feature)~str_replace(Feature,"Hemoglobin","Most recent Haemoglobin"),
+    grepl("Platelet Count",Feature)~str_replace(Feature,"Platelet Count","Most recent Platelet Count"),
+    grepl("Potassium",Feature)~str_replace(Feature,"Potassium","Most recent Serum Potassium"),
+    grepl("Neutrophils",Feature)~str_replace(Feature,"Neutrophils","Most recent Neutrophil Count"),
+    grepl("Hematocrit",Feature)~str_replace(Feature,"Hematocrit","Most recent Haematocrit"),
+    grepl("Lactate",Feature)~str_replace(Feature,"Lactate","Most recent Lactate"),
+    grepl("Monocytes",Feature)~str_replace(Feature,"Monocytes","Most recent Monocyte Count"),
+    grepl("Bilirubin",Feature)~str_replace(Feature,"Bilirubin","Most recent Bilirubin"),
+    grepl("Sodium",Feature)~str_replace(Feature,"Sodium","Most recent Serum Sodium"),
+    grepl("Bicarbonate",Feature)~str_replace(Feature,"Bicarbonate","Most recent Serum Bicarbonate"),
+    grepl("Lactate Dehydrogenase",Feature)~str_replace(Feature,"Lactate Dehydrogenase","Most recent Lactate Dehydrogenase"),
+    grepl("Creatinine",Feature)~str_replace(Feature,"Creatinine","Most recent Creatinine"),
+    grepl("RDW",Feature)~str_replace(Feature,"RDW","Most recent RDW"),
+    grepl("No Male",Feature)~str_replace(Feature,"No","Not"),
+    TRUE~Feature
+  ))
 
-
-
-
+write_csv(feat_table,"feat_table.csv")
 
