@@ -90,7 +90,7 @@ The distributions of utility values were plotted across the microsimulation data
 
 ## Microsimulation study design
 
-The single antibiotic with the highest utility value for each patient in the microsimulation dataset was selected as the personalised first-line treatment recommendation for that patient. The antibiotic with the second-highest utility was chosen as second-line option, and so on until all 13 antimicrobial agents were ranked as treatment recommendations in order of utility value for each patient. The outcomes of interest were the following, measured at illness severity weights of zero (representing systemically well patients) and 30 (representing critically unwell patients):
+The single antibiotic with the highest utility value for each patient in the microsimulation dataset was selected as the personalised first-line treatment recommendation for that patient. The antibiotic with the second-highest utility was chosen as second-line option, and so on until all 13 antimicrobial agents were ranked as treatment recommendations in order of utility value for each patient. The outcomes of interest were the following, measured at a default illness severity weights of zero (representing systemically well patients) and 30 (representing critically unwell patients):
 
 1.  The proportion of organisms grown in urine that were susceptible to the recommended first-line antibiotic
 
@@ -102,7 +102,7 @@ The single antibiotic with the highest utility value for each patient in the mic
 
 Proportions were compared against a standard first-line option for systemically well patients (nitrofurantoin) and for critically ill patients (piperacillin-tazobactam) - these agents were selected as comparators because they were the oral and intravenous antibiotics respectively that had the highest rates of susceptibility in the dataset. A chi-squared test was used as a significance test for the comparisons with a significance threshold of 5% – results are reported as proportions for the two groups with 95% confidence intervals. A sample size calculation was performed for the chi-squared test based on expected proportions of 0.7 and 0.75 with a power of 80%.
 
-Sensitivity analyses were performed to assess the effect of increasing the illness severity weight from zero up to 30 on the four outcomes listed above (for first-line single antibiotics, then for two-agent combinations, then for second-line antibiotics) and the antibiotics recommended - these results were plotted using area and line plots respectively. This analysis was then repeated to assess the potential effect of improved probability predictions by taking the mean of the predicted probability and the actual outcome denoted by one or zero, then again plotting outcomes and antibiotics recommended across illness severity using an area and line chart respectively. A further repeat of the analysis was performed to assess the effect of increased illness severity on the predicted CDI risk, toxicity risk, and minimum financial cost of first-line treatment recommendations. A similar sensitivity analysis was then performed to assess the effect of increasing nitrofurantoin resistance probability from zero up to one on the four outcomes listed above and antibiotics resommenced, plotting the results using an area and line chart respectively.
+Sensitivity analyses were performed to assess the effect of increasing the illness severity weight from zero up to 30 on the four outcomes listed above (for first-line single antibiotics, then for two-agent combinations, then for second-line antibiotics) and the antibiotics recommended - these results were plotted using area and line plots respectively. This analysis was then repeated to assess the potential effect of improved probability predictions by taking the mean of the predicted probability and the actual outcome denoted by one or zero, then again plotting outcomes and antibiotics recommended across illness severity using an area and line chart respectively. The analysis was repeated again to assess the effect of increased illness severity on the predicted CDI risk, toxicity risk, and minimum financial cost of first-line treatment recommendations. A subanalysis was also performed in inpatients on antibiotic therapy at the time of urine sampling to compare recommended antibiotics against those that were actually prescribed. A similar sensitivity analysis was performed to assess the effect of increasing nitrofurantoin resistance probability from zero up to one on the four outcomes listed above and antibiotics recommenced, plotting the results using an area and line chart respectively.
 
 # Results
 
@@ -112,9 +112,8 @@ The characteristics of patients, antimicrobial agents, and specimens in the mode
 
 ## Model specification
 
-Final training hyperparameters used for each model are summarised in Appendix 4.
+Final training hyperparameters used for each model are summarised in Appendix 4, and predictor variable contributions to predictive accuracy are summarised in Appendix 5.
 
-Model hyperparameters (appendix)
 
 Feature contributions (appendix)
 
@@ -307,5 +306,16 @@ hyp_tab <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/hyp_tab.csv
 
 knitr::kable(hyp_tab,
              caption = "Final training hyperparameters used for the 39 clinical prediction models.")
+
+```
+
+## Appendix 5
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+
+feat_table <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/feat_table.csv")
+
+knitr::kable(feat_table,
+             caption = "Feature importances in the clinical prediction models.")
 
 ```
