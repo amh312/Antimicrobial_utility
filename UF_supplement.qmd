@@ -1,0 +1,266 @@
+---
+title: "Automating antibiotic treatment choice using clinical prediction modelling: a microsimulation study"
+format:
+  docx:
+    reference-doc: doc_template.docx
+bibliography: UF_references.bib
+csl: /Users/alexhoward/Zotero/styles/the-lancet-infectious-diseases.csl
+editor: visual
+---
+
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+
+library(tidyverse)
+library(knitr)
+library(glue)
+
+```
+
+# Supplementary Material
+
+## Appendix 1: Data processing workflow
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Data flow chart.pdf")
+```
+Appendix 1: Data processing workflow
+
+## Appendix 2: Utility function
+
+Antibiotic treatment choice utility ($U$) is defined by:
+
+$$
+U^{(x)(n)} = w_s^{(x)}v_s^{(x)(n)}\left(  \sum_{k \in K} u\left(w_k, v_k^{(x)(n)}\right) + 
+\sum_{l \in L} u\left(w_l^{(x)}, v_l^{(x)(n)}\right) +
+u\left(w^{(n)}_i, v_i^{(x)}\right) \right)
+$$ {#eq-utility}
+
+where
+
+$$
+u(w, v) = 
+\begin{cases}
+    wp & \text{if } w \geq 0 \\
+    |w|(1-v) & \text{otherwise} \\
+\end{cases}
+$$
+
+$x$ is the antibiotic, $n$ is the patient, $K = \{u, a, o, r, h\}$, $L = \{c, t\}$, $v$ are values, and $w$ are weights. Weights $w_k$ in $K$ are defined solely by corresponding ranked logit coefficients from the clinician discrete choice experiment (DCE). Weight $w_s$ is defined solely by the area under the receiver operating characteristic (AUROC) value for the susceptibility clinical prediction model on the model validation dataset. Weights $w_l$ in $L$ are defined by:
+
+$$
+w_l^{(x)} = w_{l,1} + w_{l,2}^{(x)}
+$$
+
+where $w_{l,1}$ is the corresponding DCE ranked logit coefficient and $w_{l,2}$ is the validation AUROC value for the respective clinical prediction model.
+
+$w_i$ is defined by:
+
+$$
+w_i^{(n)} = w_{i,1} + w_{i,2}^{(n)}
+$$
+
+where $w_{i,1}$ is the corresponding DCE ranked logit coefficient and $w_{i,2}$ is an illness severity weight defined by the user.
+
+Values are defined as follows:
+
+$$
+v_s \in [0,1] \quad \text{(Probability of organism antimicrobial susceptibility)}
+$$
+
+$$
+v_u \in \{0,1\} \quad \text{(UTI-specific agent)}
+$$
+
+$$
+v_a \in \{0,1\} \quad \text{(WHO Access agent)}
+$$
+
+$$
+v_o \in \{0,1\} \quad \text{(Orally-administrable agent)}
+$$
+
+$$
+v_i \in \{0,1\} \quad \text{(Intravenously-administrable agent)}
+$$
+
+$$
+v_r \in \{0,1\} \quad \text{(WHO Reserve agent)}
+$$
+
+$$
+v_h \in [0,1] \quad \text{(Normalised agent cost)}
+$$
+
+$$
+v_c \in [0,1] \quad \text{(Probability of } \textit{Clostridiodes difficile} \text{ infection)}
+$$
+
+$$
+v_t \in [0,1] \quad \text{(Probability of agent toxicity)}
+$$
+
+## Appendix 2
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+
+desc_tab <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/uf_desctab.csv")
+
+desc_tab$Characteristic[is.na(desc_tab$Characteristic)] <- "··"
+
+knitr::kable(desc_tab)
+
+```
+Appendix 2: Patient compositions of the model development and microsimulation datasets.
+
+##Appendix 3
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+
+ab_tab <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/ab_tab.csv")
+
+knitr::kable(ab_tab,)
+
+```
+Appendix 3:: Antibiotic courses in the prescription dataset, including two-combination administrations of more than 24 hours duration.
+
+## Appendix 4
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+
+hyp_tab <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/hyp_tab.csv")
+
+knitr::kable(hyp_tab)
+
+```
+Appendix 4: Final training hyperparameters used for the 39 clinical prediction models.
+
+## Appendix 5
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+
+feat_table <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/feat_table.csv")
+
+knitr::kable(feat_table)
+
+```
+Appendix 5: Feature importances in the clinical prediction models.
+
+##Appendix 6
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/roc_plots_other.pdf")
+  
+```
+Appendix 6: ROC curves for probability predictions made for 2-antibiotic combination susceptibility on the validation dataset.
+
+## Appendix 7
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+
+matrics_combos_table <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/metrics_combos_table.csv")
+
+knitr::kable(matrics_combos_table)
+
+```
+Appendix 7: Model performance metrics for 2-antibiotic combinations in the single validation run on the validation dataset.
+
+
+## Appendix 8
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/stability_AUC-ROC.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/stability_Precision.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/stability_Recall.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/stability_F1 score.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/stability_Accuracy.pdf")
+  
+```
+Appendix 8: Small dataset stability metrics for single antibiotic, CDI, and toxicity models in six random train-test splits stratified by outcome at a sequence of small dataset sizes across 50 training runs of XGBoost.
+
+## Appendix 9
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2008 - 2010_AUC-ROC.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2008 - 2010_Precision.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2008 - 2010_Recall.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2008 - 2010_F1 score.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2008 - 2010_Accuracy.pdf")
+
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2011 - 2013_AUC-ROC.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2011 - 2013_Precision.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2011 - 2013_Recall.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2011 - 2013_F1 score.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2011 - 2013_Accuracy.pdf")
+
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2014 - 2016_AUC-ROC.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2014 - 2016_Precision.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2014 - 2016_Recall.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2014 - 2016_F1 score.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2014 - 2016_Accuracy.pdf")
+
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2017 - 2019_AUC-ROC.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2017 - 2019_Precision.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2017 - 2019_Recall.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2017 - 2019_F1 score.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2017 - 2019_Accuracy.pdf")
+
+```
+Appendix 9: Year group cluster analysis of clinical prediction model performance in six random train-test splits stratified by outcome.
+
+## Appendix 10
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_Age group_AUC-ROC.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_Age group_Precision.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_Age group_Recall.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_Age group_F1 score.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_Age group_Accuracy.pdf")
+
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_Race_AUC-ROC.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_Race_Precision.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_Race_Recall.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_Race_F1 score.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_Race_Accuracy.pdf")
+
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_(Gender|Language|Marital)_AUC-ROC.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_(Gender|Language|Marital)_Precision.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_(Gender|Language|Marital)_Recall.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_(Gender|Language|Marital)_F1 score.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_(Gender|Language|Marital)_Accuracy.pdf")
+
+  
+```
+Appendix 10: Fairness analyses of clinical prediction model performance across age, race, gender, spoken language, and marital status in six random train-test splits stratified by outcome.
+
+## Appendix 11
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Medicine_importances.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Surgery_importances.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Infection_importances.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Intensive care_importances.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/General Practice_importances.pdf")
+
+```
+Appendix 11: Coefficients from the ranked logit analysis of the discrete choice experiment across all prescriber specialties
+
+## Appendix 12
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_, medical specialties.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_, surgical specialties.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_, infection specialties.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_, intensive care.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_, general practice.pdf")
+
+
+```
+Appendix 12: The distribution of utility values across the microsimulation dataset for all agents (including 2-inpatient combinations), both overall and stratified by the individual specialities
