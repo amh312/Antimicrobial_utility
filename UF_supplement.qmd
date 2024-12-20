@@ -19,6 +19,15 @@ library(glue)
 
 # Supplementary Material
 
+## Appendix 1: Discrete choice experiment questionnaire
+
+```{r}
+
+print("Screenshot of discrete choice experiment here")
+
+```
+Figure 1: The discrete choice experiment provided to prescribers
+
 ## Appendix 1: Data processing workflow
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
@@ -255,12 +264,40 @@ Appendix 11: Coefficients from the ranked logit analysis of the discrete choice 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_, medical specialties.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_, surgical specialties.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_, infection specialties.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_, intensive care.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_, general practice.pdf")
-
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_ (single agent, medical specialties).pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_ (single agent, surgical specialties).pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_ (single agent, infection specialties).pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_ (single agent, intensive care).pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_ (single agent, general practice).pdf")
 
 ```
 Appendix 12: The distribution of utility values across the microsimulation dataset for all agents (including 2-inpatient combinations), both overall and stratified by the individual specialities
+
+## Appendix 13
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_.pdf")
+
+```
+Appendix 13: The overall distribution of utility values across the microsimulation dataset for all antibiotics including 2-agent combinations.
+
+## Appendix 14
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/UTI-specificity_sens_plots_grid.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Access category_sens_plots_grid.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Oral option_sens_plots_grid.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/IV option_sens_plots_grid.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Cost_sens_plots_grid.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Reserve category_sens_plots_grid.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/sens_plots_grid.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/auc_sens_plots_grid.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/resistance_sens_plots_grid.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/CDI probability_sens_plots_grid.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/toxicity probability_sens_plots_grid.pdf")
+
+
+```
+Appendix 14: Sensitivity analyses demonstrating the effect of varying all utility function parameters on overall treatment utility of individual antibiotics.
