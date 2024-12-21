@@ -15,7 +15,7 @@ abs_calc <- function(val,prob) {
   ifelse(val>=0,val*prob,abs(val)*(1-prob))
   
 }
-calculate_utilities <- function(df,formulary_list=c(),R_weight=1,MEWS=0) {
+calculate_utilities <- function(df,formulary_list=c(),R_weight=1,MEWS=1) {
   
   df <- df %>% mutate(overall_util=util_uti + util_access +
                         util_oral + 
@@ -294,6 +294,8 @@ dens_sens_plot <- function(df,measure,uf) {
   
   iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
   
+  sens_plots <- list()
+  
   for(i in seq_along(iterabs)) {
   
   df_spec_plot <- df %>% filter(Antimicrobial==iterabs[i])
@@ -325,12 +327,18 @@ dens_sens_plot <- function(df,measure,uf) {
     theme(panel.grid.major = element_blank(),
           panel.grid.minor = element_blank())
   
+  sens_plots[[i]] <- df_plot
+  
   ggsave(glue("dens_sens_1_{iterabs[i]}_{measure}.pdf"), plot = df_plot, device = "pdf", width = 6, height = 4,
          path="/Users/alexhoward/Documents/Projects/UDAST_code")
   
   print(df_plot)
   
   }
+  
+  grid_plot <- plot_grid(plotlist = sens_plots, ncol = 3)
+  
+  ggsave("resistance_sens_plots_grid.pdf", plot = grid_plot, width = 20, height = 30)
   
 }
 
@@ -427,7 +435,6 @@ R_util_sens <- function(df,probs_df,uf,min_val,max_val) {
       
       ##Extracting characteristic Desirability weights
       
-      ##Apply ridge regression
       mlogit_data <- mlogit.data(scores, choice = "Rank", shape = "long", 
                                  chid.var = "id", alt.var = "Antibiotic", 
                                  ranked = TRUE)
@@ -474,7 +481,6 @@ R_util_sens <- function(df,probs_df,uf,min_val,max_val) {
       ###Toxicity risk utility
       tox_value <- scores2[rownames(scores2)=="Toxicity_highrisk",] %>% 
         select(Value) %>% unlist()
-      
       
       ###UTI-specific utility
       uti_specifics <- c("Nitrofurantoin")
@@ -881,6 +887,7 @@ util_sens <- function(df,probs_df,uf,variable_criterion,min_val,max_val) {
 util_sens_plot <- function(df,measure,value) {
   
   iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
+  sens_plots <- list()
   
   for(i in seq_along(iterabs)) {
     
@@ -913,17 +920,25 @@ util_sens_plot <- function(df,measure,value) {
                     panel.grid.minor = element_blank())+
       geom_vline(xintercept = 0, color = "lightgrey", size = 0.5)
     
+    sens_plots[[i]] <- df_plot
+    
     ggsave(glue("util_sens_{value}_{iterabs[i]}_{measure}.pdf"), plot = df_plot, device = "pdf", width = 6, height = 4,
            path="/Users/alexhoward/Documents/Projects/UDAST_code")
     
     print(df_plot)
     
+    
   }
+  
+  grid_plot <- plot_grid(plotlist = sens_plots, ncol = 3)
+  
+  ggsave(glue("{value}_sens_plots_grid.pdf"), plot = grid_plot, width = 20, height = 30)
   
 }
 R_util_sens_plot <- function(df,measure,value) {
   
   iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
+  sens_plots <- list()
   
   for(i in seq_along(iterabs)) {
     
@@ -954,14 +969,20 @@ R_util_sens_plot <- function(df,measure,value) {
       theme_minimal()+
       theme(panel.grid.major = element_blank(),
             panel.grid.minor = element_blank())+
-      scale_x_continuous(breaks = seq(min(df$spec_value), max(df$spec_value), by = 1))
+      scale_x_continuous(breaks = seq(min(df$spec_value), max(df$spec_value), by = 5))
     
-    ggsave(glue("dens_sens_{value}_{iterabs[i]}_{measure}.pdf"), plot = df_plot, device = "pdf", width = 6, height = 4,
+    sens_plots[[i]] <- df_plot
+    
+    ggsave(glue("dens_sens_{value}_{iterabs[i]}_Rsens.pdf"), plot = df_plot, device = "pdf", width = 6, height = 4,
            path="/Users/alexhoward/Documents/Projects/UDAST_code")
     
     print(df_plot)
     
   }
+  
+  grid_plot <- plot_grid(plotlist = sens_plots, ncol = 3)
+  
+  ggsave("sens_plots_grid.pdf", plot = grid_plot, width = 20, height = 30)
   
 }
 
@@ -1124,6 +1145,7 @@ cdi_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
       ###Attach individual utilities to dataframe
       probs_df_3 <- probs_df_3 %>% 
         mutate(value_CDI = cdi_value,
+               prob_CDI=prob_vector,
                util_CDI = abs_calc(value_CDI,prob_CDI),
                value_tox = tox_value,
                util_tox = abs_calc(value_tox,prob_tox),
@@ -1309,6 +1331,7 @@ tox_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
         mutate(value_CDI = cdi_value,
                util_CDI = abs_calc(value_CDI,prob_CDI),
                value_tox = tox_value,
+               prob_tox=prob_vector,
                util_tox = abs_calc(value_tox,prob_tox),
                UTI_specific = case_when(Antimicrobial %in% uti_specifics ~ 1, TRUE~0),
                value_UTI = uti_value,
@@ -1832,6 +1855,7 @@ auc_sens_plot <- function(df,measure,uf) {
   uf <- enquo(uf)
   
   iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
+  sens_plots <- list()
   
   for(i in seq_along(iterabs)) {
     
@@ -1858,11 +1882,13 @@ auc_sens_plot <- function(df,measure,uf) {
                       group = Antimicrobial, fill = Antimicrobial), alpha = 0.3) +
       xlim(0,1) +
       ggtitle(glue("Effect of varying {iterabs[i]} prediction\nAUROC on {iterabs[i]} {measure} utility")) +
-      xlab(glue("Population median probability of\n{iterabs[i]} resistance")) +
+      xlab(glue("AUROC for {iterabs[i]} susceptibility prediction")) +
       ylab(glue("{measure} utility")) +
       theme_minimal()+
       theme(panel.grid.major = element_blank(),
             panel.grid.minor = element_blank())
+    
+    sens_plots[[i]] <- df_plot
     
     ggsave(glue("auc_sensplot_{iterabs[i]}_{measure}.pdf"), plot = df_plot, device = "pdf", width = 6, height = 4,
            path="/Users/alexhoward/Documents/Projects/UDAST_code")
@@ -1870,6 +1896,10 @@ auc_sens_plot <- function(df,measure,uf) {
     print(df_plot)
     
   }
+  
+  grid_plot <- plot_grid(plotlist = sens_plots, ncol = 3)
+  
+  ggsave(glue("auc_sens_plots_grid.pdf"), plot = grid_plot, width = 20, height = 30)
   
 }
 
@@ -1879,6 +1909,7 @@ dens_sens_plot_2 <- function(df,characteristic,measure,char_col) {
   char_col <- enquo(char_col)
   
   iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
+  sens_plots <- list()
   
   for(i in seq_along(iterabs)) {
     
@@ -1910,12 +1941,18 @@ dens_sens_plot_2 <- function(df,characteristic,measure,char_col) {
       theme(panel.grid.major = element_blank(),
             panel.grid.minor = element_blank())
     
+    sens_plots[[i]] <- df_plot
+    
     ggsave(glue("dens_sens_2_{iterabs[i]}_{measure}.pdf"), plot = df_plot, device = "pdf", width = 6, height = 4,
            path="/Users/alexhoward/Documents/Projects/UDAST_code")
     
     print(df_plot)
     
   }
+  
+  grid_plot <- plot_grid(plotlist = sens_plots, ncol = 3)
+  
+  ggsave(glue("{characteristic}_sens_plots_grid.pdf"), plot = grid_plot, width = 20, height = 30)
   
 }
 
@@ -2026,6 +2063,34 @@ scores <- scores %>%
                          "UTI-specific","IV option","High cost","Access category",
                          "Reserve category")) %>% 
   arrange(Value)
+scores_rownames <- rownames(scores)
+
+# Approximate confidence intervals using bootstrap approach
+boot_coefs <- matrix(NA, nrow = 1000, ncol = length(coef(mlogit(formula_no_int, data = mlogit_data, method = "bfgs"))))
+for (i in 1:1000) {
+  boot_index <- sample(unique(mlogit_data$id), replace = TRUE)
+  boot_mlogit <- mlogit_data %>% subset(id %in% boot_index)
+  boot_model <- mlogit(formula_no_int, data = boot_mlogit, method = "bfgs")
+  boot_coefs[i, ] <- coef(boot_model)
+}
+iqs <- data.frame(Coefficient=factor(names(coef(boot_model))),Q5=NA,Q95=NA)
+iqs <- iqs %>% mutate(Coefficient=case_when(
+  grepl("CDI",Coefficient)~ "High CDI risk",
+  grepl("Toxicity",Coefficient)~ "High toxicity risk",
+  grepl("UTI",Coefficient)~ "UTI-specific",
+  grepl("Access",Coefficient)~ "Access category",
+  grepl("Reserve",Coefficient)~ "Reserve category",
+  TRUE~Coefficient
+)) %>% 
+  mutate(Coefficient=str_replace_all(Coefficient,"_"," "))
+for (i in 1:ncol(boot_coefs)) {
+  
+  iqs$Q5[i] <- quantile(boot_coefs[,i],probs=seq(0,1,0.05))['5%']
+  iqs$Q95[i] <- quantile(boot_coefs[,i],probs=seq(0,1,0.05))['95%']
+  
+}
+scores <- scores %>% left_join(iqs)
+rownames(scores) <- scores_rownames
 
 ###Export unstandardised weights for reference
 unstan_vals <- scores %>% select(Value) %>% 
@@ -2042,22 +2107,20 @@ scores$Coefficient <- factor(scores$Coefficient, levels=
 
 sens_features <- ggplot(scores,aes(x=Value,y=Coefficient,fill=colour)) +
   geom_col() +
-  theme(legend.position = "None") +
   geom_hline(aes(yintercept=0)) +
   ylab("Drug property") +
   xlab("Coefficient value for drug selection probability") +
-  ggtitle(glue("The effect of different antimicrobial drug properties\non {specialty} clinician prescribing preference in UTI scenario"))+
-  geom_vline(xintercept = 0)
+  ggtitle(glue("The effect of different antimicrobial drug properties on\n{specialty} clinician prescribing preference in the UTI\nscenario discrete choice experiment"))+
+  geom_vline(xintercept = 0,colour="grey40")+
+  geom_errorbar(aes(xmin = Q5, xmax = Q95), width = 0.1,colour="grey40")+
+  theme_minimal()+
+  theme(panel.grid = element_blank(),
+        legend.position = "None")
 
 ggsave(glue("{specialty}_importances.pdf"), plot = sens_features, device = "pdf", width = 8, height = 4,
        path="/Users/alexhoward/Documents/Projects/UDAST_code")
 print(sens_features)
 
-
-
-
-
-print(sens_features)
 
 ###Antimicrobial dummy variables in probability prediction dataframe
 df$abx_name_ <- as.factor(df$Antimicrobial)
@@ -2250,6 +2313,8 @@ abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>%
   str_replace_all("/","-")
 combined_antimicrobial_map <- combined_antimicrobial_map[names(combined_antimicrobial_map) %in% abx_in_train]
 metrics_ablist <- c(combined_antimicrobial_map,"CDI","toxicity")
+
+###Performance metrics summary
 auc_df <- data.frame(matrix(nrow=length(metrics_ablist),ncol=0))
 auc_df$Antimicrobial <- metrics_ablist
 for (i in 1:length(metrics_ablist)) {
@@ -2316,6 +2381,24 @@ f1_score_df[39,1] <- "toxicity"
 f1_score_df$Antimicrobial <- as.character(f1_score_df$Antimicrobial)
 write_csv(f1_score_df,"f1_score_df.csv")
 
+metrics_manus_table <- auc_df %>% left_join(precision_df,by="Antimicrobial") %>% 
+  left_join(recall_df,by="Antimicrobial") %>%
+  left_join(f1_score_df,by="Antimicrobial") %>%
+  left_join(accuracy_df,by="Antimicrobial") %>% 
+  rename(Model="Antimicrobial",AUROC="AUC",Precision="precision",
+         Recall="recall",`F1 score`="f1_score", Accuracy="accuracy") %>% 
+  mutate(across(AUROC:`Accuracy`, ~ round(.x,3)),
+         Model=str_replace_all(Model,"_"," & "))
+metrics_singles_table <- metrics_manus_table %>% dplyr::slice(
+  c(1:13,38:39)
+) %>% mutate(Model=case_when(Model=="toxicity"~"Toxicity",TRUE~Model))
+metrics_combos_table <- metrics_manus_table %>% dplyr::slice(
+  -c(1:13,38:39)
+) %>% mutate(Model=case_when(Model=="toxicity"~"Toxicity",TRUE~Model))
+
+write_csv(metrics_singles_table,"metrics_singles_table.csv")
+write_csv(metrics_combos_table,"metrics_combos_table.csv")
+
 ###Re-factorising outcome variables on abx dataframes after read-in
 train_abx <- train_abx %>% factorise()
 test_abx <- test_abx %>% factorise()
@@ -2377,6 +2460,7 @@ scores <- scores %>% select(-AWaRe) %>%
   mutate(across(c(Rank, CDI_highrisk, Toxicity_highrisk, UTI_specific,Access,
                   Watch,Reserve), as.numeric)) 
 
+
 repeat_val <- nrow(scores)/13
 seq_rep <- seq(1,nrow(scores)/13)
 seq_rep1 <- c()
@@ -2424,6 +2508,34 @@ scores <- scores %>%
                          "UTI-specific","IV option","High cost","Access category",
                          "Reserve category")) %>% 
   arrange(Value)
+score_rownames <- rownames(scores)
+
+# Approximate confidence intervals using bootstrap approach
+boot_coefs <- matrix(NA, nrow = 1000, ncol = length(coef(mlogit(formula_no_int, data = mlogit_data, method = "bfgs"))))
+for (i in 1:1000) {
+  boot_index <- sample(unique(mlogit_data$id), replace = TRUE)
+  boot_mlogit <- mlogit_data %>% subset(id %in% boot_index)
+  boot_model <- mlogit(formula_no_int, data = boot_mlogit, method = "bfgs")
+  boot_coefs[i, ] <- coef(boot_model)
+}
+iqs <- data.frame(Coefficient=factor(names(coef(boot_model))),Q5=NA,Q95=NA)
+iqs <- iqs %>% mutate(Coefficient=case_when(
+  grepl("CDI",Coefficient)~ "High CDI risk",
+  grepl("Toxicity",Coefficient)~ "High toxicity risk",
+  grepl("UTI",Coefficient)~ "UTI-specific",
+  grepl("Access",Coefficient)~ "Access category",
+  grepl("Reserve",Coefficient)~ "Reserve category",
+  TRUE~Coefficient
+)) %>% 
+  mutate(Coefficient=str_replace_all(Coefficient,"_"," "))
+for (i in 1:ncol(boot_coefs)) {
+  
+  iqs$Q5[i] <- quantile(boot_coefs[,i],probs=seq(0,1,0.05))['5%']
+  iqs$Q95[i] <- quantile(boot_coefs[,i],probs=seq(0,1,0.05))['95%']
+  
+}
+scores <- scores %>% left_join(iqs)
+rownames(scores) <- score_rownames
 
 ###Export unstandardised weights for reference
 unstan_vals <- scores %>% select(Value) %>% 
@@ -2440,12 +2552,15 @@ scores$Coefficient <- factor(scores$Coefficient, levels=
 
 ORplot <- ggplot(scores,aes(x=Value,y=Coefficient,fill=colour)) +
   geom_col() +
-  theme(legend.position = "None") +
   geom_hline(aes(yintercept=0)) +
   ylab("Drug property") +
   xlab("Coefficient value for drug selection probability") +
-  ggtitle("The effect of different antimicrobial drug properties\non clinician prescribing preference in UTI scenario")+
-  geom_vline(xintercept = 0)
+  ggtitle("The effect of different antimicrobial drug properties on clinician prescribing\npreference in the UTI scenario discrete choice experiment")+
+  geom_vline(xintercept = 0,colour="grey40")+
+  geom_errorbar(aes(xmin = Q5, xmax = Q95), width = 0.1,colour="grey40")+
+  theme_minimal()+
+  theme(panel.grid = element_blank(),
+        legend.position = "None")
 
 ggsave(glue("ORplot.pdf"), plot = ORplot, device = "pdf", width = 10, height = 8,
        path="/Users/alexhoward/Documents/Projects/UDAST_code")
