@@ -263,7 +263,6 @@ Appendix 11: Coefficients from the ranked logit analysis of the discrete choice 
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_.pdf")
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_ (single agent, medical specialties).pdf")
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_ (single agent, surgical specialties).pdf")
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_ (single agent, infection specialties).pdf")
@@ -292,6 +291,8 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Oral op
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/IV option_sens_plots_grid.pdf")
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Cost_sens_plots_grid.pdf")
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Reserve category_sens_plots_grid.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/CDI_sens_plots_grid.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Toxicity_sens_plots_grid.pdf")
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/sens_plots_grid.pdf")
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/auc_sens_plots_grid.pdf")
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/resistance_sens_plots_grid.pdf")
