@@ -1549,4 +1549,120 @@ for (i in seq_along(yearlist)) {
   
 }
 
+##Hyperparameter dataframe
+hyp_names = c("Learning rate","Maximum tree depth",
+              "Minimum child weight","Row subsample",
+              "Column subsample","N training rounds")
 
+hyp_tab <- tibble(AMP=final_bestparams$AMP %>% unlist(),
+       SAM=final_bestparams$SAM %>% unlist(),
+       TZP=final_bestparams$TZP %>% unlist(),
+       CZO=final_bestparams$CZO %>% unlist(),
+       CRO=final_bestparams$CRO %>% unlist(),
+       CAZ=final_bestparams$CAZ %>% unlist(),
+       FEP=final_bestparams$FEP %>% unlist(),
+       MEM=final_bestparams$MEM %>% unlist(),
+       CIP=final_bestparams$CIP %>% unlist(),
+       GEN=final_bestparams$GEN %>% unlist(),
+       SXT=final_bestparams$SXT %>% unlist(),
+       NIT=final_bestparams$NIT %>% unlist(),
+       VAN=final_bestparams$VAN %>% unlist(),
+       AMP_CRO=final_bestparams$AMP_CRO %>% unlist(),
+       AMP_GEN=final_bestparams$AMP_GEN %>% unlist(),
+       AMP_VAN=final_bestparams$AMP_VAN %>% unlist(),
+       SAM_VAN=final_bestparams$SAM_VAN %>% unlist(),
+       TZP_CIP=final_bestparams$TZP_CIP %>% unlist(),
+       TZP_SXT=final_bestparams$TZP_SXT %>% unlist(),
+       TZP_VAN=final_bestparams$TZP_VAN %>% unlist(),
+       CZO_CIP=final_bestparams$CZO_CIP %>% unlist(),
+       CZO_SXT=final_bestparams$CZO_SXT %>% unlist(),
+       CZO_VAN=final_bestparams$CZO_VAN %>% unlist(),
+       CRO_FEP=final_bestparams$CRO_FEP %>% unlist(),
+       CRO_CIP=final_bestparams$CRO_CIP %>% unlist(),
+       CRO_SXT=final_bestparams$CRO_SXT %>% unlist(),
+       CRO_VAN=final_bestparams$CRO_VAN %>% unlist(),
+       CAZ_VAN=final_bestparams$CAZ_VAN %>% unlist(),
+       FEP_CIP=final_bestparams$FEP_CIP %>% unlist(),
+       FEP_SXT=final_bestparams$FEP_SXT %>% unlist(),
+       FEP_VAN=final_bestparams$FEP_VAN %>% unlist(),
+       MEM_SXT=final_bestparams$MEM_SXT %>% unlist(),
+       MEM_VAN=final_bestparams$MEM_VAN %>% unlist(),
+       CIP_SXT=final_bestparams$CIP_SXT %>% unlist(),
+       CIP_VAN=final_bestparams$CIP_VAN %>% unlist(),
+       GEN_VAN=final_bestparams$GEN_VAN %>% unlist(),
+       SXT_VAN=final_bestparams$SXT_VAN %>% unlist(),
+       CDI=cdi_tox_final_bestparams$CDI %>% unlist(),
+       Toxicity=cdi_tox_final_bestparams$overall_tox %>% unlist()) %>% 
+  dplyr::slice(-c(1:2))
+
+replace_values <- function(column, map) {
+  flipped_map <- setNames(names(map), map)
+  column %>%
+    as.character() %>%
+    sapply(function(x) if (x %in% names(flipped_map)) flipped_map[[x]] else x)
+}
+colnames(hyp_tab) <- replace_values(colnames(hyp_tab),combined_antimicrobial_map) %>% 
+  str_replace_all("_"," & ") %>% str_replace_all("-","/")
+  
+hyp_tab <- hyp_tab %>% mutate(Hyperparameter=hyp_names) %>% 
+  relocate(Hyperparameter,.before=1) %>% t() %>% data.frame() 
+hyp_tab$Model <- rownames(hyp_tab)
+hyp_tab <- hyp_tab %>% relocate(Model,.before = 1)
+colnames(hyp_tab) <- hyp_tab[1,]
+hyp_tab <- hyp_tab %>% rename(Model="Hyperparameter") %>% 
+  dplyr::slice(-1)
+hyp_tab <- hyp_tab %>% tibble()
+write_csv(hyp_tab,"hyp_tab.csv")
+
+##Values for results
+
+###Stability analysis
+stabmets <- read_csv("overall_stability_metrics.csv")
+max_stabdifs <- stabmets %>% group_by(Model,Training_size) %>%
+  summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% 
+  summarise(maxAUC_meandif=max(mean_AUC)-min(mean_AUC),
+            max_sd=max(sd_AUC)) %>% ungroup()
+max_stabdifs %>% arrange(desc(maxAUC_meandif))
+max_stabdifs %>% arrange(desc(max_sd))
+stabmets %>% group_by(Model,Training_size) %>% 
+  summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% filter(Model=="CDI")
+
+###Year group cluster analysis
+timemets <- read_csv("overall_time_sens_metrics.csv")
+max_timemets <- timemets %>% group_by(Model,Train_year,Test_year) %>%
+  summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% group_by(Model) %>%  
+  summarise(maxAUC_meandif=max(mean_AUC)-min(mean_AUC),
+            max_sd=max(sd_AUC)) %>% ungroup()
+max_timemets %>% arrange(desc(maxAUC_meandif))
+max_timemets %>% arrange(desc(max_sd))
+timemets %>% group_by(Model,Train_year,Test_year) %>% 
+  summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% filter(Model=="overall_tox") %>% 
+  arrange(desc(mean_AUC))
+timemets %>% group_by(Model,Train_year,Test_year) %>% 
+  summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% filter(Model=="CDI") %>% 
+  arrange(desc(sd_AUC)) %>% ungroup() %>% dplyr::slice(1) %>% select(sd_AUC) %>% unlist()
+
+###Fairness analysis
+fairmets <- read_csv("overall_fairness_metrics.csv")=
+fairnessprinter1 <- function(cat) {
+max_fairmets <- fairmets %>% filter(Category==cat) %>% group_by(Model,Characteristic) %>%
+  summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% 
+  summarise(maxAUC_meandif=max(mean_AUC)-min(mean_AUC),
+            max_sd=max(sd_AUC)) %>% ungroup()
+max_fairmets %>% arrange(desc(maxAUC_meandif)) %>% print()
+max_fairmets %>% arrange(desc(max_sd)) %>% print()
+}
+fairnessprinter2 <- function(cat,cat1,cat2) {
+fairmets %>% filter(Category==cat) %>% group_by(Model,Characteristic) %>% 
+  summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% filter(Model==cat1) %>% 
+  arrange(desc(mean_AUC)) %>% print()
+fairmets %>% filter(Category==cat) %>% group_by(Model,Characteristic) %>%
+  summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% filter(Model==cat2) %>% 
+  arrange(desc(sd_AUC)) %>% print()
+}
+fairnessprinter1("Age group")
+fairnessprinter2("Age group","TZP","CDI")
+fairnessprinter1("Race")
+fairnessprinter2("Race","CIP","CDI")
+fairnessprinter1("Gender")
+fairnessprinter2("Gender","MEM","TZP")
