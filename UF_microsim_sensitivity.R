@@ -937,7 +937,7 @@ susc_plotter_iv <- function(df,subset="",measure,suffix="",agent_col1,agent_name
   print(susplot)
   
 }
-susc_plotter_overall <- function(df,subset="",measure,suffix="",agent_col1,agent_name1,agent_col2,agent_name2,variable) {
+susc_plotter_overall <- function(df,df2,subset="",measure,suffix="",agent_col1,agent_name1,agent_col2,agent_name2,variable) {
   
   agent_col1 <- enquo(agent_col1)
   agent_col2 <- enquo(agent_col2)
@@ -946,11 +946,12 @@ susc_plotter_overall <- function(df,subset="",measure,suffix="",agent_col1,agent
   
   if (grepl("severity", variable)) {
     
-    if (grepl("Access", suffix)) {
+    if (grepl("Access", suffix)&!grepl("inpatient", suffix)) {
+      
       susplot <- ggplot(df, aes(x = Weight, y = Percentage, group = Metric, color = Metric, fill = Metric)) +
         geom_area(position = "identity", alpha = 0.6) +
-        geom_hline(linetype = "dashed", yintercept = (nrow(ur_util %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(ur_util)) * 100, color = "gray16") +
-        geom_hline(linetype = "dashed", yintercept = (nrow(ur_util %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(ur_util)) * 100, color = "gray16") +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(df2)) * 100, color = "gray16") +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(df2)) * 100, color = "gray16") +
         geom_hline(linetype = "dashed", yintercept = 70, color = "darkgreen") +
         ylim(0, 100) +
         theme_minimal() +
@@ -963,15 +964,16 @@ susc_plotter_overall <- function(df,subset="",measure,suffix="",agent_col1,agent
         ggtitle(glue("Urine isolate susceptibility to {subset}antimicrobial recommended\n{suffix}")) +
         xlab(glue("{variable}")) +
         ylab("Percentage of isolates susceptible to recommendation") +
-        annotate("text", x = Inf, y = (nrow(ur_util %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(ur_util)) * 100 + 2, label = glue(agent_name1), hjust = 1.1, color = "gray16") +
-        annotate("text", x = Inf, y = (nrow(ur_util %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(ur_util)) * 100 + 2, label = glue(agent_name2), hjust = 1.1, color = "gray16") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(df2)) * 100 + 2, label = glue(agent_name1), hjust = 1.1, color = "gray16") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(df2)) * 100 + 2, label = glue(agent_name2), hjust = 1.1, color = "gray16") +
         annotate("text", x = Inf, y = 72, label = "UN Access target", hjust = 1.1, color = "darkgreen") +
         scale_x_continuous(breaks = NULL)
-    } else {
+      
+    } else if (!grepl("Access", suffix)&!grepl("inpatient", suffix)) {
       susplot <- ggplot(df, aes(x = Weight, y = Percentage, group = Metric, color = Metric, fill = Metric)) +
         geom_area(position = "identity", alpha = 0.6) +
-        geom_hline(linetype = "dashed", yintercept = (nrow(ur_util %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(ur_util)) * 100, color = "gray16") +
-        geom_hline(linetype = "dashed", yintercept = (nrow(ur_util %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(ur_util)) * 100, color = "gray16") +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(df2)) * 100, color = "gray16") +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(df2)) * 100, color = "gray16") +
         ylim(0, 100) +
         theme_minimal() +
         theme(
@@ -983,18 +985,45 @@ susc_plotter_overall <- function(df,subset="",measure,suffix="",agent_col1,agent
         ggtitle(glue("Urine isolate susceptibility to {subset}antimicrobial recommended\n{suffix}")) +
         xlab(glue("{variable}")) +
         ylab("Percentage of isolates susceptible to recommendation") +
-        annotate("text", x = Inf, y = (nrow(ur_util %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(ur_util)) * 100 + 2, label = glue(agent_name1), hjust = 1.1, color = "gray16") +
-        annotate("text", x = Inf, y = (nrow(ur_util %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(ur_util)) * 100 + 2, label = glue(agent_name2), hjust = 1.1, color = "gray16") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(df2)) * 100 + 2, label = glue(agent_name1), hjust = 1.1, color = "gray16") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(df2)) * 100 + 2, label = glue(agent_name2), hjust = 1.1, color = "gray16") +
+        scale_x_continuous(breaks = NULL)
+      
+    } else {
+      
+      susplot <- ggplot(df, aes(x = Weight, y = Percentage, group = Metric, color = Metric, fill = Metric)) +
+        geom_area(position = "identity", alpha = 0.6) +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(df2)) * 100, color = "gray16") +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(df2)) * 100, color = "gray16") +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(ABX_PX_result == "S")) / nrow(df2)) * 100, color = "gray16") +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(ABX_PX_result == "S" & ab_px%in%all_access)) / nrow(df2)) * 100, color = "gray16") +
+        geom_hline(linetype = "dashed", yintercept = 70, color = "darkgreen") +
+        ylim(0, 100) +
+        theme_minimal() +
+        theme(
+          panel.grid.major.x = element_blank(),
+          panel.grid.major.y = element_blank(),
+          panel.grid.minor.x = element_blank(),
+          panel.grid.minor.y = element_blank()
+        ) +
+        ggtitle(glue("Urine isolate susceptibility to {subset}antimicrobial recommended\n{suffix}")) +
+        xlab(glue("{variable}")) +
+        ylab("Percentage of isolates susceptible to recommendation") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(df2)) * 100 + 2, label = glue(agent_name1), hjust = 1.1, color = "gray16") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(df2)) * 100 + 2, label = glue(agent_name2), hjust = 1.1, color = "gray16") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(ABX_PX_result == "S")) / nrow(df2)) * 100 + 2, label = "Antibiotic prescribed", hjust = 1.1, color = "gray16") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(ABX_PX_result == "S"& ab_px%in%all_access)) / nrow(df2)) * 100 + 2, label = "Access antibiotic prescribed", hjust = 1.1, color = "gray16") +
+        annotate("text", x = Inf, y = 72, label = "UN Access target", hjust = 1.1, color = "darkgreen") +
         scale_x_continuous(breaks = NULL)
     }
     
   } else {
     
-    if (grepl("Access", suffix)) {
+    if (grepl("Access", suffix)&!grepl("inpatient", suffix)) {
       susplot <- ggplot(df, aes(x = Weight, y = Percentage, group = Metric, color = Metric, fill = Metric)) +
         geom_area(position = "identity", alpha = 0.6) +
-        geom_hline(linetype = "dashed", yintercept = (nrow(ur_util %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(ur_util)) * 100, color = "gray16") +
-        geom_hline(linetype = "dashed", yintercept = (nrow(ur_util %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(ur_util)) * 100, color = "gray16") +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(df2)) * 100, color = "gray16") +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(df2)) * 100, color = "gray16") +
         geom_hline(linetype = "dashed", yintercept = 70, color = "darkgreen") +
         ylim(0, 100) +
         theme_minimal() +
@@ -1007,14 +1036,16 @@ susc_plotter_overall <- function(df,subset="",measure,suffix="",agent_col1,agent
         ggtitle(glue("Urine isolate susceptibility to {subset}antimicrobial recommended\n{suffix}")) +
         xlab(glue("{variable}")) +
         ylab("Percentage of isolates susceptible to recommendation") +
-        annotate("text", x = Inf, y = (nrow(ur_util %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(ur_util)) * 100 + 2, label = glue(agent_name1), hjust = 1.1, color = "gray16") +
-        annotate("text", x = Inf, y = (nrow(ur_util %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(ur_util)) * 100 + 2, label = glue(agent_name2), hjust = 1.1, color = "gray16") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(df2)) * 100 + 2, label = glue(agent_name1), hjust = 1.1, color = "gray16") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(df2)) * 100 + 2, label = glue(agent_name2), hjust = 1.1, color = "gray16") +
         annotate("text", x = Inf, y = 72, label = "UN Access target", hjust = 1.1, color = "darkgreen")
-    } else {
+   
+       } else if (!grepl("Access", suffix)&!grepl("inpatient", suffix)) {
+         
       susplot <- ggplot(df, aes(x = Weight, y = Percentage, group = Metric, color = Metric, fill = Metric)) +
         geom_area(position = "identity", alpha = 0.6) +
-        geom_hline(linetype = "dashed", yintercept = (nrow(ur_util %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(ur_util)) * 100, color = "gray16") +
-        geom_hline(linetype = "dashed", yintercept = (nrow(ur_util %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(ur_util)) * 100, color = "gray16") +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(df2)) * 100, color = "gray16") +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(df2)) * 100, color = "gray16") +
         ylim(0, 100) +
         theme_minimal() +
         theme(
@@ -1026,8 +1057,33 @@ susc_plotter_overall <- function(df,subset="",measure,suffix="",agent_col1,agent
         ggtitle(glue("Urine isolate susceptibility to {subset}antimicrobial recommended\n{suffix}")) +
         xlab(glue("{variable}")) +
         ylab("Percentage of isolates susceptible to recommendation") +
-        annotate("text", x = Inf, y = (nrow(ur_util %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(ur_util)) * 100 + 2, label = glue(agent_name1), hjust = 1.1, color = "gray16") +
-        annotate("text", x = Inf, y = (nrow(ur_util %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(ur_util)) * 100 + 2, label = glue(agent_name2), hjust = 1.1, color = "gray16")
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(df2)) * 100 + 2, label = glue(agent_name1), hjust = 1.1, color = "gray16") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(df2)) * 100 + 2, label = glue(agent_name2), hjust = 1.1, color = "gray16")
+       } else {
+      
+         susplot <- ggplot(df, aes(x = Weight, y = Percentage, group = Metric, color = Metric, fill = Metric)) +
+           geom_area(position = "identity", alpha = 0.6) +
+           geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(df2)) * 100, color = "gray16") +
+           geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(df2)) * 100, color = "gray16") +
+           geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(ABX_PX_result == "S")) / nrow(df2)) * 100, color = "gray16") +
+           geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(ABX_PX_result == "S" & ab_px%in%all_access)) / nrow(df2)) * 100, color = "gray16") +
+           ylim(0, 100) +
+           theme_minimal() +
+           theme(
+             panel.grid.major.x = element_blank(),
+             panel.grid.major.y = element_blank(),
+             panel.grid.minor.x = element_blank(),
+             panel.grid.minor.y = element_blank()
+           ) +
+           ggtitle(glue("Urine isolate susceptibility to {subset}antimicrobial recommended\n{suffix}")) +
+           xlab(glue("{variable}")) +
+           ylab("Percentage of isolates susceptible to recommendation") +
+           annotate("text", x = Inf, y = (nrow(df2 %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(df2)) * 100 + 2, label = glue(agent_name1), hjust = 1.1, color = "gray16") +
+           annotate("text", x = Inf, y = (nrow(df2 %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(df2)) * 100 + 2, label = glue(agent_name2), hjust = 1.1, color = "gray16") +
+           annotate("text", x = Inf, y = (nrow(df2 %>% filter(ABX_PX_result == "S")) / nrow(df2)) * 100 + 2, label = "Antibiotic prescribed", hjust = 1.1, color = "gray16") +
+           annotate("text", x = Inf, y = (nrow(df2 %>% filter(ABX_PX_result == "S"& ab_px%in%all_access)) / nrow(df2)) * 100 + 2, label = "Access antibiotic prescribed", hjust = 1.1, color = "gray16") +
+           scale_x_continuous(breaks = NULL)
+         
     }
   }
   
@@ -3083,8 +3139,41 @@ all_access <- c(access_singles, access_combos)
 watch_singles <- c("CRO","CAZ","FEP","MEM","TZP","CIP","VAN")
 watch_combos <- combn(watch_singles, 2, FUN = function(x) paste(x, collapse = "_"))
 all_watch <- c(watch_singles, watch_combos)
-
-###AST
+antimicrobial_map <- c(
+  "Ampicillin" = "AMP",
+  "Ampicillin-sulbactam" = "SAM",
+  "Piperacillin-tazobactam" = "TZP",
+  "Cefazolin" = "CZO",
+  "Ceftriaxone" = "CRO",
+  "Ceftazidime" = "CAZ",
+  "Cefepime" = "FEP",
+  "Meropenem" = "MEM",
+  "Ciprofloxacin" = "CIP",
+  "Gentamicin" = "GEN",
+  "Trimethoprim-sulfamethoxazole" = "SXT",
+  "Nitrofurantoin" = "NIT",
+  "Vancomycin" = "VAN"
+)
+map_combinations <- combn(names(antimicrobial_map), 2, simplify = FALSE)
+combined_antimicrobial_map <- c(
+  antimicrobial_map,
+  setNames(
+    lapply(map_combinations, function(x) paste(antimicrobial_map[x], collapse = "_")),
+    sapply(map_combinations, function(x) paste(x, collapse = " & "))
+  )
+)
+reversed_combomap <- list()
+for (i in 1:length(combined_antimicrobial_map)) {
+  reversed_combomap[i] <- names(combined_antimicrobial_map)[i]
+  names(reversed_combomap)[i] <- combined_antimicrobial_map[i]
+}
+reversed_combomap
+replace_values <- function(column, map) {
+  flipped_map <- setNames(names(map), map)
+  column %>%
+    as.character() %>%
+    sapply(function(x) if (x %in% names(flipped_map)) flipped_map[[x]] else x)
+}
 
 ###Read_in
 form_ur_util <- read_csv("form_ur_util_final.csv")
@@ -3092,6 +3181,7 @@ util_probs_df <- read_csv("pre_util_probs_df.csv")
 ur_util <- read_csv("interim_ur_util.csv")
 train_abx <- read_csv("train_abx.csv")
 urine_df <- read_csv("pos_urines.csv")
+abx_ref <- read_csv("abx_ref_all_combos.csv")
 
 ###Count numbers of S and R results per antimicrobial agent
 form_pdast_all_singles <- form_ur_util %>% number_ab_results(PDAST_1,PDAST_6,all_singles,"S","I")
@@ -3195,17 +3285,17 @@ overall_plot_df_nit <- data.frame(rbind(
 ))
 
 write_csv(overall_plot_df_nit,"overall_plot_df_nit.csv")
-
+read_csv("overall_plot_df_nit.csv") %>% print(n=100)
 overall_nit_plot_iv <- overall_plot_df_nit %>% filter(!grepl("(access|oral)",Metric,ignore.case=T))
-overall_nit_plot_iv %>% susc_plotter_overall("overall ", measure="MEWS",variable="Nitrofurantoin median resistance probability",agent_col1=NIT,agent_name1="Nitrofurantoin",
+overall_nit_plot_iv %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Nitrofurantoin median resistance probability",agent_col1=NIT,agent_name1="Nitrofurantoin",
                                             agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
                                             suffix="according to median nitrofurantoin resistance probability (proportion of IV-administrable agents)")
 overall_nit_plot_oral <- overall_plot_df_nit %>% filter(!grepl("(access|iv)",Metric,ignore.case=T))
-overall_nit_plot_oral %>% susc_plotter_overall("overall ", measure="MEWS",variable="Nitrofurantoin median resistance probability",agent_col1=NIT,agent_name1="Nitrofurantoin",
+overall_nit_plot_oral %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Nitrofurantoin median resistance probability",agent_col1=NIT,agent_name1="Nitrofurantoin",
                                               agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
                                               suffix="according to median nitrofurantoin resistance probability (proportion of orally-administrable agents)")
 overall_nit_plot_access <- overall_plot_df_nit %>% filter(!grepl("(oral|iv)",Metric,ignore.case=T))
-overall_nit_plot_access %>% susc_plotter_overall("overall ", measure="MEWS",variable="Nitrofurantoin median resistance probability",agent_col1=NIT,agent_name1="Nitrofurantoin",
+overall_nit_plot_access %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Nitrofurantoin median resistance probability",agent_col1=NIT,agent_name1="Nitrofurantoin",
                                                 agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
                                                 suffix="according to median nitrofurantoin resistance probability (proportion of WHO Access agents)")
 
@@ -3283,25 +3373,26 @@ abplot <- ggplot(pdrx1_df,aes(x=`Illness severity`,y=`Percentage of first-line r
   scale_x_discrete(breaks = NULL)+
   ylim(0,100)
 
-ggsave(glue("ilness_abplot.pdf"), plot = abplot, device = "pdf", width = 10, height = 6,
+ggsave(glue("illness_abplot.pdf"), plot = abplot, device = "pdf", width = 10, height = 6,
        path="/Users/alexhoward/Documents/Projects/UDAST_code")
 
 print(abplot)
+
 
 write_csv(iv_xg_plot_df,"iv_xg_plot_df.csv")
 write_csv(po_xg_plot_df,"po_xg_plot_df.csv")
 write_csv(overall_xg_plot_df,"overall_xg_plot_df.csv")
 
 overall_xg_plot_iv <- overall_xg_plot_df %>% filter(!grepl("(access|oral)",Metric,ignore.case=T))
-overall_xg_plot_iv %>% susc_plotter_overall("overall ", measure="MEWS",variable="Illness severity",agent_col1=NIT,agent_name1="Nitrofurantoin",
+overall_xg_plot_iv %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Illness severity",agent_col1=NIT,agent_name1="Nitrofurantoin",
                                               agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
                                               suffix="according to illness severity (proportion of IV-administrable agents)")
 overall_xg_plot_oral <- overall_xg_plot_df %>% filter(!grepl("(access|iv)",Metric,ignore.case=T))
-overall_xg_plot_oral %>% susc_plotter_overall("overall ", measure="MEWS",variable="Illness severity",agent_col1=NIT,agent_name1="Nitrofurantoin",
+overall_xg_plot_oral %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Illness severity",agent_col1=NIT,agent_name1="Nitrofurantoin",
                                             agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
                                             suffix="according to illness severity (proportion of orally-administrable agents)")
 overall_xg_plot_access <- overall_xg_plot_df %>% filter(!grepl("(oral|iv)",Metric,ignore.case=T))
-overall_xg_plot_access %>% susc_plotter_overall("overall ", measure="MEWS",variable="Illness severity",agent_col1=NIT,agent_name1="Nitrofurantoin",
+overall_xg_plot_access %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Illness severity",agent_col1=NIT,agent_name1="Nitrofurantoin",
                                               agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
                                               suffix="according to illness severity (proportion of WHO Access agents)")
 
@@ -3434,15 +3525,15 @@ overall_plot_df_combo <- data.frame(rbind(
 write_csv(overall_plot_df_combo,"overall_plot_df_combo.csv")
 
 overall_combo_plot_iv <- overall_plot_df_combo %>% filter(!grepl("(access|oral)",Metric,ignore.case=T))
-overall_combo_plot_iv %>% susc_plotter_overall("overall ", measure="MEWS",variable="Illness severity",agent_col1=NIT,agent_name1="Nitrofurantoin",
+overall_combo_plot_iv %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Illness severity",agent_col1=NIT,agent_name1="Nitrofurantoin",
                                             agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
                                             suffix="according to illness severity (proportion of IV-administrable agents, combinations included)")
 overall_combo_plot_oral <- overall_plot_df_combo %>% filter(!grepl("(access|iv)",Metric,ignore.case=T))
-overall_combo_plot_oral %>% susc_plotter_overall("overall ", measure="MEWS",variable="Illness severity",agent_col1=NIT,agent_name1="Nitrofurantoin",
+overall_combo_plot_oral %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Illness severity",agent_col1=NIT,agent_name1="Nitrofurantoin",
                                               agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
                                               suffix="according to illness severity (proportion of orally-administrable agents, combinations included)")
 overall_combo_plot_access <- overall_plot_df_combo %>% filter(!grepl("(oral|iv)",Metric,ignore.case=T))
-overall_combo_plot_access %>% susc_plotter_overall("overall ", measure="MEWS",variable="Illness severity",agent_col1=NIT,agent_name1="Nitrofurantoin",
+overall_combo_plot_access %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Illness severity",agent_col1=NIT,agent_name1="Nitrofurantoin",
                                                 agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
                                                 suffix="according to illness severity (proportion of WHO Access agents, combinations included)")
 
@@ -3577,17 +3668,17 @@ overall_plot_df_imp <- data.frame(rbind(
 ))
 
 write_csv(overall_plot_df_imp,"overall_plot_df_imp.csv")
-
+overall_plot_df_imp %>% print(n=100)
 overall_imp_plot_iv <- overall_plot_df_imp %>% filter(!grepl("(access|oral)",Metric,ignore.case=T))
-overall_imp_plot_iv %>% susc_plotter_overall("overall ", measure="MEWS",variable="Illness severity",agent_col1=NIT,agent_name1="Nitrofurantoin",
+overall_imp_plot_iv %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Illness severity",agent_col1=NIT,agent_name1="Nitrofurantoin",
                                                agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
-                                               suffix="according to illness severity (proportion of IV-administrable agents, improved probability predictions")
+                                               suffix="according to illness severity (proportion of IV-administrable agents, improved probability predictions)")
 overall_imp_plot_oral <- overall_plot_df_imp %>% filter(!grepl("(access|iv)",Metric,ignore.case=T))
-overall_imp_plot_oral %>% susc_plotter_overall("overall ", measure="MEWS",variable="Illness severity",agent_col1=NIT,agent_name1="Nitrofurantoin",
+overall_imp_plot_oral %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Illness severity",agent_col1=NIT,agent_name1="Nitrofurantoin",
                                                  agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
                                                  suffix="according to illness severity (proportion of orally-administrable agents, improved probability predictions)")
 overall_imp_plot_access <- overall_plot_df_imp %>% filter(!grepl("(oral|iv)",Metric,ignore.case=T))
-overall_imp_plot_access %>% susc_plotter_overall("overall ", measure="MEWS",variable="Illness severity",agent_col1=NIT,agent_name1="Nitrofurantoin",
+overall_imp_plot_access %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Illness severity",agent_col1=NIT,agent_name1="Nitrofurantoin",
                                                    agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
                                                    suffix="according to illness severity (proportion of WHO Access agents, improved probability predictions)")
 
@@ -3690,15 +3781,15 @@ overall_plot_df_2nd <- data.frame(rbind(
 write_csv(overall_plot_df_2nd,"overall_plot_df_2nd.csv")
 
 overall_2nd_plot_iv <- overall_plot_df_2nd %>% filter(!grepl("(access|oral)",Metric,ignore.case=T))
-overall_2nd_plot_iv %>% susc_plotter_overall("overall ", measure="MEWS",variable="Illness severity",agent_col1=SXT,agent_name1="Trimethoprim-sulfamethoxazole",
+overall_2nd_plot_iv %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Illness severity",agent_col1=SXT,agent_name1="Trimethoprim-sulfamethoxazole",
                                              agent_col2=CRO,agent_name2="Ceftriaxone",
-                                             suffix="according to illness severity (proportion of IV-administrable agents, 2nd-line")
+                                             suffix="according to illness severity (proportion of IV-administrable agents, 2nd-line)")
 overall_2nd_plot_oral <- overall_plot_df_2nd %>% filter(!grepl("(access|iv)",Metric,ignore.case=T))
-overall_2nd_plot_oral %>% susc_plotter_overall("overall ", measure="MEWS",variable="Illness severity",agent_col1=SXT,agent_name1="Trimethoprim-sulfamethoxazole",
+overall_2nd_plot_oral %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Illness severity",agent_col1=SXT,agent_name1="Trimethoprim-sulfamethoxazole",
                                                agent_col2=CRO,agent_name2="Ceftriaxone",
                                                suffix="according to illness severity (proportion of orally-administrable agents, 2nd-line)")
 overall_2nd_plot_access <- overall_plot_df_2nd %>% filter(!grepl("(oral|iv)",Metric,ignore.case=T))
-overall_2nd_plot_access %>% susc_plotter_overall("overall ", measure="MEWS",variable="Illness severity",agent_col1=SXT,agent_name1="Trimethoprim-sulfamethoxazole",
+overall_2nd_plot_access %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Illness severity",agent_col1=SXT,agent_name1="Trimethoprim-sulfamethoxazole",
                                                  agent_col2=CRO,agent_name2="Ceftriaxone",
                                                  suffix="according to illness severity (proportion of WHO Access agents, 2nd-line)")
 
@@ -3764,7 +3855,7 @@ cdiplot <- ggplot(cdi_df, aes(x = illness_severity)) +
 
 ggsave(glue("cdiplot.pdf"), plot = cdiplot, device = "pdf", width = 8, height = 4,
        path="/Users/alexhoward/Documents/Projects/UDAST_code")
-cdiplot
+
 toxplot <- ggplot(tox_df, aes(x = illness_severity)) +
   geom_line(aes(y = as.numeric(med))) +
   geom_ribbon(aes(y = as.numeric(med),
@@ -3801,3 +3892,116 @@ write_csv(cdi_df,"cdi_df.csv")
 write_csv(tox_df,"tox_df.csv")
 write_csv(cost_df,"cost_df.csv")
 
+read_csv("cost_df.csv") %>% print(n=100)
+
+##Sensitivity analysis for inpatients against currently-prescribed antimicrobial agent
+ur_abxpx <- ur_util %>% mutate(ab_px= abx_name %>% str_replace("/","-") %>%
+                                 str_replace_all("_"," & ") %>% 
+                                 replace_values(reversed_combomap)) %>% 
+  mutate(ab_px=case_when(is.na(ab_px)~"non_ab",
+                         nchar(ab_px) > 7 ~ "ab_3combo",
+                         TRUE~ab_px),
+         non_ab=NA,ab_3combo="S")
+
+ur_abxpx <- ur_abxpx %>% rowwise() %>% mutate(
+  ABX_PX_result = get(ab_px)) %>% 
+  mutate(ABX_PX_result=case_when(ABX_PX_result=="I"~"S",
+                                 ABX_PX_result=="NT"~"R",
+                                 TRUE~ABX_PX_result))
+ur_abxpx <- ur_abxpx %>% filter(!is.na(ABX_PX_result))
+abx_util_df <- util_probs_df %>% semi_join(ur_abxpx,by="micro_specimen_id")
+
+weightseq <- seq(0,30,2.5)
+iv_perclist_abxpx <- c()
+po_perclist_abxpx <- c()
+overall_perclist_abxpx <- c()
+ivac_list_abxpx <- c()
+poac_list_abxpx <- c()
+ovac_list_abxpx <- c()
+ovor_list_abxpx <- c()
+oviv_list_abxpx <- c()
+pdrx1_list_abxpx <- data.frame(PDRx_1=ab_singles)
+
+for(weight in seq_along(weightseq)) {
+  
+  res_sens_analysis(ur_abxpx,abx_util_df,MEWS_variable=weightseq[weight],R_value=1)
+  
+  iv_perclist_abxpx <- c(iv_perclist_abxpx,iv_perc)
+  po_perclist_abxpx <- c(po_perclist_abxpx,po_perc)
+  overall_perclist_abxpx <- c(overall_perclist_abxpx,overall_perc)
+  ivac_list_abxpx <- c(ivac_list_abxpx,iv_s_access)
+  poac_list_abxpx <- c(poac_list_abxpx,po_s_access)
+  ovac_list_abxpx <- c(ovac_list_abxpx,overall_s_access)
+  ovor_list_abxpx <- c(ovor_list_abxpx,overall_s_oral)
+  oviv_list_abxpx <- c(oviv_list_abxpx,overall_s_iv)
+  pdrx1_list_abxpx <- pdrx1_list_abxpx %>% left_join(abrx1_df,by="PDRx_1")
+  colnames(pdrx1_list_abxpx)[weight+1] <- weightseq[weight]
+  
+}
+
+iv_perclist_abxpx <- iv_perclist_abxpx %>% label_binder("All agents")
+po_perclist_abxpx <- po_perclist_abxpx %>% label_binder("All agents")
+overall_perclist_abxpx <- overall_perclist_abxpx %>% label_binder("All agents")
+ivac_list_abxpx <- ivac_list_abxpx %>% label_binder("Access agents")
+poac_list_abxpx <- poac_list_abxpx %>% label_binder("Access agents")
+ovac_list_abxpx <- ovac_list_abxpx %>% label_binder("Access agents")
+ovor_list_abxpx <- ovor_list_abxpx %>% label_binder("Oral agents")
+oviv_list_abxpx <- oviv_list_abxpx %>% label_binder("IV agents")
+iv_perclist_abxpx <- iv_perclist_abxpx %>% rename(Percentage = "vec")
+po_perclist_abxpx <- po_perclist_abxpx %>% rename(Percentage = "vec")
+overall_perclist_abxpx <- overall_perclist_abxpx %>% rename(Percentage = "vec")
+ivac_list_abxpx <- ivac_list_abxpx %>% rename(Percentage = "vec")
+poac_list_abxpx <- poac_list_abxpx %>% rename(Percentage = "vec")
+ovac_list_abxpx <- ovac_list_abxpx %>% rename(Percentage = "vec")
+ovor_list_abxpx <- ovor_list_abxpx %>% rename(Percentage = "vec")
+oviv_list_abxpx <- oviv_list_abxpx %>% rename(Percentage = "vec")
+
+iv_xg_plot_df_abxpx <- data.frame(rbind(
+  iv_perclist_abxpx,ivac_list_abxpx
+))
+po_xg_plot_df_abxpx <- data.frame(rbind(
+  po_perclist_abxpx,poac_list_abxpx
+))
+overall_xg_plot_df_abxpx <- data.frame(rbind(
+  overall_perclist_abxpx,ovac_list_abxpx,ovor_list_abxpx,oviv_list_abxpx
+))
+
+pdrx1_list_abxpx[is.na(pdrx1_list_abxpx)] <- 0
+pdrx1_df_abxpx <- pdrx1_list_abxpx %>% filter(rowSums(select(.,2:ncol(pdrx1_list_abxpx)))!=0)
+pdrx1_df_abxpx <- melt(pdrx1_df_abxpx)
+colnames(pdrx1_df_abxpx) <- c("Antimicrobial","Illness severity","Percentage of first-line recommendations")
+pdrx1_df_abxpx <- pdrx1_df_abxpx %>% mutate(Antimicrobial = ab_name(Antimicrobial))
+pdrx1_df_abxpx <- pdrx1_df_abxpx %>% mutate(`Percentage of first-line recommendations`=
+                                  (`Percentage of first-line recommendations`/nrow(ur_abxpx))*100)
+
+write_csv(pdrx1_df_abxpx,"abplot_df_abxpx.csv")
+
+abplot <- ggplot(pdrx1_df_abxpx,aes(x=`Illness severity`,y=`Percentage of first-line recommendations`,group=Antimicrobial,colour=Antimicrobial))+
+  geom_line()+
+  theme_minimal()+
+  theme(panel.grid = element_blank())+
+  ggtitle("First-line automated recommendations according to illness severity")+
+  scale_x_discrete(breaks = NULL)+
+  ylim(0,100)
+
+ggsave(glue("abxpx_ilness_abplot.pdf"), plot = abplot, device = "pdf", width = 10, height = 6,
+       path="/Users/alexhoward/Documents/Projects/UDAST_code")
+
+print(abplot)
+
+write_csv(iv_xg_plot_df_abxpx,"iv_xg_plot_df_abxpx.csv")
+write_csv(po_xg_plot_df_abxpx,"po_xg_plot_df_abxpx.csv")
+write_csv(overall_xg_plot_df_abxpx,"overall_xg_plot_df_abxpx.csv")
+
+overall_xg_plot_iv <- overall_xg_plot_df_abxpx %>% filter(!grepl("(access|oral)",Metric,ignore.case=T))
+overall_xg_plot_iv %>% susc_plotter_overall(ur_abxpx,"overall ", measure="MEWS",variable="Illness severity",agent_col1=NIT,agent_name1="Nitrofurantoin",
+                                            agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
+                                            suffix="in inpatients prescribed antibiotics\n(proportion of IV-administrable agents)")
+overall_xg_plot_oral <- overall_xg_plot_df_abxpx %>% filter(!grepl("(access|iv)",Metric,ignore.case=T))
+overall_xg_plot_oral %>% susc_plotter_overall(ur_abxpx,"overall ", measure="MEWS",variable="Illness severity",agent_col1=NIT,agent_name1="Nitrofurantoin",
+                                              agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
+                                              suffix="in inpatients prescribed antibiotics\n(proportion of orally-administrable agents)")
+overall_xg_plot_access <- overall_xg_plot_df_abxpx %>% filter(!grepl("(oral|iv)",Metric,ignore.case=T))
+overall_xg_plot_access %>% susc_plotter_overall(ur_abxpx,"overall ", measure="MEWS",variable="Illness severity",agent_col1=NIT,agent_name1="Nitrofurantoin",
+                                                agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
+                                                suffix="in inpatients prescribed antibiotics\n(proportion of WHO Access agents)")
