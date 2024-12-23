@@ -70,6 +70,14 @@ Data preprocessing and quality checking was performed in a similar way across so
 
 ## Clinical prediction models
 
+The overall design of the utility function is summarised in Figure 1.
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Utility function design.pdf")
+
+```
+Figure 1: Design of the utility function.
+
 We have described clinical prediction models of resistance for 12 of the 13 antimicrobial agents using logistic regression in our previous work \[ref\]. For this study, XGBoost (an ensemble method that improves predictive accuracy by sequentially combining multiple decision trees) was used instead because it was found to achieve higher initial area under the receiver operating characteristic curve (AUROC) values for the majority of the 12 clinical prediction models when trained and validated on the same datasets. The same XGBoost technique was used for all 39 models. The output of each model was the probability of the binary outcome's positive class (an 'S' result, CDI, or antibiotic toxicity).
 
 XGBoost models were trained and tuned on the training datasets using L2 regularisation (ridge penalty) to control overfitting. AUROC was used as the model evaluation metric. Hyperparameter tuning was performed sequentially for each of the 39 models across parameters in 3 stages. 10 sets of paired values for maximum tree depth (selecting values between two and nine inclusive) and minimum child weight (selecting values between one and 10 inclusive) were randomly selected using latin hypercube sampling with `randomLHS()` from the `lhs` package \[ref\] - a 5-fold cross-validation was then performed across 50 boosting rounds for each of these 10 pairs of values, with a default learning rate of 0.05, a proportion of cases used for each decision tree (subsample rows ratio) of 0.8, and a proportion of predictors used for each decision tree (subsample columns ratio) of 0.8. The maximum tree depth and minimum child weight values that produced the highest AUROC were carried forward to another set of 5-fold cross-validations with 50 boosting rounds across 10 paired subsample rows and columns ratios (again randomly selected using `randomLHS`, with both values sampling from a range between 0.5 and 1 inclusive) with a learning rate of 0.05. The subsample rows and columns ratios that produced the highest AUROC were carried forward to a final set of 5-fold cross-validations across four learning rates (0.1, 0.05, 0.01, and 0.001), with a maximum number of boosting rounds of 1000 and early stopping if AUROC did not improve for 50 rounds. The learning rate and the round number at which the best AUROC value occurred (forming the new total number of rounds parameter) were then taken forward as parameters for training the final model. Class imbalance methods (e.g., class weighting) were not used to avoid inflating the probability of rare occurrences (e.g., CDI) that would subsequently be used to inform the utility function.
@@ -94,13 +102,13 @@ Treatment utility was calculated individually for each patient/urine specimen in
 
 4.  A personalised utility value was calculated for each antibiotic for each patient using a bespoke mathematical expression (see Appendix 2) that performs two functions: firstly, it weights the values for each antimicrobial characteristic from steps 1-3 using their respective weights from the discrete choice experiment ($w_c$, $w_t$, $w_u$, $w_o$, $w_i$, $w_a$, $w_r$); secondly, it incorporates an illness severity variable that weights the contribution of antibiotic susceptibility probability and intravenous administration to overall utility more heavily as it increases.
 
-The distributions of utility values were plotted across the microsimulation dataset for each antibiotic and antibiotic combination using a box and whisker plot. Sensitivity analyses where the utility distribution was repeatedly calculated on the microsimulation dataset across a range of zero to one for susceptibility probability, CDI probability, toxicity probability and normalised cost, and a range of minus two to two for characteristic weights - changes in overall utility distribution in the microsimulation dataset across these ranges were then plotted for all antibiotics using line plots.
+The distributions of utility values at an illness severity value of zero were plotted across the microsimulation dataset for each antibiotic and antibiotic combination using a box and whisker plot. Sensitivity analyses where the utility distribution was repeatedly calculated on the microsimulation dataset across a range of zero to one for susceptibility probability, CDI probability, toxicity probability and normalised cost, and a range of minus two to two for characteristic weights (at an illness severity value of one so that changes in intravenous treatment utility could be examined) - changes in overall utility distribution in the microsimulation dataset across these ranges were then plotted for all antibiotics using line plots.
 
 ## Microsimulation study design
 
 The single antibiotic with the highest utility value for each patient in the microsimulation dataset was selected as the personalised first-line treatment recommendation for that patient. The antibiotic with the second-highest utility was chosen as second-line option, and so on until all 13 antimicrobial agents were ranked as treatment recommendations in order of utility value for each patient. Sensitivity analyses were performed to assess the effect of increasing the illness severity weight from zero up to 30 on the proportion of subsequent isolates that were covered by all recommendations, Access-category recommendations, recommendations with oral routes of administration, and recommendations with intravenous routes of administration - these results were plotted using area and line plots respectively. Proportions were compared visually against a standard first-line option for systemically well patients (nitrofurantoin) and for critically ill patients (piperacillin-tazobactam) - these agents were selected as comparators because they were the oral and intravenous antibiotics respectively that had the highest rates of susceptibility in the dataset. 
 
-The illness severity sensitivity analysis was then repeated firstly to examine second-line treatment recommendations (antibiotics with the second-highest treatment utility), then secondly with antimicrobial combinations also included as treament options, then thirdly to assess the potential effect of improved probability predictions for single-agent recommendations by taking the mean of the predicted probability and the actual outcome denoted by one or zero -  outcomes and antibiotics recommended were again plotted across illness severity using area and line charts respectively. The analysis was repeated again to assess the effect of increased illness severity on the predicted CDI risk, toxicity risk, and minimum financial cost of first-line treatment recommendations. A similar sensitivity analysis was performed to assess the effect of increasing nitrofurantoin resistance probability from zero up to one on the four outcomes listed above and antibiotics recommenced, plotting the results using an area and line chart respectively.
+The illness severity sensitivity analysis was then repeated firstly to examine second-line treatment recommendations (antibiotics with the second-highest treatment utility), then secondly with antimicrobial combinations also included as treament options, then thirdly to assess the potential effect of improved probability predictions for single-agent recommendations by taking the mean of the predicted probability and the actual outcome denoted by one or zero -  outcomes and antibiotics recommended were again plotted across illness severity using area and line charts respectively. The analysis was repeated again to assess the effect of increased illness severity on the predicted CDI risk, toxicity risk, and minimum financial cost of first-line treatment recommendations. A similar sensitivity analysis was performed to assess the effect of increasing nitrofurantoin resistance probability from zero up to one on the four outcomes listed above and antibiotics recommenced, plotting the results using an area and line chart respectively. The median and interquartile range of the number of susceptible results in the top six recommendations was also measured (representing automated selection of an antimicrobial suceptibility testing panel, as in our previous work[ref]) and compared to a standard panel of nitrofurantoin, trimethoprim/sulfamethoxazole, gentamicin, piperacillin/tazobactam, ceftriaxone, and ciprofloxacin. 
 
 # Results
 
@@ -112,14 +120,14 @@ The characteristics of patients, antimicrobial agents, and specimens in the mode
 
 Final training hyperparameters used for each model are summarised in Appendix 4, and predictor variable contributions to predictive performance are summarised in Appendix 5. The presence and/or absence of previously-detected resistance to an antibiotic in the last year was one of the largest contributors to predictive accuracy for susceptibility to that antibiotic in most models. Gender and age group were large contributors to antibiotic susceptibility predictive performance in all models. Hospital admission in the last year, age over 65, previous CDI, and previous acute kidney injury in the last year were among the largest contributors to predictive performance for both CDI and antibiotic toxicity.
 
-ROC curves and performance metrics for models predicting single-antibiotic suceptibility, CDI, and toxicity in the single validation run on the validation dataset are summarised in Figure 1 and Table 1 respectively. ROC curves and performance metrics for models predicting susceptibility to 2-antibiotic combinations are summarised in Appendix 6 and Appendix 7 respectively.
+ROC curves and performance metrics for models predicting single-antibiotic suceptibility, CDI, and toxicity in the single validation run on the validation dataset are summarised in Figure 2 and Table 1 respectively. ROC curves and performance metrics for models predicting susceptibility to 2-antibiotic combinations are summarised in Appendix 6 and Appendix 7 respectively.
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/roc_plots_main.pdf")
   
 ```
-Figure 1: ROC curves for probability predictions made for single-antibiotic susceptibility, CDI, and toxicity on the validation dataset.
+Figure 2: ROC curves for probability predictions made for single-antibiotic susceptibility, CDI, and toxicity on the validation dataset.
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -143,18 +151,18 @@ Performance metrics from the model fairness analyses are summarised in Appendix 
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/ORplot.pdf")
 
 ```
-Figure 2: Coefficients from the ranked logit analysis of the discrete choice experiment across all prescriber specialties
+Figure 3: Coefficients from the ranked logit analysis of the discrete choice experiment across all prescriber specialties
 
 General practitioners and infection specialists were more likely to select antibiotics with oral routes of adminstration, and less likely to select antibiotics with intravenous routes of administration - the opposite was observed in intensive care and medical specialty prescribers, where intravenous routes of administration were preferred over oral routes. Routes of administration appeared to have the least bearing on choice in surgical specialties. In medical specialties and intensive care, an antibiotic being in the WHO Access category most increased the probability of selection. Intensive care was the only specialty in which an antibiotic being in the WHO Reserve category reduced the probability of selection more than high toxicity risk. Wide estimated confidence intervals for coefficients derived from general practitioners reflected the low numbers of respondents from that prescriber group (n=5).
 
 ## Utility function
 
-The distributions of single-antimicrobial choice utility values for patients across the microsimulation dataset at a default illness severity value of one are displayed in Figure 2, The distributions of single-agent utility values stratified by prescriber types are displayed in Appendix 12, and the distribution of all antibiotic options including 2-agent combinations are displayed in Appendix 13.
+The distributions of single-antimicrobial choice utility values for patients across the microsimulation dataset are displayed in Figure 4, The distributions of single-agent utility values stratified by prescriber types are displayed in Appendix 12, and the distribution of all antibiotic options including 2-agent combinations are displayed in Appendix 13.
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_ (single agent).pdf")
 ```
-Figure 3: Distributions of antimicrobial choice utility values for patients across the microsimulation dataset.
+Figure 4: Distributions of antimicrobial choice utility values for patients across the microsimulation dataset.
 
 At the lowest illness severity, Nitrofurantoin had the highest treatment choice utility for the majority of patients in the microsimulation dataset. For single-agent treatment, five of the six antibiotics with the highest median utility were WHO Access agents - the only exception to this was piperacillin-tazobactam, which placed fourth overall amongst single agents. The lowest-placed WHO Access antibiotic was ampicillin (or amoxicillin), which placed 12th out of 13 agents. Vancomycin was the lowest-placed antibiotic choice for the majority of patients. The widest spread in utility values was observed for cefazolin (IQR 1.57), reflecting the fact that predicted probability of susceptibility to cefazolin varied the most across the population (IQR 0.279).
 
@@ -164,24 +172,24 @@ The sensitivity analyses that examined the effect of varying different utility f
 
 ## Microsimulation
 
-The results of the illness severity microsimulation study are displayed in Figures 4 and 5.
+The results of the illness severity microsimulation study are displayed in Figures 5 and 6.
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of WHO Access agents)_susplot.pdf")
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of orally-administrable agents)_susplot.pdf")
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of IV-administrable agents)_susplot.pdf")
 ```
-Figure 4: The proportion of organisms subsequently grown in urines that were covered by the automated first-line antibiotic treatment recommendation, depending on illness severity.
+Figure 5: The proportion of organisms subsequently grown in urines that were covered by the automated first-line antibiotic treatment recommendation, depending on illness severity.
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/illness_abplot.pdf")
 
 ```
-Figure 5: The make-up of automated first-line treatment recommendations by antibiotic agent depending on illness severity.
+Figure 6: The make-up of automated first-line treatment recommendations by antibiotic agent depending on illness severity.
 
-At the lowest illness severity, nitrofurantoin was the first-line treatment recommendation in almost all cases, covering 81.25% of organisms subsequently grown. As population illness severity was increased, the proportion of organisms covered and the provision of an IV treatment option increased accordingly, both reaching a plateau at 92.94% for the most unwell patients. Likelihood of coverage for a patient population with severe illness was achieved by the algorithm at the expense of recommending Access treatment options and oral treatment options (which fell to 1.25% and 1.75% respectively for the most unwell patients) - this was largely driven by a switch of atomated recommendations to piperacillin-tazobactam as population illness severity was increased. At intermediate levels of illness severity, the proportion of Access agent recommendations was maintained by the algorithm by increasing recommendions for cefazolin or gentamicin.
+At the lowest illness severity, nitrofurantoin was the first-line treatment recommendation in almost all cases, covering 81.25% of organisms subsequently grown. There were a median of five susceptible results per specimen for the top six automated recommendations (IQR 4-6), with a median of three susceptible Access results (IQR 2-4, see Appendix 17). As population illness severity was increased, the proportion of organisms covered and the provision of an IV treatment option increased accordingly, both reaching a plateau at 92.94% for the most unwell patients. Likelihood of coverage for a patient population with severe illness was achieved by the algorithm at the expense of recommending Access treatment options and oral treatment options (which fell to 1.25% and 1.75% respectively for the most unwell patients) - this was largely driven by a switch of atomated recommendations to piperacillin-tazobactam as population illness severity was increased. At intermediate levels of illness severity, the proportion of Access agent recommendations was maintained by the algorithm by increasing recommendions for cefazolin or gentamicin.
 
-The proportion of organisms covered by second-line automated recommendations (Appendix 15) initially increased with illness severity due to nitrofurantoin falling to second-line option, but as intravenous treatment was prioritised, the proportion of coverage fell back to 80.2%. The proportion of Access category agents with coverage was preserved at 30.2% at high illness severity owing to high proportions of gentamicin recommendations. 
+The proportion of organisms covered by second-line automated recommendations (Appendix 17) initially increased with illness severity due to nitrofurantoin falling to second-line option, but as intravenous treatment was prioritised, the proportion of coverage fell back to 80.2%. The proportion of Access category agents with coverage was preserved at 30.2% at high illness severity owing to high proportions of gentamicin recommendations. 
 
 When combinations of antimicrobial agents were included (Appendix 16), automated treatment recommendations were able to cover a higher proportion of the most unwell population population (98.5%) by recommending either meropenem and vancomycin, piperacillin-tazobactam and ciprofloxacin, or piperacillin-tazobactam and trimethoprim-sulfamethoxazole. At intermediate levels of illness severity, the proportion of Access agent recommendations was maintained by the algorithm by increasing recommendations for ampicillin and gentamicin.
 
