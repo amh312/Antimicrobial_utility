@@ -21,21 +21,46 @@ library(glue)
 
 ## Appendix 1: Discrete choice experiment questionnaire
 
-```{r}
+This survey is designed to ascertain the relative importance of different features of an antimicrobial to clinicians when prescribing. It should take 2-5 minutes to complete.
+Contextual information about the patient has intentionally been omitted - your decision should be made based on your experience of managing urinary tract infection in your usual clinical setting.
+The factors listed are AWaRe classification*, risk of Clostridioides difficile diarrhoea, toxicity risk (e.g., nephrotoxicity), UTI-specificity (whether the drug should only be used for UTI), oral option, intravenous option, and financial cost.
 
-print("Screenshot of discrete choice experiment here")
+
+* The WHO AWaRe classification assigns antibiotics ratings of Access, Watch and Reserve based on their risk of generating antimicrobial resistance. Those in the Access category are the lowest risk, those in Reserve are the highest.
+
+A patient has urinary tract infection. You have no other details about the patient at this stage (including disease severity). Please rank the following fictional antibiotic treatments from 1 to 13 in order of most to least preferred in this scenario by dragging and dropping options or using the arrows on the right. When finished, just click the 'Done' button at the bottom of the page.
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+
+knitr::include_graphics(c(
+  "/Users/alexhoward/Documents/Projects/UDAST_code/S1.png",
+  "/Users/alexhoward/Documents/Projects/UDAST_code/S2.png",
+  "/Users/alexhoward/Documents/Projects/UDAST_code/S3.png",
+  "/Users/alexhoward/Documents/Projects/UDAST_code/S4.png",
+  "/Users/alexhoward/Documents/Projects/UDAST_code/S5.png",
+  "/Users/alexhoward/Documents/Projects/UDAST_code/S6.png",
+  "/Users/alexhoward/Documents/Projects/UDAST_code/S7.png",
+  "/Users/alexhoward/Documents/Projects/UDAST_code/S8.png",
+  "/Users/alexhoward/Documents/Projects/UDAST_code/S9.png",
+  "/Users/alexhoward/Documents/Projects/UDAST_code/S10.png",
+  "/Users/alexhoward/Documents/Projects/UDAST_code/S11.png",
+  "/Users/alexhoward/Documents/Projects/UDAST_code/S12.png",
+  "/Users/alexhoward/Documents/Projects/UDAST_code/S13.png"
+                          ))
+                      
 
 ```
-Figure 1: The discrete choice experiment provided to prescribers
 
-## Appendix 1: Data processing workflow
+Appendix 1: A replica of the discrete choice experiment provided to prescribers
+
+## Appendix 2: Data processing workflow
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Data flow chart.pdf")
 ```
-Appendix 1: Data processing workflow
+Appendix 2: Data processing workflow
 
-## Appendix 2: Utility function
+## Appendix 3: Utility function
 
 Antibiotic treatment choice utility ($U$) is defined by:
 
@@ -109,7 +134,7 @@ $$
 v_t \in [0,1] \quad \text{(Probability of agent toxicity)}
 $$
 
-## Appendix 2
+## Appendix 4
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -120,9 +145,9 @@ desc_tab$Characteristic[is.na(desc_tab$Characteristic)] <- "··"
 knitr::kable(desc_tab)
 
 ```
-Appendix 2: Patient compositions of the model development and microsimulation datasets.
+Appendix 4: Patient compositions of the model development and microsimulation datasets.
 
-##Appendix 3
+##Appendix 5
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -131,9 +156,9 @@ ab_tab <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/ab_tab.csv")
 knitr::kable(ab_tab,)
 
 ```
-Appendix 3:: Antibiotic courses in the prescription dataset, including two-combination administrations of more than 24 hours duration.
+Appendix 5: Antibiotic courses in the prescription dataset, including two-combination administrations of more than 24 hours duration.
 
-## Appendix 4
+## Appendix 6
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -142,9 +167,9 @@ hyp_tab <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/hyp_tab.csv
 knitr::kable(hyp_tab)
 
 ```
-Appendix 4: Final training hyperparameters used for the 39 clinical prediction models.
+Appendix 6: Final training hyperparameters used for the 39 clinical prediction models.
 
-## Appendix 5
+## Appendix 7
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -153,18 +178,18 @@ feat_table <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/feat_tab
 knitr::kable(feat_table)
 
 ```
-Appendix 5: Feature importances in the clinical prediction models.
+Appendix 7: Feature importances in the clinical prediction models.
 
-##Appendix 6
+##Appendix 8
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/roc_plots_other.pdf")
   
 ```
-Appendix 6: ROC curves for probability predictions made for 2-antibiotic combination susceptibility on the validation dataset.
+Appendix 8: ROC curves for probability predictions made for 2-antibiotic combination susceptibility on the validation dataset.
 
-## Appendix 7
+## Appendix 9
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -173,10 +198,10 @@ matrics_combos_table <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_cod
 knitr::kable(matrics_combos_table)
 
 ```
-Appendix 7: Model performance metrics for 2-antibiotic combinations in the single validation run on the validation dataset.
+Appendix 9: Model performance metrics for 2-antibiotic combinations in the single validation run on the validation dataset.
 
 
-## Appendix 8
+## Appendix 10
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -187,9 +212,9 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/stabili
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/stability_Accuracy.pdf")
   
 ```
-Appendix 8: Small dataset stability metrics for single antibiotic, CDI, and toxicity models in six random train-test splits stratified by outcome at a sequence of small dataset sizes across 50 training runs of XGBoost.
+Appendix 10: Small dataset stability metrics for single antibiotic, CDI, and toxicity models in six random train-test splits stratified by outcome at a sequence of small dataset sizes across 50 training runs of XGBoost.
 
-## Appendix 9
+## Appendix 11
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -218,9 +243,9 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesen
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2017 - 2019_Accuracy.pdf")
 
 ```
-Appendix 9: Year group cluster analysis of clinical prediction model performance in six random train-test splits stratified by outcome.
+Appendix 11: Year group cluster analysis of clinical prediction model performance in six random train-test splits stratified by outcome.
 
-## Appendix 10
+## Appendix 12
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -244,9 +269,9 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protcha
 
   
 ```
-Appendix 10: Fairness analyses of clinical prediction model performance across age, race, gender, spoken language, and marital status in six random train-test splits stratified by outcome.
+Appendix 12: Fairness analyses of clinical prediction model performance across age, race, gender, spoken language, and marital status in six random train-test splits stratified by outcome.
 
-## Appendix 11
+## Appendix 13
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -257,9 +282,9 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Intensi
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/General Practice_importances.pdf")
 
 ```
-Appendix 11: Coefficients from the ranked logit analysis of the discrete choice experiment across all prescriber specialties
+Appendix 13: Coefficients from the ranked logit analysis of the discrete choice experiment across all prescriber specialties
 
-## Appendix 12
+## Appendix 14
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -270,18 +295,18 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_ (single agent, general practice).pdf")
 
 ```
-Appendix 12: The distribution of utility values across the microsimulation dataset for all agents (including 2-inpatient combinations), both overall and stratified by the individual specialities
+Appendix 14: The distribution of utility values across the microsimulation dataset for all agents (including 2-inpatient combinations), both overall and stratified by the individual specialities
 
-## Appendix 13
+## Appendix 15
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_.pdf")
 
 ```
-Appendix 13: The overall distribution of utility values across the microsimulation dataset for all antibiotics including 2-agent combinations.
+Appendix 15: The overall distribution of utility values across the microsimulation dataset for all antibiotics including 2-agent combinations.
 
-## Appendix 14
+## Appendix 16
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -303,9 +328,18 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/toxicit
 
 
 ```
-Appendix 14: Sensitivity analyses demonstrating the effect of varying all utility function parameters on overall treatment utility of individual antibiotics.
+Appendix 16: Sensitivity analyses demonstrating the effect of varying all utility function parameters on overall treatment utility of individual antibiotics.
 
-## Appendix 15
+## Appendix 17
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/UF_All agents_WHO access agents_plot.pdf")
+
+```
+Appendix 17: The number of susceptible results in the top six automated recommendations (PDRx), overall and for WHO Access agents, compared to a standard panel of nitrofurantoin, trimethoprim-sulfamethoxazole, gentamicin, piperacillin-tazobactam, ceftriaxone, and ciprofloxacin. Median values are displayed as red/green dots, interquartile ranges as red/green lines, and all results as grey dot cloud darkness.
+
+## Appendix 18
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -315,9 +349,9 @@ knitr::include_graphics(normalizePath("/Users/alexhoward/Documents/Projects/UDAS
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/ilness_2ndplot.pdf")
 
 ```
-Appendix 15: Changes in the proportion of urine organism coverage with second-line treatment recommendations overall, Access treatment recommendations, treatment recommendations with oral preparations, and treatment recommendations with intravenous preparations as the illness severity of the population was increased.
+Appendix 18: Changes in the proportion of urine organism coverage with second-line treatment recommendations overall, Access treatment recommendations, treatment recommendations with oral preparations, and treatment recommendations with intravenous preparations as the illness severity of the population was increased.
 
-## Appendix 16
+## Appendix 19
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -327,9 +361,9 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/ilness_comboplot.pdf")
 
 ```
-Appendix 16: Changes in the proportion of urine organism coverage with first-line treatment recommendations overall, Access treatment recommendations, treatment recommendations with oral preparations, and treatment recommendations with intravenous preparations as the illness severity of the population was increased (2-agent combinations included).
+Appendix 19: Changes in the proportion of urine organism coverage with first-line treatment recommendations overall, Access treatment recommendations, treatment recommendations with oral preparations, and treatment recommendations with intravenous preparations as the illness severity of the population was increased (2-agent combinations included).
 
-## Appendix 17
+## Appendix 20
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -339,9 +373,9 @@ knitr::include_graphics(normalizePath("/Users/alexhoward/Documents/Projects/UDAS
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/ilness_impplot.pdf")
 
 ```
-Appendix 17: Changes in the proportion of urine organism coverage with first-line treatment recommendations overall, Access treatment recommendations, treatment recommendations with oral preparations, and treatment recommendations with intravenous preparations as the illness severity of the population was increased (improved probability predictions).
+Appendix 20: Changes in the proportion of urine organism coverage with first-line treatment recommendations overall, Access treatment recommendations, treatment recommendations with oral preparations, and treatment recommendations with intravenous preparations as the illness severity of the population was increased (improved probability predictions).
 
-## Appendix 18
+## Appendix 21
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -351,4 +385,4 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/nitres_abplot.pdf")
 
 ```
-Appendix 18: Changes in the proportion of urine organism coverage with first-line treatment recommendations overall, Access treatment recommendations, treatment recommendations with oral preparations, and treatment recommendations with intravenous preparations as the median predicted probability of nitrofurantoin resistance was increased.
+Appendix 21: Changes in the proportion of urine organism coverage with first-line treatment recommendations overall, Access treatment recommendations, treatment recommendations with oral preparations, and treatment recommendations with intravenous preparations as the median predicted probability of nitrofurantoin resistance was increased.
