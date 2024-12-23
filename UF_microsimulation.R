@@ -28,65 +28,65 @@ number_results_per_panel <- function(df,start_col,end_col,which_abs,result_1,res
 ###Results per panel across all variants of UF and standard approaches
 rpp_ast <- function(df) {
   
-  df$PDAST_rpp_ass <- df %>% number_results_per_panel(PDAST_1,PDAST_6,all_singles,"S","I")
+  df$PDRx_rpp_ass <- df %>% number_results_per_panel(PDRx_1,PDRx_6,all_singles,"S","I")
   print(1/60)
-  df$PDAST_rpp_acs <- df %>% number_results_per_panel(PDAST_1,PDAST_6,all_combos,"S","I")
+  df$PDRx_rpp_acs <- df %>% number_results_per_panel(PDRx_1,PDRx_6,all_combos,"S","I")
   print(2/60)
-  df$PDAST_rpp_aas <- df %>% number_results_per_panel(PDAST_1,PDAST_6,all_abs,"S","I")
+  df$PDRx_rpp_aas <- df %>% number_results_per_panel(PDRx_1,PDRx_6,all_abs,"S","I")
   print(3/60)
-  df$PDAST_rpp_iss <- df %>% number_results_per_panel(PDAST_1,PDAST_6,iv_singles,"S","I")
+  df$PDRx_rpp_iss <- df %>% number_results_per_panel(PDRx_1,PDRx_6,iv_singles,"S","I")
   print(4/60)
-  df$PDAST_rpp_ics <- df %>% number_results_per_panel(PDAST_1,PDAST_6,iv_combos,"S","I")
+  df$PDRx_rpp_ics <- df %>% number_results_per_panel(PDRx_1,PDRx_6,iv_combos,"S","I")
   print(5/60)
-  df$PDAST_rpp_ais <- df %>% number_results_per_panel(PDAST_1,PDAST_6,all_ivs,"S","I")
+  df$PDRx_rpp_ais <- df %>% number_results_per_panel(PDRx_1,PDRx_6,all_ivs,"S","I")
   print(6/60)
-  df$PDAST_rpp_oss <- df %>% number_results_per_panel(PDAST_1,PDAST_6,oral_singles,"S","I")
+  df$PDRx_rpp_oss <- df %>% number_results_per_panel(PDRx_1,PDRx_6,oral_singles,"S","I")
   print(7/60)
-  df$PDAST_rpp_ocs <- df %>% number_results_per_panel(PDAST_1,PDAST_6,oral_combos,"S","I")
+  df$PDRx_rpp_ocs <- df %>% number_results_per_panel(PDRx_1,PDRx_6,oral_combos,"S","I")
   print(8/60)
-  df$PDAST_rpp_aos <- df %>% number_results_per_panel(PDAST_1,PDAST_6,all_orals,"S","I")
+  df$PDRx_rpp_aos <- df %>% number_results_per_panel(PDRx_1,PDRx_6,all_orals,"S","I")
   print(9/60)
-  df$PDAST_rpp_acss <- df %>% number_results_per_panel(PDAST_1,PDAST_6,access_singles,"S","I")
+  df$PDRx_rpp_acss <- df %>% number_results_per_panel(PDRx_1,PDRx_6,access_singles,"S","I")
   print(10/60)
-  df$PDAST_rpp_accs <- df %>% number_results_per_panel(PDAST_1,PDAST_6,access_combos,"S","I")
+  df$PDRx_rpp_accs <- df %>% number_results_per_panel(PDRx_1,PDRx_6,access_combos,"S","I")
   print(11/60)
-  df$PDAST_rpp_aacs <- df %>% number_results_per_panel(PDAST_1,PDAST_6,all_access,"S","I")
+  df$PDRx_rpp_aacs <- df %>% number_results_per_panel(PDRx_1,PDRx_6,all_access,"S","I")
   print(12/60)
-  df$PDAST_rpp_wass <- df %>% number_results_per_panel(PDAST_1,PDAST_6,watch_singles,"S","I")
+  df$PDRx_rpp_wass <- df %>% number_results_per_panel(PDRx_1,PDRx_6,watch_singles,"S","I")
   print(13/60)
-  df$PDAST_rpp_wacs <- df %>% number_results_per_panel(PDAST_1,PDAST_6,watch_combos,"S","I")
+  df$PDRx_rpp_wacs <- df %>% number_results_per_panel(PDRx_1,PDRx_6,watch_combos,"S","I")
   print(14/60)
-  df$PDAST_rpp_awas <- df %>% number_results_per_panel(PDAST_1,PDAST_6,all_watch,"S","I")
+  df$PDRx_rpp_awas <- df %>% number_results_per_panel(PDRx_1,PDRx_6,all_watch,"S","I")
   print(15/60)
-  df$PDAST_rpp_asr <- df %>% number_results_per_panel(PDAST_1,PDAST_6,all_singles,"R","NT")
+  df$PDRx_rpp_asr <- df %>% number_results_per_panel(PDRx_1,PDRx_6,all_singles,"R","NT")
   print(16/60)
-  df$PDAST_rpp_acr <- df %>% number_results_per_panel(PDAST_1,PDAST_6,all_combos,"R","NT")
+  df$PDRx_rpp_acr <- df %>% number_results_per_panel(PDRx_1,PDRx_6,all_combos,"R","NT")
   print(17/60)
-  df$PDAST_rpp_aar <- df %>% number_results_per_panel(PDAST_1,PDAST_6,all_abs,"R","NT")
+  df$PDRx_rpp_aar <- df %>% number_results_per_panel(PDRx_1,PDRx_6,all_abs,"R","NT")
   print(18/60)
-  df$PDAST_rpp_isr <- df %>% number_results_per_panel(PDAST_1,PDAST_6,iv_singles,"R","NT")
+  df$PDRx_rpp_isr <- df %>% number_results_per_panel(PDRx_1,PDRx_6,iv_singles,"R","NT")
   print(19/60)
-  df$PDAST_rpp_icr <- df %>% number_results_per_panel(PDAST_1,PDAST_6,iv_combos,"R","NT")
+  df$PDRx_rpp_icr <- df %>% number_results_per_panel(PDRx_1,PDRx_6,iv_combos,"R","NT")
   print(20/60)
-  df$PDAST_rpp_air <- df %>% number_results_per_panel(PDAST_1,PDAST_6,all_ivs,"R","NT")
+  df$PDRx_rpp_air <- df %>% number_results_per_panel(PDRx_1,PDRx_6,all_ivs,"R","NT")
   print(21/60)
-  df$PDAST_rpp_osr <- df %>% number_results_per_panel(PDAST_1,PDAST_6,oral_singles,"R","NT")
+  df$PDRx_rpp_osr <- df %>% number_results_per_panel(PDRx_1,PDRx_6,oral_singles,"R","NT")
   print(22/60)
-  df$PDAST_rpp_ocr <- df %>% number_results_per_panel(PDAST_1,PDAST_6,oral_combos,"R","NT")
+  df$PDRx_rpp_ocr <- df %>% number_results_per_panel(PDRx_1,PDRx_6,oral_combos,"R","NT")
   print(23/60)
-  df$PDAST_rpp_aor <- df %>% number_results_per_panel(PDAST_1,PDAST_6,all_orals,"R","NT")
+  df$PDRx_rpp_aor <- df %>% number_results_per_panel(PDRx_1,PDRx_6,all_orals,"R","NT")
   print(24/60)
-  df$PDAST_rpp_acsr <- df %>% number_results_per_panel(PDAST_1,PDAST_6,access_singles,"R","NT")
+  df$PDRx_rpp_acsr <- df %>% number_results_per_panel(PDRx_1,PDRx_6,access_singles,"R","NT")
   print(25/60)
-  df$PDAST_rpp_accr <- df %>% number_results_per_panel(PDAST_1,PDAST_6,access_combos,"R","NT")
+  df$PDRx_rpp_accr <- df %>% number_results_per_panel(PDRx_1,PDRx_6,access_combos,"R","NT")
   print(26/60)
-  df$PDAST_rpp_aacr <- df %>% number_results_per_panel(PDAST_1,PDAST_6,all_access,"R","NT")
+  df$PDRx_rpp_aacr <- df %>% number_results_per_panel(PDRx_1,PDRx_6,all_access,"R","NT")
   print(27/60)
-  df$PDAST_rpp_wasr <- df %>% number_results_per_panel(PDAST_1,PDAST_6,watch_singles,"R","NT")
+  df$PDRx_rpp_wasr <- df %>% number_results_per_panel(PDRx_1,PDRx_6,watch_singles,"R","NT")
   print(28/60)
-  df$PDAST_rpp_wacr <- df %>% number_results_per_panel(PDAST_1,PDAST_6,watch_combos,"R","NT")
+  df$PDRx_rpp_wacr <- df %>% number_results_per_panel(PDRx_1,PDRx_6,watch_combos,"R","NT")
   print(29/60)
-  df$PDAST_rpp_awar <- df %>% number_results_per_panel(PDAST_1,PDAST_6,all_watch,"R","NT")
+  df$PDRx_rpp_awar <- df %>% number_results_per_panel(PDRx_1,PDRx_6,all_watch,"R","NT")
   print(30/60)
   
   ###Standard results per panel
@@ -193,36 +193,36 @@ create_df <- function(df, col_name, aware_result, panel,type,result) {
 }
 assemble_dotplot_df <- function(df) {
   
-  PDAST_rpp_ass <- df %>% create_df(PDAST_rpp_ass,"PDAST\nsingle S","PDAST","Single","S")
-  PDAST_rpp_acs <- df %>% create_df(PDAST_rpp_acs,"PDAST\ncombo S","PDAST","Combo","S")
-  PDAST_rpp_aas <- df %>% create_df(PDAST_rpp_aas,"PDAST\nall S","PDAST","All","S")
-  PDAST_rpp_iss <- df %>% create_df(PDAST_rpp_iss,"PDAST\nsingle IV S","PDAST","Single IV","S")
-  PDAST_rpp_ics <- df %>% create_df(PDAST_rpp_ics,"PDAST\ncombo IV S","PDAST","Combo IV","S")
-  PDAST_rpp_ais <- df %>% create_df(PDAST_rpp_ais,"PDAST\nall IV S","PDAST","All IV","S")
-  PDAST_rpp_oss <- df %>% create_df(PDAST_rpp_oss,"PDAST\nsingle oral S","PDAST","Single Oral","S")
-  PDAST_rpp_ocs <- df %>% create_df(PDAST_rpp_ocs,"PDAST\ncombo oral S","PDAST","Combo Oral","S")
-  PDAST_rpp_aos <- df %>% create_df(PDAST_rpp_aos,"PDAST\nall oral S","PDAST","All Oral","S")
-  PDAST_rpp_acss <- df %>% create_df(PDAST_rpp_acss,"PDAST\nsingle Access S","PDAST","Single Access","S")
-  PDAST_rpp_accs <- df %>% create_df(PDAST_rpp_accs,"PDAST\ncombo Access S","PDAST","Combo Access","S")
-  PDAST_rpp_aacs <- df %>% create_df(PDAST_rpp_aacs,"PDAST\nall Access S","PDAST","All Access","S")
-  PDAST_rpp_wass <- df %>% create_df(PDAST_rpp_wass,"PDAST\nsingle Watch S","PDAST","Single Watch","S")
-  PDAST_rpp_wacs <- df %>% create_df(PDAST_rpp_wacs,"PDAST\ncombo watch S","PDAST","Combo Watch","S")
-  PDAST_rpp_awas <- df %>% create_df(PDAST_rpp_awas,"PDAST\nall watch S","PDAST","All Watch","S")
-  PDAST_rpp_asr <- df %>% create_df(PDAST_rpp_asr,"PDAST\nsingle R","PDAST","Single","R")
-  PDAST_rpp_acr <- df %>% create_df(PDAST_rpp_acr,"PDAST\ncombo R","PDAST","Combo","R")
-  PDAST_rpp_aar <- df %>% create_df(PDAST_rpp_aar,"PDAST\nall R","PDAST","All","R")
-  PDAST_rpp_isr <- df %>% create_df(PDAST_rpp_isr,"PDAST\nsingle IV R","PDAST","Single IV","R")
-  PDAST_rpp_icr <- df %>% create_df(PDAST_rpp_icr,"PDAST\ncombo IV R","PDAST","Combo IV","R")
-  PDAST_rpp_air <- df %>% create_df(PDAST_rpp_air,"PDAST\nall IV R","PDAST","All IV","R")
-  PDAST_rpp_osr <- df %>% create_df(PDAST_rpp_osr,"PDAST\nsingle oral R","PDAST","Single Oral","R")
-  PDAST_rpp_ocr <- df %>% create_df(PDAST_rpp_ocr,"PDAST\ncombo oral R","PDAST","Combo Oral","R")
-  PDAST_rpp_aor <- df %>% create_df(PDAST_rpp_aor,"PDAST\nall oral R","PDAST","All Oral","R")
-  PDAST_rpp_acsr <- df %>% create_df(PDAST_rpp_acsr,"PDAST\nsingle Access R","PDAST","Single Access","R")
-  PDAST_rpp_accr <- df %>% create_df(PDAST_rpp_accr,"PDAST\ncombo Access R","PDAST","Combo Access","R")
-  PDAST_rpp_aacr <- df %>% create_df(PDAST_rpp_aacr,"PDAST\nall Access R","PDAST","All Access","R")
-  PDAST_rpp_wasr <- df %>% create_df(PDAST_rpp_wasr,"PDAST\nsingle Watch R","PDAST","Single Watch","R")
-  PDAST_rpp_wacr <- df %>% create_df(PDAST_rpp_wacr,"PDAST\ncombo Watch R","PDAST","Combo Watch","R")
-  PDAST_rpp_awar <- df %>% create_df(PDAST_rpp_awar,"PDAST\nall Watch R","PDAST","All Watch","R")
+  PDRx_rpp_ass <- df %>% create_df(PDRx_rpp_ass,"PDRx\nsingle S","PDRx","Single","S")
+  PDRx_rpp_acs <- df %>% create_df(PDRx_rpp_acs,"PDRx\ncombo S","PDRx","Combo","S")
+  PDRx_rpp_aas <- df %>% create_df(PDRx_rpp_aas,"PDRx\nall S","PDRx","All","S")
+  PDRx_rpp_iss <- df %>% create_df(PDRx_rpp_iss,"PDRx\nsingle IV S","PDRx","Single IV","S")
+  PDRx_rpp_ics <- df %>% create_df(PDRx_rpp_ics,"PDRx\ncombo IV S","PDRx","Combo IV","S")
+  PDRx_rpp_ais <- df %>% create_df(PDRx_rpp_ais,"PDRx\nall IV S","PDRx","All IV","S")
+  PDRx_rpp_oss <- df %>% create_df(PDRx_rpp_oss,"PDRx\nsingle oral S","PDRx","Single Oral","S")
+  PDRx_rpp_ocs <- df %>% create_df(PDRx_rpp_ocs,"PDRx\ncombo oral S","PDRx","Combo Oral","S")
+  PDRx_rpp_aos <- df %>% create_df(PDRx_rpp_aos,"PDRx\nall oral S","PDRx","All Oral","S")
+  PDRx_rpp_acss <- df %>% create_df(PDRx_rpp_acss,"PDRx\nsingle Access S","PDRx","Single Access","S")
+  PDRx_rpp_accs <- df %>% create_df(PDRx_rpp_accs,"PDRx\ncombo Access S","PDRx","Combo Access","S")
+  PDRx_rpp_aacs <- df %>% create_df(PDRx_rpp_aacs,"PDRx\nall Access S","PDRx","All Access","S")
+  PDRx_rpp_wass <- df %>% create_df(PDRx_rpp_wass,"PDRx\nsingle Watch S","PDRx","Single Watch","S")
+  PDRx_rpp_wacs <- df %>% create_df(PDRx_rpp_wacs,"PDRx\ncombo watch S","PDRx","Combo Watch","S")
+  PDRx_rpp_awas <- df %>% create_df(PDRx_rpp_awas,"PDRx\nall watch S","PDRx","All Watch","S")
+  PDRx_rpp_asr <- df %>% create_df(PDRx_rpp_asr,"PDRx\nsingle R","PDRx","Single","R")
+  PDRx_rpp_acr <- df %>% create_df(PDRx_rpp_acr,"PDRx\ncombo R","PDRx","Combo","R")
+  PDRx_rpp_aar <- df %>% create_df(PDRx_rpp_aar,"PDRx\nall R","PDRx","All","R")
+  PDRx_rpp_isr <- df %>% create_df(PDRx_rpp_isr,"PDRx\nsingle IV R","PDRx","Single IV","R")
+  PDRx_rpp_icr <- df %>% create_df(PDRx_rpp_icr,"PDRx\ncombo IV R","PDRx","Combo IV","R")
+  PDRx_rpp_air <- df %>% create_df(PDRx_rpp_air,"PDRx\nall IV R","PDRx","All IV","R")
+  PDRx_rpp_osr <- df %>% create_df(PDRx_rpp_osr,"PDRx\nsingle oral R","PDRx","Single Oral","R")
+  PDRx_rpp_ocr <- df %>% create_df(PDRx_rpp_ocr,"PDRx\ncombo oral R","PDRx","Combo Oral","R")
+  PDRx_rpp_aor <- df %>% create_df(PDRx_rpp_aor,"PDRx\nall oral R","PDRx","All Oral","R")
+  PDRx_rpp_acsr <- df %>% create_df(PDRx_rpp_acsr,"PDRx\nsingle Access R","PDRx","Single Access","R")
+  PDRx_rpp_accr <- df %>% create_df(PDRx_rpp_accr,"PDRx\ncombo Access R","PDRx","Combo Access","R")
+  PDRx_rpp_aacr <- df %>% create_df(PDRx_rpp_aacr,"PDRx\nall Access R","PDRx","All Access","R")
+  PDRx_rpp_wasr <- df %>% create_df(PDRx_rpp_wasr,"PDRx\nsingle Watch R","PDRx","Single Watch","R")
+  PDRx_rpp_wacr <- df %>% create_df(PDRx_rpp_wacr,"PDRx\ncombo Watch R","PDRx","Combo Watch","R")
+  PDRx_rpp_awar <- df %>% create_df(PDRx_rpp_awar,"PDRx\nall Watch R","PDRx","All Watch","R")
   STANDARD_AST_rpp_ass <- df %>% create_df(STANDARD_AST_rpp_ass,"Standard\nsingle S","Standard","Single","S")
   STANDARD_AST_rpp_acs <- df %>% create_df(STANDARD_AST_rpp_acs,"Standard\ncombo S","Standard","Combo","S")
   STANDARD_AST_rpp_aas <- df %>% create_df(STANDARD_AST_rpp_aas,"Standard\nall S","Standard","All","S")
@@ -254,12 +254,12 @@ assemble_dotplot_df <- function(df) {
   STANDARD_AST_rpp_wacr <- df %>% create_df(STANDARD_AST_rpp_wacr,"Standard\ncombo Watch R","Standard","Combo Watch","R")
   STANDARD_AST_rpp_awar <- df %>% create_df(STANDARD_AST_rpp_awar,"Standard\nall Watch R","Standard","All Watch","R")
   
-  acs_df <- data.frame(rbind(PDAST_rpp_ass,PDAST_rpp_acs,PDAST_rpp_aas,PDAST_rpp_iss,PDAST_rpp_ics,
-                             PDAST_rpp_ais,PDAST_rpp_oss,PDAST_rpp_ocs,PDAST_rpp_aos,PDAST_rpp_acss,
-                             PDAST_rpp_accs,PDAST_rpp_aacs,PDAST_rpp_wass,PDAST_rpp_wacs,PDAST_rpp_awas,
-                             PDAST_rpp_asr,PDAST_rpp_acr,PDAST_rpp_aar,PDAST_rpp_isr,PDAST_rpp_icr,
-                             PDAST_rpp_air,PDAST_rpp_osr,PDAST_rpp_ocr,PDAST_rpp_aor,PDAST_rpp_acsr,
-                             PDAST_rpp_accr,PDAST_rpp_aacr,PDAST_rpp_wasr,PDAST_rpp_wacr,PDAST_rpp_awar,
+  acs_df <- data.frame(rbind(PDRx_rpp_ass,PDRx_rpp_acs,PDRx_rpp_aas,PDRx_rpp_iss,PDRx_rpp_ics,
+                             PDRx_rpp_ais,PDRx_rpp_oss,PDRx_rpp_ocs,PDRx_rpp_aos,PDRx_rpp_acss,
+                             PDRx_rpp_accs,PDRx_rpp_aacs,PDRx_rpp_wass,PDRx_rpp_wacs,PDRx_rpp_awas,
+                             PDRx_rpp_asr,PDRx_rpp_acr,PDRx_rpp_aar,PDRx_rpp_isr,PDRx_rpp_icr,
+                             PDRx_rpp_air,PDRx_rpp_osr,PDRx_rpp_ocr,PDRx_rpp_aor,PDRx_rpp_acsr,
+                             PDRx_rpp_accr,PDRx_rpp_aacr,PDRx_rpp_wasr,PDRx_rpp_wacr,PDRx_rpp_awar,
                              STANDARD_AST_rpp_ass,STANDARD_AST_rpp_acs,STANDARD_AST_rpp_aas,STANDARD_AST_rpp_iss,
                              STANDARD_AST_rpp_ics,STANDARD_AST_rpp_ais,STANDARD_AST_rpp_oss,STANDARD_AST_rpp_ocs,
                              STANDARD_AST_rpp_aos,STANDARD_AST_rpp_acss,STANDARD_AST_rpp_accs,STANDARD_AST_rpp_aacs,
@@ -284,17 +284,17 @@ assemble_dotplot_df <- function(df) {
 }
 
 ###Main dot plot of all S results and WHO Access S results
-main_dotplotter <- function(df,pdast_1,standard_1,pdast_2,standard_2,
+main_dotplotter <- function(df,PDRx_1,standard_1,PDRx_2,standard_2,
                             left_label,right_label,sens_addendum="") {
   
-  plot_df <- df %>% filter(grepl(pdast_1,AWaRe_results) |
+  plot_df <- df %>% filter(grepl(PDRx_1,AWaRe_results) |
                              grepl(standard_1,AWaRe_results) |
-                             grepl(pdast_2,AWaRe_results) |
+                             grepl(PDRx_2,AWaRe_results) |
                              grepl(standard_2,AWaRe_results) )
   
-  plot_df$AWaRe_results <- factor(plot_df$AWaRe_results,levels = c(pdast_1,
+  plot_df$AWaRe_results <- factor(plot_df$AWaRe_results,levels = c(PDRx_1,
                                                                    standard_1,
-                                                                   pdast_2,
+                                                                   PDRx_2,
                                                                    standard_2))
   
   df_plot <- ggplot(plot_df,aes(x=AWaRe_results,y=n,color=Approach)) +
@@ -333,7 +333,7 @@ abs_df_assemble <- function(pd_df,standard_df) {
     df %>% filter(ind==ab_name(abx)) %>% arrange(Approach) %>% select(values)
     
     if(nrow(abs_df %>% filter(ind==ab_name(abx)) %>% select(1)) ==2 &
-       abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% dplyr::slice(1) =="PDAST") {
+       abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% dplyr::slice(1) =="PDRx") {
       
       abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(1) -
         abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(2)
@@ -345,7 +345,7 @@ abs_df_assemble <- function(pd_df,standard_df) {
           abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(2))
       
     } else if (nrow(abs_df %>% filter(ind==ab_name(abx)) %>% select(1)) ==1 &
-               abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% dplyr::slice(1) =="PDAST") {
+               abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% dplyr::slice(1) =="PDRx") {
       
       abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(1)
       
@@ -359,7 +359,7 @@ abs_df_assemble <- function(pd_df,standard_df) {
   
   abs_df <- bind_rows(
     standard_df %>% data.frame() %>% mutate(Approach = "Standard"),
-    pd_df %>% data.frame() %>% mutate(Approach = "PDAST")
+    pd_df %>% data.frame() %>% mutate(Approach = "PDRx")
   ) %>% mutate(ind = ab_name(ind))
   abs_diffs <- map_df(all_singles, function(abs) {
     abs_df %>% 
@@ -367,10 +367,10 @@ abs_df_assemble <- function(pd_df,standard_df) {
       tibble() %>% 
       mutate(ind = ab_name(abs))
   }) %>% 
-    mutate(better = if_else(values > 0, "PDAST", "Standard"),
+    mutate(better = if_else(values > 0, "PDRx", "Standard"),
            values2 = abs(values)) %>% 
     left_join(
-      abs_df %>% filter(Approach == "PDAST") %>% select(values, ind) %>% rename(PDAST = values), 
+      abs_df %>% filter(Approach == "PDRx") %>% select(values, ind) %>% rename(PDRx = values), 
       by = "ind"
     ) %>% 
     left_join(
@@ -379,11 +379,11 @@ abs_df_assemble <- function(pd_df,standard_df) {
     ) %>% 
     mutate(
       Standard = if_else(is.na(Standard), 0, Standard),
-      values = if_else(better == "PDAST", PDAST + 200, Standard + 200)
+      values = if_else(better == "PDRx", PDRx + 200, Standard + 200)
     )
   abs_diffs <<- abs_diffs
   standard_levels <- abs_df %>% filter(Approach == "Standard") %>% arrange(values) %>% pull(ind) 
-  pdast_levels <- abs_df %>% filter(Approach == "PDAST") %>% filter(!ind %in% standard_levels) %>% arrange(values) %>% pull(ind)
+  PDRx_levels <- abs_df %>% filter(Approach == "PDRx") %>% filter(!ind %in% standard_levels) %>% arrange(values) %>% pull(ind)
   abs_df <- abs_df %>% 
     anti_join(
       abs_df %>% filter(Approach == "Standard") %>% select(ind), 
@@ -392,8 +392,8 @@ abs_df_assemble <- function(pd_df,standard_df) {
     mutate(Approach = "Standard", values = 0) %>% 
     bind_rows(abs_df) %>% 
     mutate(
-      Approach = factor(Approach, levels = c("PDAST", "Standard")),
-      ind = factor(ind, levels = c(pdast_levels,standard_levels)),
+      Approach = factor(Approach, levels = c("PDRx", "Standard")),
+      ind = factor(ind, levels = c(PDRx_levels,standard_levels)),
       aware = if_else(ind %in% ab_name(access_singles), "Access", "Watch")
     )
   axiscols <- if_else(
@@ -443,114 +443,6 @@ awaretotaller <- function(panel) {
     select(n_results) %>% unlist()
 }
 
-###Search for previous event across multiple variables
-apply_prev_event <- function(df, param,organism) {
-  df %>%
-    prev_event_type_assign(!!sym(param), urine_df, org_fullname,organism, 365, 1)
-}
-
-###Applying previous AST result search across multiple result types
-prev_AST_applier <- function(df1,micro_data,suffix,result,timeframe=365,n_events=1) {
-  
-  params <- paste0("p", antibiotics, suffix)
-  
-  apply_prev_event <- function(df, param, antibiotic) {
-    df %>%
-      prev_event_type_assign(!!sym(param), micro_data, !!sym(antibiotic), result, timeframe, n_events)
-  }
-  df1 <- reduce(seq_along(antibiotics), function(df, i) {
-    apply_prev_event(df, params[i], antibiotics[i])
-  }, .init = df1) %>%
-    ungroup()
-  
-}
-
-###Assembling dataframe for treatment recommendations bar plot
-ab_rec_df <- function(df,pd_rec,quote_pdrec,pd_res,st_res,st_rec) {
-  
-  pd_rec <- enquo(pd_rec)
-  pd_res <- enquo(pd_res)
-  st_res <- enquo(st_res)
-  
-  urines_abx <- urines_abx %>% filter(!!pd_rec %in% all_singles)
-  
-  pdast_graph <- urines_abx %>% count(!!pd_rec,!!pd_res,!!st_res) %>% 
-    mutate(AWaRe = case_when(!!pd_rec %in% access_singles ~ "Access",
-                             TRUE~"Watch")) %>% 
-    mutate(!!pd_rec:=ab_name(!!pd_rec),
-           Panel="PDAST",
-           Result=!!pd_res) %>% 
-    rename(abx_name=quote_pdrec)
-  standard_graph <- pdast_graph %>% mutate(Panel="Standard",
-                                           Result=!!st_res)
-  ab_gr_df <- data.frame(rbind(pdast_graph,standard_graph))
-  ab_gr_df <- ab_gr_df %>% mutate(abx_name = case_when(Panel=="Standard" ~ st_rec,
-                                                       TRUE ~ abx_name))
-  
-  axiscols <- ifelse(ab_gr_df %>% group_by(abx_name) %>% 
-                       mutate(n=sum(n)) %>% 
-                       arrange(n) %>% ungroup() %>% 
-                       distinct(abx_name) %>% unlist() %in% ab_name(access_abs),"seagreen",
-                     "darkorange")
-  
-  axiscols <<- axiscols
-  
-  ab_gr_df$abx_name <- factor(ab_gr_df$abx_name,
-                              levels=ab_gr_df %>% group_by(abx_name) %>% 
-                                mutate(n=sum(n)) %>% 
-                                arrange(n) %>% ungroup() %>% 
-                                distinct(abx_name) %>% unlist())
-  max_count <- ceiling((ab_gr_df %>% group_by(abx_name,Panel) %>% summarise(sumn=sum(n)) %>% 
-                          ungroup() %>% summarise(max=max(sumn)) %>% unlist() %>% 
-                          as.numeric() /25) * 25)
-  
-  max_count <<- max_count
-  
-  ab_gr_df
-  
-}
-
-###Bar plot of treatment recommendations - results
-ab_result_graph <- function(df,line,route,title_height,title_width) {
-  
-  ab_plot <- ggplot(df, aes(x = abx_name, y = if_else(Panel == "Standard", -n, n),
-                            fill = Result,color=Result)) +
-    geom_bar(stat = "identity", width=0.85,position = "stack") +
-    scale_y_continuous(
-      limits = c(-ceiling(max_count / 100) * 100, ceiling(max_count / 100) * 100), 
-      breaks = seq(-ceiling(max_count / 500) * 500, ceiling(max_count / 500) * 500,by=500), 
-      labels = abs(seq(-ceiling(max_count / 500) * 500, ceiling(max_count / 500) * 500,by=500)) 
-    ) +
-    coord_flip() +
-    labs(y = "Number of results", x = "Antimicrobial agent recommended",
-         fill = "Result") +
-    theme_minimal() +
-    theme(axis.text.y = element_text(size = 12), 
-          axis.title.y = element_text(size = 14),
-          axis.title.x = element_text(size = 14),
-          legend.title = element_text(size = 14),
-          legend.text = element_text(size = 12)) +
-    scale_x_discrete(expand = expansion(mult = c(0.1, 0.2))) +
-    geom_hline(yintercept = 0,linetype="solid",color="black") +
-    ggtitle(glue("Comparison of subsequent urine susceptibility results for antibiotics\nrecommended as {line}-line {route} treatment")) +
-    geom_text(x=title_height,y=-title_width,label=glue("Standard {line}-line {route} agent"),color="#3C3C3C",size=4) +
-    geom_text(x=title_height,y=title_width,label=glue("Personalised {line}-line {route} agent"),color="#3C3C3C",size=4) +
-    theme(plot.title = element_text(size = 16, margin = margin(b = 20)),
-          panel.grid.minor.y = element_blank(),
-          panel.grid.minor.x = element_blank(),
-          panel.grid.major.x = element_blank(),
-          axis.text.y = element_text(
-            colour = axiscols))
-  
-  
-  
-  ggsave(glue("uf_{line}-line_{route}_recommended.pdf"), plot = abx_prescribed, device = "pdf", width = 10, height = 4,
-         path="/Users/alexhoward/Documents/Projects/UDAST_code")
-  
-  ab_plot
-  
-}
-
 ##Uploads and reference lists
 
 ###Uploads
@@ -580,24 +472,6 @@ all_access <- c(access_singles, access_combos)
 watch_singles <- c("CRO","CAZ","FEP","MEM","TZP","CIP","VAN")
 watch_combos <- combn(watch_singles, 2, FUN = function(x) paste(x, collapse = "_"))
 all_watch <- c(watch_singles, watch_combos)
-
-##Sample size calculation for chi-squared test
-
-###Pooled proportion
-prop_1 <- 0.7 #expected standard
-prop_2 <- 0.75 #expected intervention
-pooled_prop <- (prop_1+prop_2)/2
-
-###Effect size
-ef_size <- sqrt((prop_1-prop_2)^2/(pooled_prop*(1-pooled_prop)))
-
-###Z values
-Za <- 1.96 #5% sig level
-Zb <- 0.84 #80% power
-
-###Sample size
-samp_size <- (Za+Zb)^2/ef_size^2
-glue("sample size requirement for chi-squared test = {samp_size}")
 
 ##Descriptive data
 abx %>% distinct(subject_id,.keep_all = T) %>% count(CDI)
@@ -843,7 +717,7 @@ acs_df <- ur_util %>% assemble_dotplot_df()
 write_csv(acs_df,"uf_ast_sourcedata_aware_dotplot.csv")
 
 ###Dot plot of number of all S results and Access S results per panel
-main_aware_plot <- acs_df %>% main_dotplotter("PDAST\nall S","Standard\nall S","PDAST\nall Access S","Standard\nall Access S",
+main_aware_plot <- acs_df %>% main_dotplotter("PDRx\nall S","Standard\nall S","PDRx\nall Access S","Standard\nall Access S",
                                               "All agents","WHO access agents")
 
 ###Dot plot of number of all R results and Access R results per panel
