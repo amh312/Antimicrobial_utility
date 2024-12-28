@@ -204,6 +204,44 @@ Increasing median nitrofurantoin predicted resistance probability (Appendix 18) 
 
 ## Interpretation
 
+This study shows that personalised automation of empirical antibotic decision making using a utility function built on clinical prediction modelling, prescriber discrete choice experiments, and measures of illness severity could help safely maximise the use of WHO Access category antibiotics in clinical practice while minimising the risk of clinical failure due to resistance. Where illness severity was very low or very high, our algorithm behaved much like a fixed antimicrobial formulary - well patients (i.e., patients with uncomplicated lower UTI) were almost exclusively recommended nitrofurantoin and very unwell patients (i.e., patients with urosepsis) were almost exclusively recommended piperacillin-tazobactam. The algorithm was able to provide more nuance than an antimicrobial formulary in the grey area in between these two patient cohorts - as illness severity increased, our algorithm gradually compromised on the use of Access agents to reduce the probability of clinical failure and prioritise agents that could be administered intravenously.
+
+Our algorithm can safely navigate antibotic decision making for three reasons: firstly, clinical prediction modelling is likely to provide more objective estimates of the probability of antibiotic outcomes than human clinicians who can be vulnerable to psychological phenomena such as the availability heuristic (where the importance of events influences perception of their probability); secondly, the algorithm leverages the experience of real-world prescribers by quantifying how important they perceive different factors to be in a theoretical scenario where they can be dispassionate and objective; thirdly, the utility function is constructed to weight intravenous antibiotics and probability of susceptibility more heavily as patients become more unwell, allowing the algorithm to replicate a key aspect of clinical judgement in antibiotic prescribing - weighing up the risk of untreated infection against antibiotic-related harm and AMR generation.
+
+We envisage that our algorithm could be implemented at the point of a clinician ordering a urine culture test - in response to the order for a patient, the utility of different antibiotic options for that individual patient are calculated using probability predictions based on the patient's prior healthcare data, importance weights from a local discrete choice experiment, and an illness severity score (e.g., National Early Warning Score [NEWS]). The top three antibiotics are communicated to the clinician through the test ordering interface as first, second, and third-line recommendations, and the top six antibiotics are chosen for susceptibility testing (see Figure 7). For this to be done safely, local calibration of the utility function to the chosen illness severity score will need to be performed by tweaking the built in severity weight and gauging its effect with the sensitivity analysis displayed in Figure 5 - this will ensure that coverage rates are acceptable to local healthcare providers (e.g., a coverage of at least 90% may be desired once a patient's NEWS is 5 or above).
+
+```{r, echo=FALSE,,warning=FALSE}
+
+glue(
+  
+  "URINE CULTURE: INTERIM REPORT
+  
+  Patient: BETA, Alpha (NHS 123 456 7890):
+  
+  In your test request, you have stated that there are clinical features of UTI.
+  
+  Empirical treatment recommendations:
+  First-line: Nitrofurantoin (85% probability S)
+  Second-line: Ciprofloxacin (90% probability S)
+  Third-line: Ampicillin/sulbactam (85% probability S)
+  
+  Urine culture will be performed,
+  along with the following susceptibility tests:
+  Nitrofurantoin
+  Ciprofloxacin
+  Ampicillin/sulbactam
+  Piperacillin/tazobactam
+  Gentamicin
+  Cefazolin
+  
+  Further results to follow.
+  Please direct any queries regarding
+  this report to Medical Microbiology."
+)
+
+```
+Figure 7: Example of a potential output from the antibiotic decision algorithm as an immediate interim report to a clinician when a urine culture request is made an a box is ticked stating that the patient has clinical features of urinary tract infection.
+
 Give an overall interpretation of the main results, including issues of fairness in the context of the objectives and previous studies
 
 ## Limitations
