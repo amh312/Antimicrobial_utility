@@ -101,7 +101,7 @@ The maximum tree depth and minimum child weight values that produced the highest
 
 The learning rate and the round number at which the best AUROC value occurred (forming the new total number of rounds parameter) were then taken forward as parameters for training the final model. Class imbalance methods (e.g., class weighting) were not used to ensure that probability predictions were not skewed to improve predictive performance (e.g., universally increased to improve sensitivity), given that they would subsequently be used to inform the utility function.
 
-Predictor variable contributions to predictive value in model training were measured using Shapley values with 'predict' from the 'stats' package.[@Chapter53Shapley] Predictor variables with Shapley values of zero were then excluded from models for the final training round. A single validation run was then performed with the final trained model on the validation dataset, measuring AUROC, accuracy, precision, recall, and F1 score (decision threshold 0.5) using coded formulae for each model.
+Predictor variable contributions to predictive value in model training were measured using Shapley values with 'predict' from the 'stats' package.[@Chapter53Shapley] Predictor variables with Shapley values of zero were then excluded from models for the final training round. A single validation run was then performed with the final trained model on the validation dataset, measuring AUROC, accuracy, precision, recall, and F1 score (decision threshold 0.5) using coded formulae for each model. 95% confidence intervals were approximated for each metric using a bootstrap method with 1000 iterations.
 
 A model stability analysis was performed for each model excluding the 24 antibiotic combination models (15 models in total) in view of the computational time required, where training and validation of the final model was performed in six random train-test splits without replacement (stratified by outcome) for each of four smaller train-test dataset size ratios (2:98%, 6:94%, 8:92%, and 12:88%) - AUC, accuracy, precision, recall, and F1 score were measured for each of these validations, and metric distributions were plotted using dot plots to assess heterogeneity in performance.
 
@@ -161,13 +161,13 @@ Figure 2: ROC curves for probability predictions made for single-antibiotic susc
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
-matrics_singles_table <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/metrics_singles_table.csv")
+metrics_singles_table <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/metrics_singles_table.csv")
 
-knitr::kable(matrics_singles_table)
+knitr::kable(metrics_singles_table)
 
 ```
 
-Table 1: Model performance metrics for prediction of single-antibiotic susceptibility, CDI, and antibiotic toxicity in the single validation run on the validation dataset.\
+Table 1: Model performance metrics for prediction of single-antibiotic susceptibility, CDI, and antibiotic toxicity in the single validation run on the validation dataset. 95% confidence intervals are displayed in parentheses. \
 
 Performance metrics from the small training dataset stability analysis are summarised in Appendix 10. The largest difference in mean AUROC across six model train-test iterations was observed between the 2% and 12% training datasets in the CDI prediction model (0.132, 0.631 versus 0.763), and the largest AUROC standard deviation was observed in the 2% dataset in the CDI prediction model (0.025). Performance metrics from the year group cluster analyses are summarised in Appendix 11. For all models and all year groups, mean AUROC across six train-test iterations was highest in the same year group upon which the model had been trained. The largest difference in AUROC between year groups was observed for the toxicity prediction model between 2011-2013 training, 2011-2013 testing and 2011-2013 training, 2014-2016 testing (0.257, 0.880 versus 0.623). The largest AUROC standard deviation was observed for the CDI model with 2008-2010 training, 2011-2013 testing (0.091).
 
