@@ -2986,6 +2986,37 @@ metrics_combos_table <- metrics_manus_table %>% dplyr::slice(
   -c(1:13,38:39)
 ) %>% mutate(Model=case_when(Model=="toxicity"~"Toxicity",TRUE~Model))
 
+ci_singles_table <- read_csv("ci_singles_table.csv")
+ci_combos_table <- read_csv("ci_combos_table.csv")
+
+
+metrics_singles_table <- metrics_singles_table %>% left_join(ci_singles_table)
+metrics_combos_table <- metrics_combos_table %>% left_join(ci_combos_table)
+
+metrics_singles_table <- metrics_singles_table %>% mutate(
+  AUROC = case_when(!is.na(AUROC_CI)&!is.na(AUROC)~glue("{AUROC} {AUROC_CI}"),
+                    TRUE~glue("{AUROC} (NA)")),
+  Precision = case_when(!is.na(Precision_CI)&!is.na(Precision)~glue("{Precision} {Precision_CI}"),
+                    TRUE~glue("{Precision} (NA)")),
+  Recall = case_when(!is.na(Recall_CI)&!is.na(Recall)~glue("{Recall} {Recall_CI}"),
+                    TRUE~glue("{Recall} (NA)")),
+  Accuracy = case_when(!is.na(Accuracy_CI)&!is.na(Accuracy)~glue("{Accuracy} {Accuracy_CI}"),
+                    TRUE~glue("{Accuracy} (NA)")),
+  `F1 score` = case_when(!is.na(F1_CI)&!is.na(`F1 score`)~glue("{`F1 score`} {F1_CI}"),
+                    TRUE~glue("{`F1 score`} (NA)"))) %>% select(Model:Accuracy)
+
+metrics_combos_table <- metrics_combos_table %>% mutate(
+  AUROC = case_when(!is.na(AUROC_CI)&AUROC_CI!="NA"~glue("{AUROC} {AUROC_CI}"),
+                    TRUE~glue("{AUROC} (NA)")),
+  Precision = case_when(!is.na(Precision_CI)&Precision_CI!="NA"~glue("{Precision} {Precision_CI}"),
+                        TRUE~glue("{Precision} (NA)")),
+  Recall = case_when(!is.na(Recall_CI)&Recall_CI!="NA"~glue("{Recall} {Recall_CI}"),
+                     TRUE~glue("{Recall} (NA)")),
+  Accuracy = case_when(!is.na(Accuracy_CI)&Accuracy_CI!="NA"~glue("{Accuracy} {Accuracy_CI}"),
+                       TRUE~glue("{Accuracy} (NA)")),
+  `F1 score` = case_when(!is.na(F1_CI)&F1_CI!="NA"~glue("{`F1 score`} {F1_CI}"),
+                         TRUE~glue("{`F1 score`} (NA)"))) %>% select(Model:Accuracy)
+
 write_csv(metrics_singles_table,"metrics_singles_table.csv")
 write_csv(metrics_combos_table,"metrics_combos_table.csv")
 
