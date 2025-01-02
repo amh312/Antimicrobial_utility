@@ -9,6 +9,14 @@ factorise <- function(df) {
                 sepsis_ae=factor(sepsis_ae))
 }
 
+###Value replacement
+replace_values <- function(column, map) {
+  flipped_map <- setNames(names(map), map)
+  column %>%
+    as.character() %>%
+    sapply(function(x) if (x %in% names(flipped_map)) flipped_map[[x]] else x)
+}
+
 ##Read-in
 
 train_abx <- read_csv("train_abx.csv")
@@ -22,7 +30,7 @@ pats <- read_csv("patients.csv")
 
 ###Antimicrobial mapping lists
 all_singles <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
-                 "MEM","CIP","GEN","SXT","NIT")
+                 "MEM","CIP","GEN","SXT","NIT","VAN")
 ab_singles <- all_singles
 all_combos <- combn(all_singles, 2, FUN = function(x) paste(x, collapse = "_"))
 all_abs <- c(all_singles,all_combos)
@@ -337,7 +345,9 @@ test_probs_df <- data.frame(matrix(nrow=floor(nrow(urines5_combined)*0.2),ncol=0
 micro_probs_df <- data.frame(matrix(nrow=nrow(ur_xg_combined),ncol=0))
 aucs <- data.frame(matrix(nrow=1,ncol=0))
 shap_summary_tables <- list()
-metrics_list <- list() 
+metrics_list <- list()
+roc_plots <- list()
+confidence_biglist <- list()
 for (outcome in colnames(urines5_outcomes)) {
   
   if (sum(!is.na(urines5_combined[[outcome]])) > 0) {
@@ -407,9 +417,23 @@ for (outcome in colnames(urines5_outcomes)) {
     auc_value <- auc(roc_result)
     print(paste("AUC-ROC:", auc_value))
     aucs[[outcome]] <- auc_value
-    pdf(glue("{outcome}_xg_roc.pdf"), width = 10, height = 10)
-    plot(roc_result, main = glue("{outcome} ROC Curve"), col = "blue")
-    dev.off()
+    roc_plot <- ggroc(roc_result) + 
+      ggtitle(glue("{replace_values(outcome,combined_antimicrobial_map)}\nROC Curve"))+
+      theme_minimal()+
+      labs(x = "1 - Specificity", y = "Sensitivity")+
+      theme(plot.title = element_text(hjust = 0.5))+
+      theme(
+        plot.title = element_text(hjust = 0.5),
+        axis.text = element_blank(),
+        axis.ticks = element_blank()
+      )+
+      geom_segment(aes(x = 1, y = 0, xend = 0, yend = 1),
+                   color = "grey", linetype = "dashed")
+    
+    roc_plots[[outcome]] <- roc_plot
+    
+    ggsave(filename = glue("{outcome}_xg_roc.pdf"), plot = roc_plot, width = 10, height = 10)
+
     pred_prob_micro <- predict(xgb_model, newdata = micro_matrix)
     
     test_probs_df[[outcome]] <- pred_prob_test
@@ -436,6 +460,34 @@ for (outcome in colnames(urines5_outcomes)) {
       F1_Score = f1_score
     )
     
+    #Bootstrapping for confidence intervals
+    
+    n_bootstraps <- 1000
+    calculate_metrics <- function(df, indices) {
+      y_true_boot <- df$y_true[indices]
+      y_scores_boot <- df$y_scores[indices]
+      y_pred_boot <- df$y_pred[indices]
+      
+      confusion <- confusionMatrix(factor(y_pred_boot), factor(y_true_boot))
+      accuracy <- confusion$overall['Accuracy']
+      precision <- confusion$byClass['Precision']
+      recall <- confusion$byClass['Recall']
+      f1_score <- 2 * (precision * recall) / (precision + recall)
+      auroc <- auc(y_true_boot, y_scores_boot)
+      
+      return(c(auroc = auroc, precision = precision, recall = recall, accuracy = accuracy, f1 = f1_score))
+    }
+    
+    df_ys <- data.frame(y_true = actual_test_class, y_pred = pred_test_class,y_scores = pred_prob_test)
+    
+    boot_results <- boot(data = df_ys, statistic = calculate_metrics, R = n_bootstraps)
+    
+    confidence_intervals <- lapply(1:5, function(i) boot.ci(boot_results, type = "perc", index = i))
+    
+    names(confidence_intervals) <- c("AUC", "Precision", "Recall", "Accuracy", "F1_Score")
+    
+    confidence_biglist[[outcome]] <- confidence_intervals
+    
   }
 }
 for (i in 1:length(shap_summary_tables)) {
@@ -454,14 +506,22 @@ for (i in 1:length(metrics_list)) {
   write_csv(metricky,glue("metrics_{combined_antimicrobial_map[i]}.csv"))
   
 }
+ci_df <- data.frame(matrix(nrow=length(urines5_outcomes),ncol=5))
+colnames(ci_df) <- c("AUROC_CI","Precision_CI","Recall_CI","F1_CI","Accuracy_CI")
+
+for (i in 1: length(confidence_biglist)) {
+  
+  ci_df$AUROC_CI[i] <- glue(" ({round(confidence_biglist[[i]]$AUC$percent[4],3)}-{round(confidence_biglist[[i]]$AUC$percent[5],3)})")
+  ci_df$Precision_CI[i] <- glue(" ({round(confidence_biglist[[i]]$Precision$percent[4],3)}-{round(confidence_biglist[[i]]$AUC$percent[5],3)})")
+  ci_df$Recall_CI[i] <- glue(" ({round(confidence_biglist[[i]]$Recall$percent[4],3)}-{round(confidence_biglist[[i]]$AUC$percent[5],3)})")
+  ci_df$Accuracy_CI[i] <- glue(" ({round(confidence_biglist[[i]]$Accuracy$percent[4],3)}-{round(confidence_biglist[[i]]$AUC$percent[5],3)})")
+  ci_df$F1_CI[i] <- glue(" ({round(confidence_biglist[[i]]$F1_Score$percent[4],3)}-{round(confidence_biglist[[i]]$AUC$percent[5],3)})")
+  
+}
+
+write_csv(ci_df,"interim_ci_df.csv")
 
 ###Microsimulation dataframe
-replace_values <- function(column, map) {
-  flipped_map <- setNames(names(map), map)
-  column %>%
-    as.character() %>%
-    sapply(function(x) if (x %in% names(flipped_map)) flipped_map[[x]] else x)
-}
 micro_probs_df$micro_specimen_id <- ur_xg$micro_specimen_id
 micro_probs_df$subject_id <- ur_xg$subject_id
 probs_df_overall <- micro_probs_df %>% melt(id.vars=c("micro_specimen_id","subject_id")) %>% 
@@ -820,9 +880,22 @@ pred_prob_test <- predict(xgb_model, newdata = test_matrix)
 roc_result <- roc(abxTest[['CDI']], pred_prob_test)
 cdi_auc_value <- auc(roc_result)
 print(paste("AUC-ROC:", cdi_auc_value))
-pdf(glue("CDI_xg_roc.pdf"), width = 10, height = 10)
-plot(roc_result, main = glue("CDI ROC Curve"), col = "blue")
-dev.off()
+roc_plot <- ggroc(roc_result) + 
+  ggtitle(glue("CDI\nROC Curve"))+
+  theme_minimal()+
+  labs(x = "1 - Specificity", y = "Sensitivity")+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    axis.text = element_blank(),
+    axis.ticks = element_blank()
+  )+
+  geom_segment(aes(x = 1, y = 0, xend = 0, yend = 1),
+               color = "grey", linetype = "dashed")
+
+roc_plots[['CDI']] <- roc_plot
+
+ggsave(filename = glue("CDI_xg_roc.pdf"), plot = roc_plot, width = 10, height = 10)
 cdi_util_probs <- predict(xgb_model, newdata = micro_matrix)
 
 pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
@@ -847,6 +920,34 @@ cdi_metrics_list <- data.frame(
 )
 
 write_csv(cdi_metrics_list,glue("metrics_CDI.csv"))
+
+#Bootstrapping for confidence intervals
+
+n_bootstraps <- 1000
+calculate_metrics <- function(df, indices) {
+  y_true_boot <- df$y_true[indices]
+  y_scores_boot <- df$y_scores[indices]
+  y_pred_boot <- df$y_pred[indices]
+  
+  confusion <- confusionMatrix(factor(y_pred_boot), factor(y_true_boot))
+  accuracy <- confusion$overall['Accuracy']
+  precision <- confusion$byClass['Precision']
+  recall <- confusion$byClass['Recall']
+  f1_score <- 2 * (precision * recall) / (precision + recall)
+  auroc <- auc(y_true_boot, y_scores_boot)
+  
+  return(c(auroc = auroc, precision = precision, recall = recall, accuracy = accuracy, f1 = f1_score))
+}
+
+df_ys <- data.frame(y_true = actual_test_class, y_pred = pred_test_class,y_scores = pred_prob_test)
+
+boot_results <- boot(data = df_ys, statistic = calculate_metrics, R = n_bootstraps)
+
+confidence_intervals <- lapply(1:5, function(i) boot.ci(boot_results, type = "perc", index = i))
+
+names(confidence_intervals) <- c("AUC", "Precision", "Recall", "Accuracy", "F1_Score")
+
+confidence_biglist[['CDI']] <- confidence_intervals
 
 ###Toxicity data partitioning
 set.seed(123)
@@ -911,10 +1012,22 @@ xgb_model <- xgb.train(
 pred_prob_test <- predict(xgb_model, newdata = test_matrix)
 roc_result <- roc(abxTest[['overall_tox']], pred_prob_test)
 overall_tox_auc_value <- auc(roc_result)
-print(paste("AUC-ROC:", overall_tox_auc_value))
-pdf(glue("overall_tox_xg_roc.pdf"), width = 10, height = 10)
-plot(roc_result, main = glue("overall_tox ROC Curve"), col = "blue")
-dev.off()
+roc_plot <- ggroc(roc_result) + 
+  ggtitle(glue("Toxicity\nROC Curve"))+
+  theme_minimal()+
+  labs(x = "1 - Specificity", y = "Sensitivity")+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    axis.text = element_blank(),
+    axis.ticks = element_blank()
+  )+
+  geom_segment(aes(x = 1, y = 0, xend = 0, yend = 1),
+               color = "grey", linetype = "dashed")
+
+roc_plots[['overall_tox']] <- roc_plot
+
+ggsave(filename = glue("toxicity_xg_roc.pdf"), plot = roc_plot, width = 10, height = 10)
 overall_tox_util_probs <- predict(xgb_model, newdata = micro_matrix)
 
 pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
@@ -939,6 +1052,78 @@ tox_metrics_list <- data.frame(
 
 write_csv(tox_metrics_list,glue("metrics_toxicity.csv"))
 
+#Bootstrapping for confidence intervals
+
+n_bootstraps <- 1000
+calculate_metrics <- function(df, indices) {
+  y_true_boot <- df$y_true[indices]
+  y_scores_boot <- df$y_scores[indices]
+  y_pred_boot <- df$y_pred[indices]
+  
+  confusion <- confusionMatrix(factor(y_pred_boot), factor(y_true_boot))
+  accuracy <- confusion$overall['Accuracy']
+  precision <- confusion$byClass['Precision']
+  recall <- confusion$byClass['Recall']
+  f1_score <- 2 * (precision * recall) / (precision + recall)
+  auroc <- auc(y_true_boot, y_scores_boot)
+  
+  return(c(auroc = auroc, precision = precision, recall = recall, accuracy = accuracy, f1 = f1_score))
+}
+
+df_ys <- data.frame(y_true = actual_test_class, y_pred = pred_test_class,y_scores = pred_prob_test)
+
+boot_results <- boot(data = df_ys, statistic = calculate_metrics, R = n_bootstraps)
+
+confidence_intervals <- lapply(1:5, function(i) boot.ci(boot_results, type = "perc", index = i))
+
+names(confidence_intervals) <- c("AUC", "Precision", "Recall", "Accuracy", "F1_Score")
+
+confidence_biglist[['overall_tox']] <- confidence_intervals
+
+###Save all metric confidence intervals to CSV
+ci_df <- data.frame(matrix(nrow=length(confidence_biglist),ncol=5))
+colnames(ci_df) <- c("AUROC_CI","Precision_CI","Recall_CI","F1_CI","Accuracy_CI")
+
+for (i in 1: length(confidence_biglist)) {
+  
+  ci_df$AUROC_CI[i] <- ifelse(!is.na(confidence_biglist[[i]]$AUC),glue(" ({round(confidence_biglist[[i]]$AUC$percent[4],3)}-{round(confidence_biglist[[i]]$AUC$percent[5],3)})"),"NA")
+  ci_df$Precision_CI[i] <- ifelse(!is.na(confidence_biglist[[i]]$Precision),glue(" ({round(confidence_biglist[[i]]$Precision$percent[4],3)}-{round(confidence_biglist[[i]]$Precision$percent[5],3)})"),"NA")
+  ci_df$Recall_CI[i] <- ifelse(!is.na(confidence_biglist[[i]]$Recall),glue(" ({round(confidence_biglist[[i]]$Recall$percent[4],3)}-{round(confidence_biglist[[i]]$Recall$percent[5],3)})"),"NA")
+  ci_df$Accuracy_CI[i] <- ifelse(!is.na(confidence_biglist[[i]]$Accuracy),glue(" ({round(confidence_biglist[[i]]$Accuracy$percent[4],3)}-{round(confidence_biglist[[i]]$Accuracy$percent[5],3)})"),"NA")
+  ci_df$F1_CI[i] <- ifelse(!is.na(confidence_biglist[[i]]$F1_Score),glue(" ({round(confidence_biglist[[i]]$F1_Score$percent[4],3)}-{round(confidence_biglist[[i]]$F1_Score$percent[5],3)})"),"NA")
+  
+}
+
+ci_df$Model <- names(confidence_biglist)
+
+write_csv(ci_df,"final_ci_df.csv")
+ci_filter_list <- c(all_singles,"CDI","overall_tox")
+ci_singles_table <- ci_df %>% filter(Model %in% ci_filter_list) %>% 
+  mutate(Model=case_when(grepl("tox",Model)~"Toxicity",TRUE~Model))
+ci_combos_table <- ci_df %>% filter(!Model %in% ci_filter_list)
+ci_singles_table <- ci_singles_table %>% mutate(Model = case_when(
+  Model %in% combined_antimicrobial_map ~ replace_values(
+    Model, combined_antimicrobial_map
+  ),TRUE~Model
+))
+ci_combos_table <- ci_combos_table %>% mutate(Model = case_when(
+  Model %in% combined_antimicrobial_map ~ replace_values(
+    Model, combined_antimicrobial_map
+  ),TRUE~Model
+)) %>% mutate(Model = str_replace_all(Model,"_"," & "))
+
+write_csv(ci_singles_table,"ci_singles_table.csv")
+write_csv(ci_combos_table,"ci_combos_table.csv")
+
+##Save all ROCs to grid PDFs
+roc_plots_main <- c(roc_plots[1:13],roc_plots[38:39])
+roc_plots_other <- roc_plots[14:37]
+
+main_grid_plot <- plot_grid(plotlist = roc_plots_main, ncol = 3)
+other_grid_plot <- plot_grid(plotlist = roc_plots_other, ncol = 3)
+
+ggsave(glue("roc_plots_main.pdf"), plot = main_grid_plot, width = 15, height = 30)
+ggsave(glue("roc_plots_other.pdf"), plot = other_grid_plot, width = 15, height = 30)
 
 ##Feature contributions dataframe
 other_outcome_map <- list("CDI","toxicity")
@@ -980,8 +1165,8 @@ feat_table <- feat_table %>% mutate(Feature = case_when(
                                 TRUE~Feature
 )) %>% 
   mutate(Feature = case_when(
-  grepl("r$",Feature)&!grepl("(insur|Rest|fever)",Feature)~glue("{Feature %>% str_remove(r)} resistance"),
-  grepl("rx$",Feature)~glue("{Feature %>% str_remove(rx)} treatment"),
+  grepl("r$",Feature)&!grepl("(insur|Rest|fever)",Feature)~glue("{Feature %>% str_remove(r)} resistance in the last year"),
+  grepl("rx$",Feature)~glue("{Feature %>% str_remove(rx)} treatment in the last year"),
   grepl("ICD_",Feature)~str_replace(Feature,"ICD_","ICD diagnosis category "),
   grepl("PROC_",Feature)~str_replace(Feature,"PROC_","ICD procedure category "),
   grepl("NUTR",Feature)~str_replace(Feature,"NUTR","nutrition input in the last year"),
@@ -1122,4 +1307,3 @@ feat_table <- feat_table %>% mutate(Feature = case_when(
   mutate(Model=str_replace_all(Model,"_"," & "))
 
 write_csv(feat_table,"feat_table.csv")
-
