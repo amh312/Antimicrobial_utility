@@ -411,9 +411,34 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/nitres_
 
 Appendix 22: Changes in the proportion of urine organism coverage with first-line treatment recommendations overall, Access treatment recommendations, treatment recommendations with oral preparations, and treatment recommendations with intravenous preparations as the median predicted probability of nitrofurantoin resistance was varied between zero and one.\
 
+## Appendix 23: Discrete choice experiment edge case sensitivity analysis
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/ORplot_edgecase.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_ (single agent in edge case).pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of WHO Access agents, edge case)_susplot.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of orally-administrable agents, edge case)_susplot.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of IV-administrable agents, edge case)_susplot.pdf")
+
+
+```
+
+Appendix 23: Discrete choice experiment edge case sensitivity analysis where many identical responses were simlated in which oral administration options were prioritised.\
+\
+
+## Appendix 24: Discrete choice experiment edge case sensitivity analysis (collinearity reduced)
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/ORplot_edgecase2.pdf")
+
+```
+
+Appendix 24: The effect of reducing collinearity between oral routes of administration and UTI-specificity on coefficients in the ranked logit model in the discrete choice experiment edge case sensitivity analysis.\
+\
+
 ## References
 
 ::: {#refs}
 :::
-
-
