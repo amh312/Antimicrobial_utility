@@ -1,8 +1,3447 @@
-#MICROSIMULATION ANALYSIS
+#MAIN ANALYSIS
+
+##Functions
+
+###Utility calculation
+calculate_utilities <- function(df,formulary_list=c(),R_weight=1) {
+  
+  df <- df %>% mutate(overall_util=util_uti + util_access +
+                        util_oral + 
+                        util_reserve + util_highcost 
+                      + util_tox + util_CDI + util_iv*exp(acuity)*R_weight,
+                      short_util = util_uti + util_access +
+                        util_oral + util_iv +
+                        util_reserve + util_highcost 
+                      + util_tox + util_CDI,
+                      S_utility = S*overall_util,
+                      AMPR_utility = case_when(
+                        Antimicrobial=="Ampicillin" ~
+                          abs(R_weight)*AMP_R_value*R, TRUE~0
+                      ),
+                      SAMR_utility = case_when(
+                        Antimicrobial=="Ampicillin-sulbactam" ~
+                          abs(R_weight)*SAM_R_value*R, TRUE~0
+                      ),
+                      TZPR_utility = case_when(
+                        Antimicrobial=="Piperacillin-tazobactam" ~
+                          abs(R_weight)*TZP_R_value*R, TRUE~0
+                      ),
+                      CZOR_utility = case_when(
+                        Antimicrobial=="Cefazolin" ~
+                          abs(R_weight)*CZO_R_value*R, TRUE~0
+                      ),
+                      CROR_utility = case_when(
+                        Antimicrobial=="Ceftriaxone" ~
+                          abs(R_weight)*CRO_R_value*R, TRUE~0
+                      ),
+                      CAZR_utility = case_when(
+                        Antimicrobial=="Ceftazidime" ~
+                          abs(R_weight)*CAZ_R_value*R, TRUE~0
+                      ),
+                      FEPR_utility = case_when(
+                        Antimicrobial=="Cefepime" ~
+                          abs(R_weight)*FEP_R_value*R, TRUE~0
+                      ),
+                      MEMR_utility = case_when(
+                        Antimicrobial=="Meropenem" ~
+                          abs(R_weight)*MEM_R_value*R, TRUE~0
+                      ),
+                      CIPR_utility = case_when(
+                        Antimicrobial=="Ciprofloxacin" ~
+                          abs(R_weight)*CIP_R_value*R, TRUE~0
+                      ),
+                      GENR_utility = case_when(
+                        Antimicrobial=="Gentamicin" ~
+                          abs(R_weight)*GEN_R_value*R, TRUE~0
+                      ),
+                      SXTR_utility = case_when(
+                        Antimicrobial=="Trimethoprim-sulfamethoxazole" ~
+                          abs(R_weight)*SXT_R_value*R, TRUE~0
+                      ),
+                      NITR_utility = case_when(
+                        Antimicrobial=="Nitrofurantoin" ~
+                          abs(R_weight)*NIT_R_value*R, TRUE~0
+                      ),
+                      VANR_utility = case_when(
+                        Antimicrobial=="Vancomycin" ~
+                          abs(R_weight)*VAN_R_value*R, TRUE~0
+                      ),
+                      Formulary_agent = case_when(
+                        Antimicrobial%in%formulary_list ~
+                          TRUE, TRUE~FALSE
+                      ),
+                      Formulary_utility = 
+                        abs(R_weight)*Formulary_agent*R,
+                      AST_utility = (short_util+
+                                       AMPR_utility +
+                                       SAMR_utility +
+                                       TZPR_utility +
+                                       CZOR_utility +
+                                       CROR_utility +
+                                       CAZR_utility +
+                                       FEPR_utility +
+                                       MEMR_utility +
+                                       CIPR_utility +
+                                       GENR_utility +
+                                       SXTR_utility +
+                                       NITR_utility +
+                                       VANR_utility +
+                                       Formulary_utility)*single_agent,
+                      Rx_utility = S_utility)
+  
+  df %>% 
+    mutate(
+      Urosepsis_Rx_utility = case_when(
+        util_iv ==0 ~0,
+        TRUE~Rx_utility),
+      Outpatient_Rx_utility = case_when(
+        util_oral ==0 ~0,
+        TRUE~Rx_utility)
+    )
+  
+}
+abs_calc <- function(val,prob) {
+  
+  ifelse(val>=0,val*prob,abs(val)*(1-prob))
+  
+}
+
+###Factorise training and testing datasets
+factorise <- function(df) {
+  df %>% mutate(CDI = factor(CDI),
+                overall_tox = factor(overall_tox),
+                sepsis_ae=factor(sepsis_ae))
+}
+
+###Utility data visualisation
+utility_plot <- function(df, variable,application,modification="") {
+  
+  variable <- enquo(variable)
+  
+  axiscols <- if_else(
+    df %>% pull(Antimicrobial) %in% formulary_agents,
+    "seagreen", "black")
+  
+  df <- df %>% mutate(Antimicrobial = str_replace_all(Antimicrobial,"_"," & "))
+  
+  if (application=="Intravenous treatment") {
+    
+    df <- df %>% filter(Urosepsis_Rx_utility != min(Urosepsis_Rx_utility))
+    
+  } else if (application=="Oral treatment") {
+    
+    df <- df %>% filter(Outpatient_Rx_utility != min(Outpatient_Rx_utility))
+    
+  } else if (application=="AST") {
+    
+    df <- df %>% filter(AST_utility != min(AST_utility) & single_agent)
+    
+  }
+  
+  if (grepl("single",modification,ignore.case=T)) {
+    
+    df <- df %>% filter(single_agent)
+    
+  } else if (grepl("combination",modification,ignore.case=T)) {
+    
+    df <- df %>% filter(!single_agent)
+    
+  }
+  
+  thisplot <- ggplot(df %>% mutate(Antimicrobial = 
+                                     factor(Antimicrobial,
+                                            levels = df %>% group_by(Antimicrobial) %>% 
+                                              summarise(Median_util=median(!!variable)) %>% 
+                                              arrange(Median_util) %>% select(Antimicrobial) %>% unlist())), 
+                     aes(x=!!variable,y=Antimicrobial,fill=Antimicrobial)) +
+    geom_boxplot(outlier.color = NULL,
+                 outlier.alpha = 0.3) +
+    theme_minimal() +
+    ggtitle(glue("{application} utility distribution on\nmicrosimulation dataset{modification}")) +
+    theme(legend.position = "None",axis.text.y = element_text(
+      colour = axiscols))+
+    xlab(glue("{application} utility"))+
+    theme()
+  
+  ggsave(glue("utility_{application}_{modification}.pdf"), plot = thisplot, device = "pdf", width = 10, height = 8,
+         path="/Users/alexhoward/Documents/Projects/UDAST_code")
+  
+  print(thisplot)
+  
+}
+
+###Sensitivity analysis probability distribution check
+dens_check <- function(df,abx_agent,result,alpha,beta) {
+  
+  result <- enquo(result)
+  
+  test_dist <- tibble(Probability=rbeta(nrow(ur_util),alpha,beta),Distribution="Test")
+  actual_dist <- tibble(
+    Probability=df %>% filter(Antimicrobial==abx_agent) %>% pull(!!result),
+    Distribution="Actual")
+  dist_df <- tibble(rbind(test_dist,actual_dist))
+  
+  thisplot <- ggplot(dist_df,
+                     aes(x=Probability,color=Distribution)) + 
+    geom_density()+
+    ggtitle(glue("{abx_agent} resistance probability"))+
+    xlim(0,1)+
+    ylab("") +
+    theme_minimal()+
+    theme(axis.ticks.y = element_blank(),
+          axis.text.y = element_blank(),
+          panel.grid.major.x = element_blank(),
+          panel.grid.major.y = element_blank(),
+          panel.grid.minor.x = element_blank(),
+          panel.grid.minor.y = element_blank())
+  
+  print(thisplot)
+  
+}
+
+###Replacing resistance probability distribution with simulated distribution
+dist_replace <- function(df,df2,abx_agent,result,result2,alpha,beta) {
+  
+  replacement <- rbeta(nrow(df2),alpha,beta)
+  
+  dfrows <- which(df$Antimicrobial== abx_agent)
+  dfcols <- which(colnames(df)==result)
+  
+  dfrows2 <- which(df$Antimicrobial== abx_agent)
+  dfcols2 <- which(colnames(df)==result2)
+  
+  df[dfrows,dfcols] <- replacement
+  df[dfrows2,dfcols2] <- 1-replacement
+  
+  df
+  
+}
+
+###Sensitivity analysis varying resistance probabilities
+dens_sens <- function(df,probs_df,uf) {
+  
+  uf <- enquo(uf)
+  
+  sens_cum <- data.frame(matrix(nrow = 0,ncol=7))
+  colnames(sens_cum) <- c("med_util","best_ut","lower_iqr","upper_iqr","r_prob","overall_med","Antimicrobial")
+  iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
+  probs_df <- probs_df %>% filter(Antimicrobial %in% iterabs)
+  
+  for (j in seq_along(iterabs)) {
+    
+    a <- 0.5
+    b <- 18.5
+    
+    probs_df_2 <- probs_df
+    probs_df_3 <- probs_df
+    
+    for(i in 0:10) {
+      
+      if (i==0) {
+        
+        sens_df <- probs_df_3 %>% mutate(
+          R=case_when(Antimicrobial==iterabs[j]~0,TRUE~R),
+          S=case_when(Antimicrobial==iterabs[j]~1,TRUE~S))
+        
+      } else if (i==10) {
+        
+        sens_df <- probs_df_3 %>% mutate(
+          R=case_when(Antimicrobial==iterabs[j]~1,TRUE~R),
+          S=case_when(Antimicrobial==iterabs[j]~0,TRUE~S)
+        )
+        
+      } else {
+        
+        densy <- probs_df_2 %>% dens_check(iterabs[j],R,a,b)
+        print(densy)
+        
+        sens_df <- probs_df_3 %>% dist_replace(df,iterabs[j],"R","S",a,b) }
+      
+      sens_df <- sens_df %>% calculate_utilities()
+      
+      overall_median <- round(median(sens_df %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
+      
+      best_util <- sens_df %>% group_by(Antimicrobial) %>% summarise(
+        abmeds = median(!!uf)) %>% ungroup() %>% 
+        summarise(bestab = max(abmeds)) %>% unlist()
+      
+      sens_row <- sens_df %>% filter(Antimicrobial==iterabs[j]) %>% 
+        summarise(med_util=median(!!uf),
+                  best_ut=best_util,
+                  lower_iqr=quantile(!!uf)[2],
+                  upper_iqr=quantile(!!uf)[4],
+                  r_prob=median(R),
+                  overall_med=overall_median,
+                  Antimicrobial=iterabs[j])
+      
+      sens_cum <- data.frame(rbind(sens_cum,sens_row))
+      
+      a <- a+i
+      b <- b-(i/2)
+      
+    }
+    
+  }
+  
+  sens_cum
+  
+}
+
+###Data visualisation of resistance probability sensitivity analysis
+dens_sens_plot <- function(df,measure,uf) {
+  
+  uf <- enquo(uf)
+  
+  iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
+  
+  sens_plots <- list()
+  
+  for(i in seq_along(iterabs)) {
+    
+    df_spec_plot <- df %>% filter(Antimicrobial==iterabs[i])
+    med_plot <- df_spec_plot %>% mutate(Antimicrobial="All antimicrobials",
+                                        med_util=overall_med,
+                                        lower_iqr=overall_med,
+                                        upper_iqr=overall_med)
+    best_plot <- df_spec_plot %>% mutate(Antimicrobial="Best antimicrobial",
+                                         med_util=best_ut,
+                                         lower_iqr=best_ut,
+                                         upper_iqr=best_ut)
+    df_spec_plot <- data.frame(rbind(df_spec_plot,med_plot,best_plot))
+    
+    df_spec_plot$Antimicrobial <- factor(df_spec_plot$Antimicrobial,
+                                         levels=c("All antimicrobials","Best antimicrobial",
+                                                  iterabs[i]))
+    
+    df_plot <- ggplot(df_spec_plot, aes(x = r_prob)) +
+      geom_line(aes(y = as.numeric(med_util), group = Antimicrobial, color = Antimicrobial)) +
+      geom_ribbon(aes(y = as.numeric(med_util),
+                      ymin = as.numeric(lower_iqr),
+                      ymax = as.numeric(upper_iqr),
+                      group = Antimicrobial, fill = Antimicrobial), alpha = 0.3) +
+      xlim(0,1) +
+      ggtitle(glue("Effect of varying {iterabs[i]} resistance\nprobability on {iterabs[i]} {measure} utility")) +
+      xlab(glue("Population median probability of\n{iterabs[i]} resistance")) +
+      ylab(glue("{measure} utility")) +
+      theme_minimal()+
+      theme(panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank())
+    
+    sens_plots[[i]] <- df_plot
+    
+    ggsave(glue("dens_sens_1_{iterabs[i]}_{measure}.pdf"), plot = df_plot, device = "pdf", width = 6, height = 4,
+           path="/Users/alexhoward/Documents/Projects/UDAST_code")
+    
+    print(df_plot)
+    
+  }
+  
+  grid_plot <- plot_grid(plotlist = sens_plots, ncol = 3)
+  
+  ggsave("resistance_sens_plots_grid.pdf", plot = grid_plot, width = 20, height = 30)
+  
+}
+
+###Sensitivity analysis varying characteristic Desirability
+R_util_sens <- function(df,probs_df,uf,min_val,max_val) {
+  
+  uf <- enquo(uf)
+  
+  util_cum <- data.frame(matrix(nrow = 0,ncol=7))
+  colnames(util_cum) <- c("med_util","lower_iqr","upper_iqr","spec_value","overall_med","Antimicrobial")
+  iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
+  probs_df <- probs_df %>% filter(Antimicrobial %in% iterabs)
+  
+  for (j in seq_along(iterabs)) {
+    
+    probs_df_2 <- probs_df
+    
+    results <- read_csv("ADAPT-AST Factors influencing Antimicrobial Prescribing for Urinary Tract Infection.csv")
+    
+    ##Survey results
+    
+    ###Engineer scores dataframe
+    rankings <- results %>% select(10:ncol(results)) %>% dplyr::slice(2:nrow(results))
+    colnames(rankings) <- c("Abelfenide","Acetemran","Adenomadin","Adrevenac",
+                            "Amrodine","Choriotroban","Cormide","Decloxone",
+                            "Dexaset","Endoxolol","Olanzasys","Pansolid",
+                            "Protestryl")
+    Characteristic <- c("AWaRe","CDI","Toxicity","UTI","Oral","IV","Cost")
+    Abelfenide <- c("Reserve","Low","Low","No","Yes","Yes","High")
+    Acetemran <- c("Watch","Low","Low","Yes","Yes","No","Low")
+    Adenomadin <- c("Access","High","Low","No","Yes","Yes","Low")
+    Adrevenac <- c("Watch","High","Low","No","No","Yes","High")
+    Amrodine <- c("Reserve","High","Low","No","No","Yes","High")
+    Choriotroban <- c("Access","Low","High","No","No","Yes","Low")
+    Cormide <- c("Watch","Low","Low","No","No","Yes","High")
+    Decloxone <- c("Watch","Low","High","No","No","Yes","High")
+    Dexaset <- c("Access","Low","Low","No","Yes","Yes","Low")
+    Endoxolol <- c("Access","Low","Low","Yes","Yes","No","Low")
+    Olanzasys <- c("Watch","High","Low","No","No","Yes","Low")
+    Pansolid <- c("Access","Low","Low","No","Yes","No","Low")
+    Protestryl <- c("Watch","High","Low","No","Yes","Yes","Low")
+    characteristics <- data.frame(Abelfenide,Acetemran,Adenomadin,
+                                  Adrevenac,Amrodine,Choriotroban,
+                                  Cormide,Decloxone,Dexaset,
+                                  Endoxolol,Olanzasys,Pansolid,Protestryl) %>% 
+      t() %>% data.frame()
+    
+    colnames(characteristics) <- Characteristic
+    characteristics <- characteristics %>% 
+      mutate(Antibiotic = rownames(characteristics)) %>% relocate(
+        Antibiotic,.before = AWaRe
+      )
+    rownames(characteristics) <- NULL
+    scores <- rankings %>% pivot_longer(Abelfenide:Protestryl)
+    colnames(scores) <- c("Antibiotic","Rank")
+    scores <- scores %>% left_join(characteristics,by="Antibiotic")
+    
+    scores <- scores %>% mutate(Access = case_when(AWaRe=="Access"~1,TRUE~0),
+                                Watch = case_when(AWaRe=="Watch"~1,TRUE~0),
+                                Reserve = case_when(AWaRe=="Reserve"~1,TRUE~0))
+    
+    scores <- scores %>% rename(CDI_highrisk = "CDI",
+                                Toxicity_highrisk = "Toxicity",
+                                UTI_specific = "UTI",
+                                Oral_option = "Oral",
+                                IV_option = "IV",
+                                High_cost = "Cost")
+    scores[scores=="High"] <- "1"
+    scores[scores=="Low"] <- "0"
+    scores[scores=="Yes"] <- "1"
+    scores[scores=="No"] <- "0"
+    
+    scores
+    
+    scores <- scores %>% select(-AWaRe) %>%
+      mutate(across(c(Rank, CDI_highrisk, Toxicity_highrisk, UTI_specific,Access,
+                      Watch,Reserve), as.numeric)) 
+    
+    repeat_val <- nrow(scores)/13
+    seq_rep <- seq(1,nrow(scores)/13)
+    seq_rep1 <- c()
+    
+    for (p in seq_rep) {
+      
+      seq_rep2 <- rep(seq_rep[p],13)
+      seq_rep1 <- append(seq_rep1,seq_rep2)
+      
+      
+    }
+    
+    scores <- scores %>% mutate(choice = case_when(Rank==1~1,TRUE~0),
+                                id = seq_rep1) %>% 
+      mutate(across(Oral_option:High_cost,as.numeric))
+    
+    ##Extracting characteristic Desirability weights
+    
+    mlogit_data <- mlogit.data(scores, choice = "Rank", shape = "long", 
+                               chid.var = "id", alt.var = "Antibiotic", 
+                               ranked = TRUE)
+    
+    formula_no_int <- Rank ~ CDI_highrisk + Toxicity_highrisk +  
+      Oral_option + UTI_specific + IV_option + High_cost + Access + Reserve
+    
+    X <- model.matrix(formula_no_int, data = mlogit_data)
+    y <- mlogit_data$Rank
+    fit <- cv.glmnet(X, y, family = "multinomial", alpha = 0)
+    
+    lambda_min <- fit$lambda.min
+    lambda_1se <- fit$lambda.1se
+    cat("Lambda.min:", lambda_min, "\n")
+    cat("Lambda.1se:", lambda_1se, "\n")
+    
+    tmp_coeffs <- coef(fit, s = "lambda.min")
+    scores <- tmp_coeffs$`TRUE` %>% as.matrix() %>% data.frame()
+    colnames(scores) <- "Value"
+    scores <- scores %>% mutate(Coefficient = rownames(scores),
+                                OR = exp(Value),
+                                OR_dif = OR-1)
+    scores <- scores %>% mutate(colour = case_when(
+      Value > 0 ~ "B", Value < 0 ~ "A"
+    )) %>% dplyr::slice(-1) %>% dplyr::slice(-1)
+    
+    scores <- scores %>% mutate(stan_OR = (OR-1)/max(abs(OR-1)))
+    scores$Coefficient <- c("High CDI risk","High toxicity risk","Oral option",
+                            "UTI-specific","IV option","High cost","Access category",
+                            "Reserve category")
+    
+    scores$Coefficient <- factor(scores$Coefficient, levels= scores %>% arrange(Value) %>% select(Coefficient) %>% unlist())
+    scores$Value <- scores$OR
+    weight_sq <- seq(min_val,max_val,length.out=11)
+    
+    for(i in seq_along(weight_sq)) {
+      
+      scores2 <- scores  
+      R_wt_value <- weight_sq[i]
+      
+      cdi_value <- scores2[rownames(scores2)=="CDI_highrisk",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Toxicity risk utility
+      tox_value <- scores2[rownames(scores2)=="Toxicity_highrisk",] %>% 
+        select(Value) %>% unlist()
+      
+      ###UTI-specific utility
+      uti_specifics <- c("Nitrofurantoin")
+      uti_value <- scores2[rownames(scores2)=="UTI_specific",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Access category utility
+      access_abs <- c("AMP","SAM","CZO",
+                      "GEN","SXT","NIT") %>% ab_name() %>% 
+        str_replace("/","-")
+      access_combos <- combn(access_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+      access_abs <- c(access_abs, access_combos)
+      
+      access_value <- scores2[rownames(scores2)=="Access",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Oral option utilituy
+      oral_abs <- c("AMP","SAM","CIP",
+                    "SXT","NIT") %>% ab_name() %>% 
+        str_replace("/","-")
+      oral_combos <- combn(oral_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+      oral_abs <- c(oral_abs, oral_combos)
+      
+      oral_value <- scores2[rownames(scores2)=="Oral_option",] %>% 
+        select(Value) %>% unlist()
+      
+      ###IV option utility
+      iv_abs <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
+                  "GEN","SXT","VAN") %>% ab_name() %>% 
+        str_replace("/","-") 
+      iv_combos <- combn(iv_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+      iv_abs <- c(iv_abs, iv_combos)
+      
+      iv_value <- scores2[rownames(scores2)=="IV_option",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Reserve category utility
+      reserve_abs <- c()
+      reserve_value <- scores2[rownames(scores2)=="Reserve",] %>% 
+        select(Value) %>% unlist()
+      
+      ###High-cost agent utility
+      highcost_abs <- c()
+      cost_value <- scores2[rownames(scores2)=="High_cost",] %>% 
+        select(Value) %>% unlist()
+      cost_list <- read_csv("us_drug_cost_list.csv")
+      drug_order <- cost_list %>% distinct(`Generic Name`) %>% unlist()
+      cost_list <- cost_list %>% group_by(`Generic Name`) %>% summarise(min_cost=min(Cost)) %>% ungroup() %>% 
+        mutate(`Generic Name` = factor(`Generic Name`,levels=drug_order)) %>% arrange(`Generic Name`)
+      comb <- combn(cost_list$`Generic Name`, 2, simplify = FALSE)
+      cost_comb <- combn(cost_list$min_cost, 2, function(x) sum(x))
+      cost_list2 <- data.frame(
+        Antimicrobial = sapply(comb, function(x) paste(x, collapse = "_")),
+        min_cost = cost_comb
+      )  
+      cost_list <- cost_list %>% rename(Antimicrobial="Generic Name")
+      cost_list <- data.frame(rbind(cost_list,cost_list2))
+      cost_list <- cost_list %>% mutate(min_cost = min_cost/max(min_cost),
+                                        Antimicrobial = str_replace_all(Antimicrobial,"/","-"))
+      probs_df_2 <- probs_df_2 %>% left_join(cost_list)
+      
+      ###AST R result utility
+      Rval_key <- df %>% select(micro_specimen_id,AMP_R_value:VAN_R_value)
+      
+      ###Attach individual utilities to dataframe
+      probs_df_2 <- probs_df_2 %>% 
+        mutate(value_CDI = cdi_value,
+               util_CDI = abs_calc(value_CDI,prob_CDI),
+               value_tox = tox_value,
+               util_tox = abs_calc(value_tox,prob_tox),
+               UTI_specific = case_when(Antimicrobial %in% uti_specifics ~ 1, TRUE~0),
+               value_UTI = uti_value,
+               util_uti = abs_calc(value_UTI,UTI_specific),
+               Access_agent = case_when(Antimicrobial %in% access_abs ~ 1, TRUE~0),
+               value_access = access_value,
+               util_access = abs_calc(value_access,Access_agent),
+               Oral_agent = case_when(Antimicrobial %in% oral_abs ~ 1, TRUE~0),
+               value_oral = oral_value,
+               util_oral = abs_calc(value_oral,Oral_agent),
+               IV_agent = case_when(Antimicrobial %in% iv_abs ~ 1, TRUE~0),
+               value_iv = iv_value,
+               util_iv = abs_calc(value_iv,IV_agent),
+               Reserve_agent = case_when(Antimicrobial %in% reserve_abs ~ 1, TRUE~0),
+               value_reserve = reserve_value,
+               util_reserve = abs_calc(value_reserve,Reserve_agent),
+               Highcost_agent = min_cost,
+               value_highcost = cost_value,
+               util_highcost = abs_calc(value_highcost,Highcost_agent),
+               single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE))
+      
+      ###Calculate overall utility score
+      probs_df_2 <- probs_df_2 %>% calculate_utilities(MEWS=R_wt_value,R_weight = 1)
+      
+      ###Filter out combination predictions not present in training dataset
+      abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+        str_replace_all("/","-")
+      probs_df_2 <- probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
+      
+      ###Dataframe for formulary agent sensitivity analysis
+      form_probs_df_2 <- probs_df_2 %>% calculate_utilities(
+        formulary_list = c("Ceftriaxone","Ciprofloxacin"))
+      form_probs_df_2 <- form_probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
+      
+      overall_median <- round(median(probs_df_2 %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
+      
+      best_util <- probs_df_2 %>% group_by(Antimicrobial) %>% summarise(
+        abmeds = median(!!uf)) %>% ungroup() %>% 
+        summarise(bestab = max(abmeds)) %>% unlist()
+      
+      print(probs_df_2 %>% filter(Antimicrobial==iterabs[j]) %>% 
+              summarise(med_util=median(!!uf)))
+      
+      util_row <- probs_df_2 %>% filter(Antimicrobial==iterabs[j]) %>% 
+        summarise(med_util=median(!!uf),
+                  best_ut=best_util,
+                  lower_iqr=quantile(!!uf)[2],
+                  upper_iqr=quantile(!!uf)[4],
+                  spec_value=weight_sq[i],
+                  overall_med=overall_median,
+                  Antimicrobial=iterabs[j])
+      
+      util_cum <- data.frame(rbind(util_cum,util_row))
+      
+    }
+    
+  }
+  
+  util_cum
+  
+}
+util_sens <- function(df,probs_df,uf,variable_criterion,min_val,max_val) {
+  
+  uf <- enquo(uf)
+  
+  util_cum <- data.frame(matrix(nrow = 0,ncol=7))
+  colnames(util_cum) <- c("med_util","lower_iqr","upper_iqr","spec_value","overall_med","Antimicrobial")
+  iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
+  probs_df <- probs_df %>% filter(Antimicrobial %in% iterabs)
+  
+  for (j in seq_along(iterabs)) {
+    
+    probs_df_2 <- probs_df
+    
+    results <- read_csv("ADAPT-AST Factors influencing Antimicrobial Prescribing for Urinary Tract Infection.csv")
+    
+    ##Survey results
+    
+    ###Engineer scores dataframe
+    rankings <- results %>% select(10:ncol(results)) %>% dplyr::slice(2:nrow(results))
+    colnames(rankings) <- c("Abelfenide","Acetemran","Adenomadin","Adrevenac",
+                            "Amrodine","Choriotroban","Cormide","Decloxone",
+                            "Dexaset","Endoxolol","Olanzasys","Pansolid",
+                            "Protestryl")
+    Characteristic <- c("AWaRe","CDI","Toxicity","UTI","Oral","IV","Cost")
+    Abelfenide <- c("Reserve","Low","Low","No","Yes","Yes","High")
+    Acetemran <- c("Watch","Low","Low","Yes","Yes","No","Low")
+    Adenomadin <- c("Access","High","Low","No","Yes","Yes","Low")
+    Adrevenac <- c("Watch","High","Low","No","No","Yes","High")
+    Amrodine <- c("Reserve","High","Low","No","No","Yes","High")
+    Choriotroban <- c("Access","Low","High","No","No","Yes","Low")
+    Cormide <- c("Watch","Low","Low","No","No","Yes","High")
+    Decloxone <- c("Watch","Low","High","No","No","Yes","High")
+    Dexaset <- c("Access","Low","Low","No","Yes","Yes","Low")
+    Endoxolol <- c("Access","Low","Low","Yes","Yes","No","Low")
+    Olanzasys <- c("Watch","High","Low","No","No","Yes","Low")
+    Pansolid <- c("Access","Low","Low","No","Yes","No","Low")
+    Protestryl <- c("Watch","High","Low","No","Yes","Yes","Low")
+    characteristics <- data.frame(Abelfenide,Acetemran,Adenomadin,
+                                  Adrevenac,Amrodine,Choriotroban,
+                                  Cormide,Decloxone,Dexaset,
+                                  Endoxolol,Olanzasys,Pansolid,Protestryl) %>% 
+      t() %>% data.frame()
+    
+    colnames(characteristics) <- Characteristic
+    characteristics <- characteristics %>% 
+      mutate(Antibiotic = rownames(characteristics)) %>% relocate(
+        Antibiotic,.before = AWaRe
+      )
+    rownames(characteristics) <- NULL
+    scores <- rankings %>% pivot_longer(Abelfenide:Protestryl)
+    colnames(scores) <- c("Antibiotic","Rank")
+    scores <- scores %>% left_join(characteristics,by="Antibiotic")
+    
+    scores <- scores %>% mutate(Access = case_when(AWaRe=="Access"~1,TRUE~0),
+                                Watch = case_when(AWaRe=="Watch"~1,TRUE~0),
+                                Reserve = case_when(AWaRe=="Reserve"~1,TRUE~0))
+    
+    scores <- scores %>% rename(CDI_highrisk = "CDI",
+                                Toxicity_highrisk = "Toxicity",
+                                UTI_specific = "UTI",
+                                Oral_option = "Oral",
+                                IV_option = "IV",
+                                High_cost = "Cost")
+    scores[scores=="High"] <- "1"
+    scores[scores=="Low"] <- "0"
+    scores[scores=="Yes"] <- "1"
+    scores[scores=="No"] <- "0"
+    
+    scores
+    
+    scores <- scores %>% select(-AWaRe) %>%
+      mutate(across(c(Rank, CDI_highrisk, Toxicity_highrisk, UTI_specific,Access,
+                      Watch,Reserve), as.numeric)) 
+    
+    repeat_val <- nrow(scores)/13
+    seq_rep <- seq(1,nrow(scores)/13)
+    seq_rep1 <- c()
+    
+    for (p in seq_rep) {
+      
+      seq_rep2 <- rep(seq_rep[p],13)
+      seq_rep1 <- append(seq_rep1,seq_rep2)
+      
+      
+    }
+    
+    scores <- scores %>% mutate(choice = case_when(Rank==1~1,TRUE~0),
+                                id = seq_rep1) %>% 
+      mutate(across(Oral_option:High_cost,as.numeric))
+    
+    ##Extracting characteristic Desirability weights
+    
+    ##Apply ridge regression
+    mlogit_data <- mlogit.data(scores, choice = "Rank", shape = "long", 
+                               chid.var = "id", alt.var = "Antibiotic", 
+                               ranked = TRUE)
+    
+    formula_no_int <- Rank ~ CDI_highrisk + Toxicity_highrisk +  
+      Oral_option + UTI_specific + IV_option + High_cost + Access + Reserve
+    
+    X <- model.matrix(formula_no_int, data = mlogit_data)
+    y <- mlogit_data$Rank
+    fit <- cv.glmnet(X, y, family = "multinomial", alpha = 0)
+    
+    lambda_min <- fit$lambda.min
+    lambda_1se <- fit$lambda.1se
+    cat("Lambda.min:", lambda_min, "\n")
+    cat("Lambda.1se:", lambda_1se, "\n")
+    
+    tmp_coeffs <- coef(fit, s = "lambda.min")
+    scores <- tmp_coeffs$`TRUE` %>% as.matrix() %>% data.frame()
+    colnames(scores) <- "Value"
+    scores <- scores %>% mutate(Coefficient = rownames(scores),
+                                OR = exp(Value),
+                                OR_dif = OR-1)
+    scores <- scores %>% mutate(colour = case_when(
+      Value > 0 ~ "B", Value < 0 ~ "A"
+    )) %>% dplyr::slice(-1) %>% dplyr::slice(-1)
+    
+    scores <- scores %>% mutate(stan_OR = (OR-1)/max(abs(OR-1)))
+    scores$Coefficient <- c("High CDI risk","High toxicity risk","Oral option",
+                            "UTI-specific","IV option","High cost","Access category",
+                            "Reserve category")
+    
+    scores$Coefficient <- factor(scores$Coefficient, levels= scores %>% arrange(Value) %>% select(Coefficient) %>% unlist())
+    scores$Value <- scores$OR
+    weight_sq <- seq(min_val,max_val,length.out=11)
+    
+    for(i in seq_along(weight_sq)) {
+      
+      scores2 <- scores  
+      R_wt_value <- 1
+      scores2 <- scores2 %>% mutate(Value=case_when(rownames(scores2)==variable_criterion~weight_sq[i],
+                                                    TRUE~Value))
+      
+      cdi_value <- scores2[rownames(scores2)=="CDI_highrisk",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Toxicity risk utility
+      tox_value <- scores2[rownames(scores2)=="Toxicity_highrisk",] %>% 
+        select(Value) %>% unlist()
+      
+      
+      ###UTI-specific utility
+      uti_specifics <- c("Nitrofurantoin")
+      uti_value <- scores2[rownames(scores2)=="UTI_specific",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Access category utility
+      access_abs <- c("AMP","SAM","CZO",
+                      "GEN","SXT","NIT") %>% ab_name() %>% 
+        str_replace("/","-")
+      access_combos <- combn(access_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+      access_abs <- c(access_abs, access_combos)
+      
+      access_value <- scores2[rownames(scores2)=="Access",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Oral option utility
+      oral_abs <- c("AMP","SAM","CIP",
+                    "SXT","NIT") %>% ab_name() %>% 
+        str_replace("/","-")
+      oral_combos <- combn(oral_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+      oral_abs <- c(oral_abs, oral_combos)
+      
+      oral_value <- scores2[rownames(scores2)=="Oral_option",] %>% 
+        select(Value) %>% unlist()
+      
+      ###IV option utility
+      iv_abs <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
+                  "GEN","SXT","VAN") %>% ab_name() %>% 
+        str_replace("/","-") 
+      iv_combos <- combn(iv_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+      iv_abs <- c(iv_abs, iv_combos)
+      
+      iv_value <- scores2[rownames(scores2)=="IV_option",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Reserve category utility
+      reserve_abs <- c()
+      reserve_value <- scores2[rownames(scores2)=="Reserve",] %>% 
+        select(Value) %>% unlist()
+      
+      ###High-cost agent utility
+      highcost_abs <- c()
+      cost_value <- scores2[rownames(scores2)=="High_cost",] %>% 
+        select(Value) %>% unlist()
+      cost_list <- read_csv("us_drug_cost_list.csv")
+      drug_order <- cost_list %>% distinct(`Generic Name`) %>% unlist()
+      cost_list <- cost_list %>% group_by(`Generic Name`) %>% summarise(min_cost=min(Cost)) %>% ungroup() %>% 
+        mutate(`Generic Name` = factor(`Generic Name`,levels=drug_order)) %>% arrange(`Generic Name`)
+      comb <- combn(cost_list$`Generic Name`, 2, simplify = FALSE)
+      cost_comb <- combn(cost_list$min_cost, 2, function(x) sum(x))
+      cost_list2 <- data.frame(
+        Antimicrobial = sapply(comb, function(x) paste(x, collapse = "_")),
+        min_cost = cost_comb
+      )  
+      cost_list <- cost_list %>% rename(Antimicrobial="Generic Name")
+      cost_list <- data.frame(rbind(cost_list,cost_list2))
+      cost_list <- cost_list %>% mutate(min_cost = min_cost/max(min_cost),
+                                        Antimicrobial = str_replace_all(Antimicrobial,"/","-"))
+      probs_df_2 <- probs_df_2 %>% left_join(cost_list)
+      
+      ###AST R result utility
+      Rval_key <- df %>% select(micro_specimen_id,AMP_R_value:VAN_R_value)
+      
+      ###Attach individual utilities to dataframe
+      probs_df_2 <- probs_df_2 %>% 
+        mutate(value_CDI = cdi_value,
+               util_CDI = abs_calc(value_CDI,prob_CDI),
+               value_tox = tox_value,
+               util_tox = abs_calc(value_tox,prob_tox),
+               UTI_specific = case_when(Antimicrobial %in% uti_specifics ~ 1, TRUE~0),
+               value_UTI = uti_value,
+               util_uti = abs_calc(value_UTI,UTI_specific),
+               Access_agent = case_when(Antimicrobial %in% access_abs ~ 1, TRUE~0),
+               value_access = access_value,
+               util_access = abs_calc(value_access,Access_agent),
+               Oral_agent = case_when(Antimicrobial %in% oral_abs ~ 1, TRUE~0),
+               value_oral = oral_value,
+               util_oral = abs_calc(value_oral,Oral_agent),
+               IV_agent = case_when(Antimicrobial %in% iv_abs ~ 1, TRUE~0),
+               value_iv = iv_value,
+               util_iv = abs_calc(value_iv,IV_agent),
+               Reserve_agent = case_when(Antimicrobial %in% reserve_abs ~ 1, TRUE~0),
+               value_reserve = reserve_value,
+               util_reserve = abs_calc(value_reserve,Reserve_agent),
+               Highcost_agent = min_cost,
+               value_highcost = cost_value,
+               util_highcost = abs_calc(value_highcost,Highcost_agent),
+               single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE))
+      
+      ###Calculate overall utility score
+      probs_df_2 <- probs_df_2 %>% calculate_utilities(R_weight=R_wt_value)
+      print(probs_df_2 %>% filter(Antimicrobial==iterabs[j]) %>% summarise(medac=median(Rx_utility)))
+      
+      ###Filter out combination predictions not present in training dataset
+      abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+        str_replace_all("/","-")
+      probs_df_2 <- probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
+      
+      ###Dataframe for formulary agent sensitivity analysis
+      form_probs_df_2 <- probs_df_2 %>% calculate_utilities(
+        formulary_list = c("Ceftriaxone","Ciprofloxacin"))
+      form_probs_df_2 <- form_probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
+      
+      overall_median <- round(median(probs_df_2 %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
+      
+      best_util <- probs_df_2 %>% group_by(Antimicrobial) %>% summarise(
+        abmeds = median(!!uf)) %>% ungroup() %>% 
+        summarise(bestab = max(abmeds)) %>% unlist()
+      
+      util_row <- probs_df_2 %>% filter(Antimicrobial==iterabs[j]) %>% 
+        summarise(med_util=median(!!uf),
+                  best_ut=best_util,
+                  lower_iqr=quantile(!!uf)[2],
+                  upper_iqr=quantile(!!uf)[4],
+                  spec_value=weight_sq[i],
+                  overall_med=overall_median,
+                  Antimicrobial=iterabs[j])
+      
+      
+      util_cum <- data.frame(rbind(util_cum,util_row))
+      
+    }
+    
+  }
+  
+  util_cum
+  
+}
+
+###Data visualisation of Desirability sensitivity analysis
+util_sens_plot <- function(df,measure,value) {
+  
+  iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
+  sens_plots <- list()
+  
+  for(i in seq_along(iterabs)) {
+    
+    df_spec_plot <- df %>% filter(Antimicrobial==iterabs[i])
+    med_plot <- df_spec_plot %>% mutate(Antimicrobial="All antimicrobials",
+                                        med_util=overall_med,
+                                        lower_iqr=overall_med,
+                                        upper_iqr=overall_med)
+    best_plot <- df_spec_plot %>% mutate(Antimicrobial="Best antimicrobial",
+                                         med_util=best_ut,
+                                         lower_iqr=best_ut,
+                                         upper_iqr=best_ut)
+    df_spec_plot <- data.frame(rbind(df_spec_plot,med_plot,best_plot))
+    
+    df_spec_plot$Antimicrobial <- factor(df_spec_plot$Antimicrobial,
+                                         levels=c("All antimicrobials","Best antimicrobial",
+                                                  iterabs[i]))
+    
+    df_plot <- ggplot(df_spec_plot, aes(x = spec_value)) +
+      geom_line(aes(y = as.numeric(med_util), group = Antimicrobial, color = Antimicrobial)) +
+      geom_ribbon(aes(y = as.numeric(med_util),
+                      ymin = as.numeric(lower_iqr),
+                      ymax = as.numeric(upper_iqr),
+                      group = Antimicrobial, fill = Antimicrobial), alpha = 0.3) +
+      ggtitle(glue("Effect of varying {value} weight on\n{iterabs[i]} {measure} utility")) +
+      xlab(glue("{value}")) +
+      ylab(glue("{measure} utility")) +
+      theme_minimal()+
+      theme(panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank())+
+      geom_vline(xintercept = 0, color = "lightgrey", size = 0.5)
+    
+    sens_plots[[i]] <- df_plot
+    
+    ggsave(glue("util_sens_{value}_{iterabs[i]}_{measure}.pdf"), plot = df_plot, device = "pdf", width = 6, height = 4,
+           path="/Users/alexhoward/Documents/Projects/UDAST_code")
+    
+    print(df_plot)
+    
+    
+  }
+  
+  grid_plot <- plot_grid(plotlist = sens_plots, ncol = 3)
+  
+  ggsave(glue("{value}_sens_plots_grid.pdf"), plot = grid_plot, width = 20, height = 30)
+  
+}
+R_util_sens_plot <- function(df,measure,value) {
+  
+  iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
+  sens_plots <- list()
+  
+  for(i in seq_along(iterabs)) {
+    
+    df_spec_plot <- df %>% filter(Antimicrobial==iterabs[i])
+    med_plot <- df_spec_plot %>% mutate(Antimicrobial="All antimicrobials",
+                                        med_util=overall_med,
+                                        lower_iqr=overall_med,
+                                        upper_iqr=overall_med)
+    best_plot <- df_spec_plot %>% mutate(Antimicrobial="Best antimicrobial",
+                                         med_util=best_ut,
+                                         lower_iqr=best_ut,
+                                         upper_iqr=best_ut)
+    df_spec_plot <- data.frame(rbind(df_spec_plot,med_plot,best_plot))
+    
+    df_spec_plot$Antimicrobial <- factor(df_spec_plot$Antimicrobial,
+                                         levels=c("All antimicrobials","Best antimicrobial",
+                                                  iterabs[i]))
+    
+    df_plot <- ggplot(df_spec_plot, aes(x = spec_value)) +
+      geom_line(aes(y = as.numeric(med_util), group = Antimicrobial, color = Antimicrobial)) +
+      geom_ribbon(aes(y = as.numeric(med_util),
+                      ymin = as.numeric(lower_iqr),
+                      ymax = as.numeric(upper_iqr),
+                      group = Antimicrobial, fill = Antimicrobial), alpha = 0.3) +
+      ggtitle(glue("Effect of varying {value} on\n{iterabs[i]} {measure} utility")) +
+      xlab(glue("{value}")) +
+      ylab(glue("{measure} utility")) +
+      theme_minimal()+
+      theme(panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank())+
+      scale_x_continuous(breaks = seq(min(df$spec_value), max(df$spec_value), by = 5))
+    
+    sens_plots[[i]] <- df_plot
+    
+    ggsave(glue("dens_sens_{value}_{iterabs[i]}_Rsens.pdf"), plot = df_plot, device = "pdf", width = 6, height = 4,
+           path="/Users/alexhoward/Documents/Projects/UDAST_code")
+    
+    print(df_plot)
+    
+  }
+  
+  grid_plot <- plot_grid(plotlist = sens_plots, ncol = 3)
+  
+  ggsave("sens_plots_grid.pdf", plot = grid_plot, width = 20, height = 30)
+  
+}
+
+###Sensitivity analysis probability distribution check
+dens_check_2 <- function(df,abx_agent,result,alpha,beta,characteristic) {
+  
+  result <- enquo(result)
+  
+  test_dist <- tibble(Probability=rbeta(nrow(ur_util),alpha,beta),Distribution="Test")
+  actual_dist <- tibble(
+    Probability=df %>% filter(Antimicrobial==abx_agent) %>% pull(!!result),
+    Distribution="Actual")
+  dist_df <- tibble(rbind(test_dist,actual_dist))
+  
+  thisplot <- ggplot(dist_df,
+                     aes(x=Probability,color=Distribution)) + 
+    geom_density()+
+    ggtitle(glue("{abx_agent} {characteristic} probability"))+
+    xlim(0,1)+
+    ylab("") +
+    theme(axis.ticks.y = element_blank(),
+          axis.text.y = element_blank())
+  
+  print(thisplot)
+  
+}
+
+###Replacing other probability distributions with simulated distribution
+dist_replace_2 <- function(df,df2,abx_agent,parameter,alpha,beta) {
+  
+  replacement <- rbeta(nrow(df2),alpha,beta)
+  
+  dfrows <- which(df$Antimicrobial== abx_agent)
+  dfcols <- which(colnames(df)==parameter)
+  
+  df[dfrows,dfcols] <- replacement
+  
+  df
+  
+}
+
+###Sensitivity analysis varying characteristic probabilities
+cdi_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_col,char_col2,characteristic_name) {
+  
+  uf <- enquo(uf)
+  char_col <- enquo(char_col)
+  char_col2 <- enquo(char_col2)
+  
+  sens_cum <- data.frame(matrix(nrow = 0,ncol=7))
+  colnames(sens_cum) <- c("med_util","best_util","lower_iqr","upper_iqr",characteristic,"overall_med","Antimicrobial")
+  iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
+  probs_df <- probs_df %>% filter(Antimicrobial %in% iterabs)
+  
+  for (j in seq_along(iterabs)) {
+    
+    a <- 50
+    b <- 1850
+    
+    probs_df_2 <- probs_df
+    probs_df_3 <- probs_df
+    
+    for(i in 0:10) {
+      
+      densy <- probs_df_2 %>% dens_check_2(iterabs[j],!!char_col2,a,b,characteristic_name)
+      print(densy)
+      
+      ##Utility score calculation
+      
+      ###CDI risk utility
+      cdi_value <- scores[rownames(scores)=="CDI_highrisk",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Toxicity risk utility
+      tox_value <- scores[rownames(scores)=="Toxicity_highrisk",] %>% 
+        select(Value) %>% unlist()
+      
+      
+      ###UTI-specific utility
+      uti_specifics <- c("Nitrofurantoin")
+      uti_value <- scores[rownames(scores)=="UTI_specific",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Access category utility
+      access_abs <- c("AMP","SAM","CZO",
+                      "GEN","SXT","NIT") %>% ab_name() %>% 
+        str_replace("/","-")
+      access_combos <- combn(access_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+      access_abs <- c(access_abs, access_combos)
+      
+      access_value <- scores[rownames(scores)=="Access",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Oral option utilituy
+      oral_abs <- c("AMP","SAM","CIP",
+                    "SXT","NIT") %>% ab_name() %>% 
+        str_replace("/","-")
+      oral_combos <- combn(oral_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+      oral_abs <- c(oral_abs, oral_combos)
+      
+      oral_value <- scores[rownames(scores)=="Oral_option",] %>% 
+        select(Value) %>% unlist()
+      
+      ###IV option utility
+      iv_abs <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
+                  "GEN","SXT","VAN") %>% ab_name() %>% 
+        str_replace("/","-") 
+      iv_combos <- combn(iv_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+      iv_abs <- c(iv_abs, iv_combos)
+      
+      iv_value <- scores[rownames(scores)=="IV_option",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Reserve category utility
+      reserve_abs <- c()
+      reserve_value <- scores[rownames(scores)=="Reserve",] %>% 
+        select(Value) %>% unlist()
+      
+      ###High-cost agent utility
+      highcost_abs <- c()
+      cost_value <- scores[rownames(scores)=="High_cost",] %>% 
+        select(Value) %>% unlist()
+      cost_list <- read_csv("us_drug_cost_list.csv")
+      drug_order <- cost_list %>% distinct(`Generic Name`) %>% unlist()
+      cost_list <- cost_list %>% group_by(`Generic Name`) %>% summarise(min_cost=min(Cost)) %>% ungroup() %>% 
+        mutate(`Generic Name` = factor(`Generic Name`,levels=drug_order)) %>% arrange(`Generic Name`)
+      comb <- combn(cost_list$`Generic Name`, 2, simplify = FALSE)
+      cost_comb <- combn(cost_list$min_cost, 2, function(x) sum(x))
+      cost_list2 <- data.frame(
+        Antimicrobial = sapply(comb, function(x) paste(x, collapse = "_")),
+        min_cost = cost_comb
+      )  
+      cost_list <- cost_list %>% rename(Antimicrobial="Generic Name")
+      cost_list <- data.frame(rbind(cost_list,cost_list2))
+      cost_list <- cost_list %>% mutate(min_cost = min_cost/max(min_cost),
+                                        Antimicrobial = str_replace_all(Antimicrobial,"/","-"))
+      probs_df_3 <- probs_df_3 %>% left_join(cost_list)
+      
+      ###AST R result utility
+      Rval_key <- df %>% select(micro_specimen_id,AMP_R_value:VAN_R_value)
+      
+      if (i==0){
+        
+        prob_vector <- probs_df_3 %>% mutate(
+          !!char_col2:=case_when(Antimicrobial==iterabs[j]~0,
+                                 TRUE~!!char_col2)) %>% 
+          pull(!!char_col2) 
+        
+      } else if (i==10) {
+        
+        prob_vector <- probs_df_3 %>% mutate(
+          !!char_col2:=case_when(Antimicrobial==iterabs[j]~1,
+                                 TRUE~!!char_col2)) %>% 
+          pull(!!char_col2) 
+        
+      } else {
+        
+        prob_vector <- probs_df_3 %>% dist_replace_2(df,iterabs[j],characteristic_col,a,b) %>% 
+          pull(!!char_col2) }
+      
+      ###Attach individual utilities to dataframe
+      probs_df_3 <- probs_df_3 %>% 
+        mutate(value_CDI = cdi_value,
+               prob_CDI=prob_vector,
+               util_CDI = abs_calc(value_CDI,prob_CDI),
+               value_tox = tox_value,
+               util_tox = abs_calc(value_tox,prob_tox),
+               UTI_specific = case_when(Antimicrobial %in% uti_specifics ~ 1, TRUE~0),
+               value_UTI = uti_value,
+               util_uti = abs_calc(value_UTI,UTI_specific),
+               Access_agent = case_when(Antimicrobial %in% access_abs ~ 1, TRUE~0),
+               value_access = access_value,
+               util_access = abs_calc(value_access,Access_agent),
+               Oral_agent = case_when(Antimicrobial %in% oral_abs ~ 1, TRUE~0),
+               value_oral = oral_value,
+               util_oral = abs_calc(value_oral,Oral_agent),
+               IV_agent = case_when(Antimicrobial %in% iv_abs ~ 1, TRUE~0),
+               value_iv = iv_value,
+               util_iv = abs_calc(value_iv,IV_agent),
+               Reserve_agent = case_when(Antimicrobial %in% reserve_abs ~ 1, TRUE~0),
+               value_reserve = reserve_value,
+               util_reserve = abs_calc(value_reserve,Reserve_agent),
+               Highcost_agent = min_cost,
+               value_highcost = cost_value,
+               util_highcost = abs_calc(value_highcost,Highcost_agent),
+               single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE))
+      
+      ###calculate overall utility score
+      probs_df_3 <- probs_df_3 %>% calculate_utilities()
+      
+      ###Filter out combination predictions not present in training dataset
+      abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+        str_replace_all("/","-")
+      probs_df_3 <- probs_df_3 %>% filter(Antimicrobial %in% abx_in_train)
+      
+      ###Dataframe for formulary agent sensitivity analysis
+      form_probs_df_3 <- probs_df_3 %>% calculate_utilities(
+        formulary_list = c("Ceftriaxone","Ciprofloxacin"))
+      form_probs_df_3 <- form_probs_df_3 %>% filter(Antimicrobial %in% abx_in_train)
+      
+      overall_median <- round(median(probs_df_3 %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
+      
+      best_util <- probs_df_3 %>% group_by(Antimicrobial) %>% summarise(
+        abmeds = median(!!uf)) %>% ungroup() %>% 
+        summarise(bestab = max(abmeds)) %>% unlist()
+      
+      sens_row <- probs_df_3 %>% filter(Antimicrobial==iterabs[j]) %>% 
+        summarise(med_util=median(!!uf),
+                  best_ut=best_util,
+                  lower_iqr=quantile(!!uf)[2],
+                  upper_iqr=quantile(!!uf)[4],
+                  !!char_col:=median(!!char_col2),
+                  overall_med=overall_median,
+                  Antimicrobial=iterabs[j])
+      
+      sens_cum <- data.frame(rbind(sens_cum,sens_row))
+      
+      a <- a+(i*100)
+      b <- b-((i*100)/2)
+      
+    }
+    
+  }
+  
+  sens_cum
+  
+}
+tox_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_col,char_col2,characteristic_name) {
+  
+  uf <- enquo(uf)
+  char_col <- enquo(char_col)
+  char_col2 <- enquo(char_col2)
+  
+  sens_cum <- data.frame(matrix(nrow = 0,ncol=7))
+  colnames(sens_cum) <- c("med_util","best_ut","lower_iqr","upper_iqr",characteristic,"overall_med","Antimicrobial")
+  iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
+  probs_df <- probs_df %>% filter(Antimicrobial %in% iterabs)
+  
+  for (j in seq_along(iterabs)) {
+    
+    a <- 50
+    b <- 1850
+    
+    probs_df_2 <- probs_df
+    probs_df_3 <- probs_df
+    
+    for(i in 0:10) {
+      
+      densy <- probs_df_2 %>% dens_check_2(iterabs[j],!!char_col2,a,b,characteristic_name)
+      print(densy)
+      
+      ##Utility score calculation
+      
+      ###CDI risk utility
+      cdi_value <- scores[rownames(scores)=="CDI_highrisk",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Toxicity risk utility
+      tox_value <- scores[rownames(scores)=="Toxicity_highrisk",] %>% 
+        select(Value) %>% unlist()
+      
+      
+      ###UTI-specific utility
+      uti_specifics <- c("Nitrofurantoin")
+      uti_value <- scores[rownames(scores)=="UTI_specific",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Access category utility
+      access_abs <- c("AMP","SAM","CZO",
+                      "GEN","SXT","NIT") %>% ab_name() %>% 
+        str_replace("/","-")
+      access_combos <- combn(access_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+      access_abs <- c(access_abs, access_combos)
+      
+      access_value <- scores[rownames(scores)=="Access",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Oral option utilituy
+      oral_abs <- c("AMP","SAM","CIP",
+                    "SXT","NIT") %>% ab_name() %>% 
+        str_replace("/","-")
+      oral_combos <- combn(oral_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+      oral_abs <- c(oral_abs, oral_combos)
+      
+      oral_value <- scores[rownames(scores)=="Oral_option",] %>% 
+        select(Value) %>% unlist()
+      
+      ###IV option utility
+      iv_abs <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
+                  "GEN","SXT","VAN") %>% ab_name() %>% 
+        str_replace("/","-") 
+      iv_combos <- combn(iv_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+      iv_abs <- c(iv_abs, iv_combos)
+      
+      iv_value <- scores[rownames(scores)=="IV_option",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Reserve category utility
+      reserve_abs <- c()
+      reserve_value <- scores[rownames(scores)=="Reserve",] %>% 
+        select(Value) %>% unlist()
+      
+      ###High-cost agent utility
+      highcost_abs <- c()
+      cost_value <- scores[rownames(scores)=="High_cost",] %>% 
+        select(Value) %>% unlist()
+      cost_list <- read_csv("us_drug_cost_list.csv")
+      drug_order <- cost_list %>% distinct(`Generic Name`) %>% unlist()
+      cost_list <- cost_list %>% group_by(`Generic Name`) %>% summarise(min_cost=min(Cost)) %>% ungroup() %>% 
+        mutate(`Generic Name` = factor(`Generic Name`,levels=drug_order)) %>% arrange(`Generic Name`)
+      comb <- combn(cost_list$`Generic Name`, 2, simplify = FALSE)
+      cost_comb <- combn(cost_list$min_cost, 2, function(x) sum(x))
+      cost_list2 <- data.frame(
+        Antimicrobial = sapply(comb, function(x) paste(x, collapse = "_")),
+        min_cost = cost_comb
+      )  
+      cost_list <- cost_list %>% rename(Antimicrobial="Generic Name")
+      cost_list <- data.frame(rbind(cost_list,cost_list2))
+      cost_list <- cost_list %>% mutate(min_cost = min_cost/max(min_cost),
+                                        Antimicrobial = str_replace_all(Antimicrobial,"/","-"))
+      probs_df_3 <- probs_df_3 %>% left_join(cost_list)
+      
+      ###AST R result utility
+      Rval_key <- df %>% select(micro_specimen_id,AMP_R_value:VAN_R_value)
+      
+      if (i==0){
+        
+        prob_vector <- probs_df_3 %>% mutate(
+          !!char_col2:=case_when(Antimicrobial==iterabs[j]~0,
+                                 TRUE~!!char_col2)) %>% 
+          pull(!!char_col2) 
+        
+      } else if (i==10) {
+        
+        prob_vector <- probs_df_3 %>% mutate(
+          !!char_col2:=case_when(Antimicrobial==iterabs[j]~1,
+                                 TRUE~!!char_col2)) %>% 
+          pull(!!char_col2) 
+        
+      } else {
+        
+        prob_vector <- probs_df_3 %>% dist_replace_2(df,iterabs[j],characteristic_col,a,b) %>% 
+          pull(!!char_col2) }
+      
+      ###Attach individual utilities to dataframe
+      probs_df_3 <- probs_df_3 %>% 
+        mutate(value_CDI = cdi_value,
+               util_CDI = abs_calc(value_CDI,prob_CDI),
+               value_tox = tox_value,
+               prob_tox=prob_vector,
+               util_tox = abs_calc(value_tox,prob_tox),
+               UTI_specific = case_when(Antimicrobial %in% uti_specifics ~ 1, TRUE~0),
+               value_UTI = uti_value,
+               util_uti = abs_calc(value_UTI,UTI_specific),
+               Access_agent = case_when(Antimicrobial %in% access_abs ~ 1, TRUE~0),
+               value_access = access_value,
+               util_access = abs_calc(value_access,Access_agent),
+               Oral_agent = case_when(Antimicrobial %in% oral_abs ~ 1, TRUE~0),
+               value_oral = oral_value,
+               util_oral = abs_calc(value_oral,Oral_agent),
+               IV_agent = case_when(Antimicrobial %in% iv_abs ~ 1, TRUE~0),
+               value_iv = iv_value,
+               util_iv = abs_calc(value_iv,IV_agent),
+               Reserve_agent = case_when(Antimicrobial %in% reserve_abs ~ 1, TRUE~0),
+               value_reserve = reserve_value,
+               util_reserve = abs_calc(value_reserve,Reserve_agent),
+               Highcost_agent = min_cost,
+               value_highcost = cost_value,
+               util_highcost = abs_calc(value_highcost,Highcost_agent),
+               single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE))
+      
+      ###calculate overall utility score
+      probs_df_3 <- probs_df_3 %>% calculate_utilities()
+      
+      ###Filter out combination predictions not present in training dataset
+      abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+        str_replace_all("/","-")
+      probs_df_3 <- probs_df_3 %>% filter(Antimicrobial %in% abx_in_train)
+      
+      ###Dataframe for formulary agent sensitivity analysis
+      form_probs_df_3 <- probs_df_3 %>% calculate_utilities(
+        formulary_list = c("Ceftriaxone","Ciprofloxacin"))
+      form_probs_df_3 <- form_probs_df_3 %>% filter(Antimicrobial %in% abx_in_train)
+      
+      overall_median <- round(median(probs_df_3 %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
+      
+      best_util <- probs_df_3 %>% group_by(Antimicrobial) %>% summarise(
+        abmeds = median(!!uf)) %>% ungroup() %>% 
+        summarise(bestab = max(abmeds)) %>% unlist()
+      
+      sens_row <- probs_df_3 %>% filter(Antimicrobial==iterabs[j]) %>% 
+        summarise(med_util=median(!!uf),
+                  best_ut=best_util,
+                  lower_iqr=quantile(!!uf)[2],
+                  upper_iqr=quantile(!!uf)[4],
+                  !!char_col:=median(!!char_col2),
+                  overall_med=overall_median,
+                  Antimicrobial=iterabs[j])
+      
+      sens_cum <- data.frame(rbind(sens_cum,sens_row))
+      
+      a <- a+(i*100)
+      b <- b-((i*100)/2)
+      
+    }
+    
+  }
+  
+  sens_cum
+  
+}
+sepsisae_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_col,char_col2,characteristic_name) {
+  
+  uf <- enquo(uf)
+  char_col <- enquo(char_col)
+  char_col2 <- enquo(char_col2)
+  
+  sens_cum <- data.frame(matrix(nrow = 0,ncol=7))
+  colnames(sens_cum) <- c("med_util","best_ut","lower_iqr","upper_iqr",characteristic,"overall_med","Antimicrobial")
+  iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
+  probs_df <- probs_df %>% filter(Antimicrobial %in% iterabs)
+  
+  for (j in seq_along(iterabs)) {
+    
+    a <- 50
+    b <- 1850
+    
+    probs_df_2 <- probs_df
+    probs_df_3 <- probs_df
+    
+    for(i in 0:10) {
+      
+      densy <- probs_df_2 %>% dens_check_2(iterabs[j],!!char_col2,a,b,characteristic_name)
+      print(densy)
+      
+      ##Utility score calculation
+      
+      ###CDI risk utility
+      cdi_value <- scores[rownames(scores)=="CDI_highrisk",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Toxicity risk utility
+      tox_value <- scores[rownames(scores)=="Toxicity_highrisk",] %>% 
+        select(Value) %>% unlist()
+      
+      ###UTI-specific utility
+      uti_specifics <- c("Nitrofurantoin")
+      uti_value <- scores[rownames(scores)=="UTI_specific",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Access category utility
+      access_abs <- c("AMP","SAM","CZO",
+                      "GEN","SXT","NIT") %>% ab_name() %>% 
+        str_replace("/","-")
+      access_combos <- combn(access_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+      access_abs <- c(access_abs, access_combos)
+      
+      access_value <- scores[rownames(scores)=="Access",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Oral option utilituy
+      oral_abs <- c("AMP","SAM","CIP",
+                    "SXT","NIT") %>% ab_name() %>% 
+        str_replace("/","-")
+      oral_combos <- combn(oral_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+      oral_abs <- c(oral_abs, oral_combos)
+      
+      oral_value <- scores[rownames(scores)=="Oral_option",] %>% 
+        select(Value) %>% unlist()
+      
+      ###IV option utility
+      iv_abs <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
+                  "GEN","SXT","VAN") %>% ab_name() %>% 
+        str_replace("/","-") 
+      iv_combos <- combn(iv_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+      iv_abs <- c(iv_abs, iv_combos)
+      
+      iv_value <- scores[rownames(scores)=="IV_option",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Reserve category utility
+      reserve_abs <- c()
+      reserve_value <- scores[rownames(scores)=="Reserve",] %>% 
+        select(Value) %>% unlist()
+      
+      ###High-cost agent utility
+      highcost_abs <- c()
+      cost_value <- scores[rownames(scores)=="High_cost",] %>% 
+        select(Value) %>% unlist()
+      cost_list <- read_csv("us_drug_cost_list.csv")
+      drug_order <- cost_list %>% distinct(`Generic Name`) %>% unlist()
+      cost_list <- cost_list %>% group_by(`Generic Name`) %>% summarise(min_cost=min(Cost)) %>% ungroup() %>% 
+        mutate(`Generic Name` = factor(`Generic Name`,levels=drug_order)) %>% arrange(`Generic Name`)
+      comb <- combn(cost_list$`Generic Name`, 2, simplify = FALSE)
+      cost_comb <- combn(cost_list$min_cost, 2, function(x) sum(x))
+      cost_list2 <- data.frame(
+        Antimicrobial = sapply(comb, function(x) paste(x, collapse = "_")),
+        min_cost = cost_comb
+      )  
+      cost_list <- cost_list %>% rename(Antimicrobial="Generic Name")
+      cost_list <- data.frame(rbind(cost_list,cost_list2))
+      cost_list <- cost_list %>% mutate(min_cost = min_cost/max(min_cost),
+                                        Antimicrobial = str_replace_all(Antimicrobial,"/","-"))
+      probs_df_3 <- probs_df_3 %>% left_join(cost_list)
+      
+      ###AST R result utility
+      Rval_key <- df %>% select(micro_specimen_id,AMP_R_value:VAN_R_value)
+      
+      if (i==0){
+        
+        prob_vector <- rep(0,nrow(probs_df_3))
+        
+      } else if (i==10) {
+        
+        prob_vector <- rep(1,nrow(probs_df_3))
+        
+      } else {
+        
+        prob_vector <- rbeta(nrow(probs_df_3),a,b) }
+      
+      
+      ###Attach individual utilities to dataframe
+      probs_df_3 <- probs_df_3 %>% 
+        mutate(value_CDI = cdi_value,
+               util_CDI = abs_calc(value_CDI,prob_CDI),
+               value_tox = tox_value,
+               util_tox = abs_calc(value_tox,prob_tox),
+               UTI_specific = case_when(Antimicrobial %in% uti_specifics ~ 1, TRUE~0),
+               value_UTI = uti_value,
+               util_uti = abs_calc(value_UTI,UTI_specific),
+               Access_agent = case_when(Antimicrobial %in% access_abs ~ 1, TRUE~0),
+               value_access = access_value,
+               util_access = abs_calc(value_access,Access_agent),
+               Oral_agent = case_when(Antimicrobial %in% oral_abs ~ 1, TRUE~0),
+               value_oral = oral_value,
+               util_oral = abs_calc(value_oral,Oral_agent),
+               IV_agent = case_when(Antimicrobial %in% iv_abs ~ 1, TRUE~0),
+               value_iv = iv_value,
+               util_iv = abs_calc(value_iv,IV_agent),
+               Reserve_agent = case_when(Antimicrobial %in% reserve_abs ~ 1, TRUE~0),
+               value_reserve = reserve_value,
+               util_reserve = abs_calc(value_reserve,Reserve_agent),
+               Highcost_agent = min_cost,
+               value_highcost = cost_value,
+               util_highcost = abs_calc(value_highcost,Highcost_agent),
+               single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE))
+      
+      ###calculate overall utility score
+      probs_df_3 <- probs_df_3 %>% calculate_utilities()
+      
+      print(iterabs[j])
+      probs_df_3 %>% 
+        group_by(Antimicrobial) %>% summarise(meds=median(Rx_utility)) %>% 
+        print()
+      
+      ###Filter out combination predictions not present in training dataset
+      abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+        str_replace_all("/","-")
+      probs_df_3 <- probs_df_3 %>% filter(Antimicrobial %in% abx_in_train)
+      
+      ###Dataframe for formulary agent sensitivity analysis
+      form_probs_df_3 <- probs_df_3 %>% calculate_utilities(
+        formulary_list = c("Ceftriaxone","Ciprofloxacin"))
+      form_probs_df_3 <- form_probs_df_3 %>% filter(Antimicrobial %in% abx_in_train)
+      
+      overall_median <- round(median(probs_df_3 %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
+      
+      best_util <- probs_df_3 %>% group_by(Antimicrobial) %>% summarise(
+        abmeds = median(!!uf)) %>% ungroup() %>% 
+        summarise(bestab = max(abmeds)) %>% unlist()
+      
+      sens_row <- probs_df_3 %>% filter(Antimicrobial==iterabs[j]) %>% 
+        summarise(med_util=median(!!uf),
+                  best_ut=best_util,
+                  lower_iqr=quantile(!!uf)[2],
+                  upper_iqr=quantile(!!uf)[4],
+                  !!char_col:=median(!!char_col2),
+                  overall_med=overall_median,
+                  Antimicrobial=iterabs[j])
+      
+      sens_cum <- data.frame(rbind(sens_cum,sens_row))
+      
+      a <- a+(i*100)
+      b <- b-((i*100)/2)
+      
+    }
+    
+  }
+  
+  sens_cum
+  
+}
+
+###Sensitivity analysis varying AUCs
+util_sens_auc <- function(df,probs_df,uf,min_val,max_val) {
+  
+  uf <- enquo(uf)
+  
+  util_cum <- data.frame(matrix(nrow = 0,ncol=7))
+  colnames(util_cum) <- c("med_util","lower_iqr","upper_iqr","spec_value","overall_med","Antimicrobial")
+  iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
+  probs_df <- probs_df %>% filter(Antimicrobial %in% iterabs)
+  
+  for (j in seq_along(iterabs)) {
+    
+    probs_df_2 <- probs_df
+    
+    results <- read_csv("ADAPT-AST Factors influencing Antimicrobial Prescribing for Urinary Tract Infection.csv")
+    
+    ##Survey results
+    
+    ###Engineer scores dataframe
+    rankings <- results %>% select(10:ncol(results)) %>% dplyr::slice(2:nrow(results))
+    colnames(rankings) <- c("Abelfenide","Acetemran","Adenomadin","Adrevenac",
+                            "Amrodine","Choriotroban","Cormide","Decloxone",
+                            "Dexaset","Endoxolol","Olanzasys","Pansolid",
+                            "Protestryl")
+    Characteristic <- c("AWaRe","CDI","Toxicity","UTI","Oral","IV","Cost")
+    Abelfenide <- c("Reserve","Low","Low","No","Yes","Yes","High")
+    Acetemran <- c("Watch","Low","Low","Yes","Yes","No","Low")
+    Adenomadin <- c("Access","High","Low","No","Yes","Yes","Low")
+    Adrevenac <- c("Watch","High","Low","No","No","Yes","High")
+    Amrodine <- c("Reserve","High","Low","No","No","Yes","High")
+    Choriotroban <- c("Access","Low","High","No","No","Yes","Low")
+    Cormide <- c("Watch","Low","Low","No","No","Yes","High")
+    Decloxone <- c("Watch","Low","High","No","No","Yes","High")
+    Dexaset <- c("Access","Low","Low","No","Yes","Yes","Low")
+    Endoxolol <- c("Access","Low","Low","Yes","Yes","No","Low")
+    Olanzasys <- c("Watch","High","Low","No","No","Yes","Low")
+    Pansolid <- c("Access","Low","Low","No","Yes","No","Low")
+    Protestryl <- c("Watch","High","Low","No","Yes","Yes","Low")
+    characteristics <- data.frame(Abelfenide,Acetemran,Adenomadin,
+                                  Adrevenac,Amrodine,Choriotroban,
+                                  Cormide,Decloxone,Dexaset,
+                                  Endoxolol,Olanzasys,Pansolid,Protestryl) %>% 
+      t() %>% data.frame()
+    
+    colnames(characteristics) <- Characteristic
+    characteristics <- characteristics %>% 
+      mutate(Antibiotic = rownames(characteristics)) %>% relocate(
+        Antibiotic,.before = AWaRe
+      )
+    rownames(characteristics) <- NULL
+    scores <- rankings %>% pivot_longer(Abelfenide:Protestryl)
+    colnames(scores) <- c("Antibiotic","Rank")
+    scores <- scores %>% left_join(characteristics,by="Antibiotic")
+    
+    scores <- scores %>% mutate(Access = case_when(AWaRe=="Access"~1,TRUE~0),
+                                Watch = case_when(AWaRe=="Watch"~1,TRUE~0),
+                                Reserve = case_when(AWaRe=="Reserve"~1,TRUE~0))
+    
+    scores <- scores %>% rename(CDI_highrisk = "CDI",
+                                Toxicity_highrisk = "Toxicity",
+                                UTI_specific = "UTI",
+                                Oral_option = "Oral",
+                                IV_option = "IV",
+                                High_cost = "Cost")
+    scores[scores=="High"] <- "1"
+    scores[scores=="Low"] <- "0"
+    scores[scores=="Yes"] <- "1"
+    scores[scores=="No"] <- "0"
+    
+    scores
+    
+    scores <- scores %>% select(-AWaRe) %>%
+      mutate(across(c(Rank, CDI_highrisk, Toxicity_highrisk, UTI_specific,Access,
+                      Watch,Reserve), as.numeric)) 
+    
+    repeat_val <- nrow(scores)/13
+    seq_rep <- seq(1,nrow(scores)/13)
+    seq_rep1 <- c()
+    
+    for (p in seq_rep) {
+      
+      seq_rep2 <- rep(seq_rep[p],13)
+      seq_rep1 <- append(seq_rep1,seq_rep2)
+      
+      
+    }
+    
+    scores <- scores %>% mutate(choice = case_when(Rank==1~1,TRUE~0),
+                                id = seq_rep1) %>% 
+      mutate(across(Oral_option:High_cost,as.numeric))
+    
+    ##Extracting characteristic Desirability weights
+    
+    ##Apply ridge regression
+    mlogit_data <- mlogit.data(scores, choice = "Rank", shape = "long", 
+                               chid.var = "id", alt.var = "Antibiotic", 
+                               ranked = TRUE)
+    
+    formula_no_int <- Rank ~ CDI_highrisk + Toxicity_highrisk +  
+      Oral_option + UTI_specific + IV_option + High_cost + Access + Reserve
+    
+    X <- model.matrix(formula_no_int, data = mlogit_data)
+    y <- mlogit_data$Rank
+    fit <- cv.glmnet(X, y, family = "multinomial", alpha = 0)
+    
+    lambda_min <- fit$lambda.min
+    lambda_1se <- fit$lambda.1se
+    cat("Lambda.min:", lambda_min, "\n")
+    cat("Lambda.1se:", lambda_1se, "\n")
+    
+    tmp_coeffs <- coef(fit, s = "lambda.min")
+    scores <- tmp_coeffs$`TRUE` %>% as.matrix() %>% data.frame()
+    colnames(scores) <- "Value"
+    scores <- scores %>% mutate(Coefficient = rownames(scores),
+                                OR = exp(Value),
+                                OR_dif = OR-1)
+    scores <- scores %>% mutate(colour = case_when(
+      Value > 0 ~ "B", Value < 0 ~ "A"
+    )) %>% dplyr::slice(-1) %>% dplyr::slice(-1)
+    
+    scores <- scores %>% mutate(stan_OR = (OR-1)/max(abs(OR-1)))
+    scores$Coefficient <- c("High CDI risk","High toxicity risk","Oral option",
+                            "UTI-specific","IV option","High cost","Access category",
+                            "Reserve category")
+    
+    scores$Coefficient <- factor(scores$Coefficient, levels= scores %>% arrange(Value) %>% select(Coefficient) %>% unlist())
+    scores$Value <- scores$OR
+    weight_sq <- seq(min_val,max_val,length.out=11)
+    
+    for(i in seq_along(weight_sq)) {
+      
+      scores2 <- scores  
+      R_wt_value <- 1
+      
+      cdi_value <- scores2[rownames(scores2)=="CDI_highrisk",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Toxicity risk utility
+      tox_value <- scores2[rownames(scores2)=="Toxicity_highrisk",] %>% 
+        select(Value) %>% unlist()
+      
+      
+      ###UTI-specific utility
+      uti_specifics <- c("Nitrofurantoin")
+      uti_value <- scores2[rownames(scores2)=="UTI_specific",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Access category utility
+      access_abs <- c("AMP","SAM","CZO",
+                      "GEN","SXT","NIT") %>% ab_name() %>% 
+        str_replace("/","-")
+      access_combos <- combn(access_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+      access_abs <- c(access_abs, access_combos)
+      
+      access_value <- scores2[rownames(scores2)=="Access",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Oral option utility
+      oral_abs <- c("AMP","SAM","CIP",
+                    "SXT","NIT") %>% ab_name() %>% 
+        str_replace("/","-")
+      oral_combos <- combn(oral_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+      oral_abs <- c(oral_abs, oral_combos)
+      
+      oral_value <- scores2[rownames(scores2)=="Oral_option",] %>% 
+        select(Value) %>% unlist()
+      
+      ###IV option utility
+      iv_abs <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
+                  "GEN","SXT","VAN") %>% ab_name() %>% 
+        str_replace("/","-") 
+      iv_combos <- combn(iv_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+      iv_abs <- c(iv_abs, iv_combos)
+      
+      iv_value <- scores2[rownames(scores2)=="IV_option",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Reserve category utility
+      reserve_abs <- c()
+      reserve_value <- scores2[rownames(scores2)=="Reserve",] %>% 
+        select(Value) %>% unlist()
+      
+      ###High-cost agent utility
+      highcost_abs <- c()
+      cost_value <- scores2[rownames(scores2)=="High_cost",] %>% 
+        select(Value) %>% unlist()
+      cost_list <- read_csv("us_drug_cost_list.csv")
+      drug_order <- cost_list %>% distinct(`Generic Name`) %>% unlist()
+      cost_list <- cost_list %>% group_by(`Generic Name`) %>% summarise(min_cost=min(Cost)) %>% ungroup() %>% 
+        mutate(`Generic Name` = factor(`Generic Name`,levels=drug_order)) %>% arrange(`Generic Name`)
+      comb <- combn(cost_list$`Generic Name`, 2, simplify = FALSE)
+      cost_comb <- combn(cost_list$min_cost, 2, function(x) sum(x))
+      cost_list2 <- data.frame(
+        Antimicrobial = sapply(comb, function(x) paste(x, collapse = "_")),
+        min_cost = cost_comb
+      )  
+      cost_list <- cost_list %>% rename(Antimicrobial="Generic Name")
+      cost_list <- data.frame(rbind(cost_list,cost_list2))
+      cost_list <- cost_list %>% mutate(min_cost = min_cost/max(min_cost),
+                                        Antimicrobial = str_replace_all(Antimicrobial,"/","-"))
+      probs_df_2 <- probs_df_2 %>% left_join(cost_list)
+      
+      ###AST R result utility
+      Rval_key <- df %>% select(micro_specimen_id,AMP_R_value:VAN_R_value)
+      
+      ###Attach individual utilities to dataframe
+      probs_df_2 <- probs_df_2 %>% 
+        mutate(value_CDI = cdi_value,
+               util_CDI = abs_calc(value_CDI,prob_CDI),
+               value_tox = tox_value,
+               util_tox = abs_calc(value_tox,prob_tox),
+               UTI_specific = case_when(Antimicrobial %in% uti_specifics ~ 1, TRUE~0),
+               value_UTI = uti_value,
+               util_uti = abs_calc(value_UTI,UTI_specific),
+               Access_agent = case_when(Antimicrobial %in% access_abs ~ 1, TRUE~0),
+               value_access = access_value,
+               util_access = abs_calc(value_access,Access_agent),
+               Oral_agent = case_when(Antimicrobial %in% oral_abs ~ 1, TRUE~0),
+               value_oral = oral_value,
+               util_oral = abs_calc(value_oral,Oral_agent),
+               IV_agent = case_when(Antimicrobial %in% iv_abs ~ 1, TRUE~0),
+               value_iv = iv_value,
+               util_iv = abs_calc(value_iv,IV_agent),
+               Reserve_agent = case_when(Antimicrobial %in% reserve_abs ~ 1, TRUE~0),
+               value_reserve = reserve_value,
+               util_reserve = abs_calc(value_reserve,Reserve_agent),
+               Highcost_agent = min_cost,
+               value_highcost = cost_value,
+               util_highcost = abs_calc(value_highcost,Highcost_agent),
+               single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE))
+      
+      probs_df_2 <- probs_df_2 %>% mutate(AUC=case_when(Antimicrobial==iterabs[j]~weight_sq[i],
+                                                        TRUE~AUC))
+      
+      ###Calculate overall utility score
+      probs_df_2 <- probs_df_2 %>% calculate_utilities(R_weight=R_wt_value)
+      print(probs_df_2 %>% filter(Antimicrobial==iterabs[j]) %>% summarise(medac=median(Rx_utility)))
+      
+      ###Filter out combination predictions not present in training dataset
+      abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+        str_replace_all("/","-")
+      probs_df_2 <- probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
+      
+      ###Dataframe for formulary agent sensitivity analysis
+      form_probs_df_2 <- probs_df_2 %>% calculate_utilities(
+        formulary_list = c("Ceftriaxone","Ciprofloxacin"))
+      form_probs_df_2 <- form_probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
+      
+      overall_median <- round(median(probs_df_2 %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
+      
+      best_util <- probs_df_2 %>% group_by(Antimicrobial) %>% summarise(
+        abmeds = median(!!uf)) %>% ungroup() %>% 
+        summarise(bestab = max(abmeds)) %>% unlist()
+      
+      util_row <- probs_df_2 %>% filter(Antimicrobial==iterabs[j]) %>% 
+        summarise(med_util=median(!!uf),
+                  best_ut=best_util,
+                  lower_iqr=quantile(!!uf)[2],
+                  upper_iqr=quantile(!!uf)[4],
+                  spec_value=weight_sq[i],
+                  overall_med=overall_median,
+                  Antimicrobial=iterabs[j])
+      
+      
+      util_cum <- data.frame(rbind(util_cum,util_row))
+      
+    }
+    
+  }
+  
+  util_cum
+  
+}
+util_sens_auc_cdi <- function(df,probs_df,uf,min_val,max_val) {
+  
+  uf <- enquo(uf)
+  
+  util_cum <- data.frame(matrix(nrow = 0,ncol=7))
+  colnames(util_cum) <- c("med_util","lower_iqr","upper_iqr","spec_value","overall_med","Antimicrobial")
+  iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
+  probs_df <- probs_df %>% filter(Antimicrobial %in% iterabs)
+  
+  for (j in seq_along(iterabs)) {
+    
+    probs_df_2 <- probs_df
+    
+    results <- read_csv("ADAPT-AST Factors influencing Antimicrobial Prescribing for Urinary Tract Infection.csv")
+    
+    ##Survey results
+    
+    ###Engineer scores dataframe
+    rankings <- results %>% select(10:ncol(results)) %>% dplyr::slice(2:nrow(results))
+    colnames(rankings) <- c("Abelfenide","Acetemran","Adenomadin","Adrevenac",
+                            "Amrodine","Choriotroban","Cormide","Decloxone",
+                            "Dexaset","Endoxolol","Olanzasys","Pansolid",
+                            "Protestryl")
+    Characteristic <- c("AWaRe","CDI","Toxicity","UTI","Oral","IV","Cost")
+    Abelfenide <- c("Reserve","Low","Low","No","Yes","Yes","High")
+    Acetemran <- c("Watch","Low","Low","Yes","Yes","No","Low")
+    Adenomadin <- c("Access","High","Low","No","Yes","Yes","Low")
+    Adrevenac <- c("Watch","High","Low","No","No","Yes","High")
+    Amrodine <- c("Reserve","High","Low","No","No","Yes","High")
+    Choriotroban <- c("Access","Low","High","No","No","Yes","Low")
+    Cormide <- c("Watch","Low","Low","No","No","Yes","High")
+    Decloxone <- c("Watch","Low","High","No","No","Yes","High")
+    Dexaset <- c("Access","Low","Low","No","Yes","Yes","Low")
+    Endoxolol <- c("Access","Low","Low","Yes","Yes","No","Low")
+    Olanzasys <- c("Watch","High","Low","No","No","Yes","Low")
+    Pansolid <- c("Access","Low","Low","No","Yes","No","Low")
+    Protestryl <- c("Watch","High","Low","No","Yes","Yes","Low")
+    characteristics <- data.frame(Abelfenide,Acetemran,Adenomadin,
+                                  Adrevenac,Amrodine,Choriotroban,
+                                  Cormide,Decloxone,Dexaset,
+                                  Endoxolol,Olanzasys,Pansolid,Protestryl) %>% 
+      t() %>% data.frame()
+    
+    colnames(characteristics) <- Characteristic
+    characteristics <- characteristics %>% 
+      mutate(Antibiotic = rownames(characteristics)) %>% relocate(
+        Antibiotic,.before = AWaRe
+      )
+    rownames(characteristics) <- NULL
+    scores <- rankings %>% pivot_longer(Abelfenide:Protestryl)
+    colnames(scores) <- c("Antibiotic","Rank")
+    scores <- scores %>% left_join(characteristics,by="Antibiotic")
+    
+    scores <- scores %>% mutate(Access = case_when(AWaRe=="Access"~1,TRUE~0),
+                                Watch = case_when(AWaRe=="Watch"~1,TRUE~0),
+                                Reserve = case_when(AWaRe=="Reserve"~1,TRUE~0))
+    
+    scores <- scores %>% rename(CDI_highrisk = "CDI",
+                                Toxicity_highrisk = "Toxicity",
+                                UTI_specific = "UTI",
+                                Oral_option = "Oral",
+                                IV_option = "IV",
+                                High_cost = "Cost")
+    scores[scores=="High"] <- "1"
+    scores[scores=="Low"] <- "0"
+    scores[scores=="Yes"] <- "1"
+    scores[scores=="No"] <- "0"
+    
+    scores
+    
+    scores <- scores %>% select(-AWaRe) %>%
+      mutate(across(c(Rank, CDI_highrisk, Toxicity_highrisk, UTI_specific,Access,
+                      Watch,Reserve), as.numeric)) 
+    
+    repeat_val <- nrow(scores)/13
+    seq_rep <- seq(1,nrow(scores)/13)
+    seq_rep1 <- c()
+    
+    for (p in seq_rep) {
+      
+      seq_rep2 <- rep(seq_rep[p],13)
+      seq_rep1 <- append(seq_rep1,seq_rep2)
+      
+      
+    }
+    
+    scores <- scores %>% mutate(choice = case_when(Rank==1~1,TRUE~0),
+                                id = seq_rep1) %>% 
+      mutate(across(Oral_option:High_cost,as.numeric))
+    
+    ##Extracting characteristic Desirability weights
+    
+    ##Apply ridge regression
+    mlogit_data <- mlogit.data(scores, choice = "Rank", shape = "long", 
+                               chid.var = "id", alt.var = "Antibiotic", 
+                               ranked = TRUE)
+    
+    formula_no_int <- Rank ~ CDI_highrisk + Toxicity_highrisk +  
+      Oral_option + UTI_specific + IV_option + High_cost + Access + Reserve
+    
+    X <- model.matrix(formula_no_int, data = mlogit_data)
+    y <- mlogit_data$Rank
+    fit <- cv.glmnet(X, y, family = "multinomial", alpha = 0)
+    
+    lambda_min <- fit$lambda.min
+    lambda_1se <- fit$lambda.1se
+    cat("Lambda.min:", lambda_min, "\n")
+    cat("Lambda.1se:", lambda_1se, "\n")
+    
+    tmp_coeffs <- coef(fit, s = "lambda.min")
+    scores <- tmp_coeffs$`TRUE` %>% as.matrix() %>% data.frame()
+    colnames(scores) <- "Value"
+    scores <- scores %>% mutate(Coefficient = rownames(scores),
+                                OR = exp(Value),
+                                OR_dif = OR-1)
+    scores <- scores %>% mutate(colour = case_when(
+      Value > 0 ~ "B", Value < 0 ~ "A"
+    )) %>% dplyr::slice(-1) %>% dplyr::slice(-1)
+    
+    scores <- scores %>% mutate(stan_OR = (OR-1)/max(abs(OR-1)))
+    scores$Coefficient <- c("High CDI risk","High toxicity risk","Oral option",
+                            "UTI-specific","IV option","High cost","Access category",
+                            "Reserve category")
+    
+    scores$Coefficient <- factor(scores$Coefficient, levels= scores %>% arrange(Value) %>% select(Coefficient) %>% unlist())
+    scores$Value <- scores$OR
+    weight_sq <- seq(min_val,max_val,length.out=11)
+    
+    for(i in seq_along(weight_sq)) {
+      
+      scores2 <- scores  
+      R_wt_value <- 1
+      
+      cdi_value <- scores2[rownames(scores2)=="CDI_highrisk",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Toxicity risk utility
+      tox_value <- scores2[rownames(scores2)=="Toxicity_highrisk",] %>% 
+        select(Value) %>% unlist()
+      
+      
+      ###UTI-specific utility
+      uti_specifics <- c("Nitrofurantoin")
+      uti_value <- scores2[rownames(scores2)=="UTI_specific",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Access category utility
+      access_abs <- c("AMP","SAM","CZO",
+                      "GEN","SXT","NIT") %>% ab_name() %>% 
+        str_replace("/","-")
+      access_combos <- combn(access_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+      access_abs <- c(access_abs, access_combos)
+      
+      access_value <- scores2[rownames(scores2)=="Access",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Oral option utility
+      oral_abs <- c("AMP","SAM","CIP",
+                    "SXT","NIT") %>% ab_name() %>% 
+        str_replace("/","-")
+      oral_combos <- combn(oral_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+      oral_abs <- c(oral_abs, oral_combos)
+      
+      oral_value <- scores2[rownames(scores2)=="Oral_option",] %>% 
+        select(Value) %>% unlist()
+      
+      ###IV option utility
+      iv_abs <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
+                  "GEN","SXT","VAN") %>% ab_name() %>% 
+        str_replace("/","-") 
+      iv_combos <- combn(iv_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+      iv_abs <- c(iv_abs, iv_combos)
+      
+      iv_value <- scores2[rownames(scores2)=="IV_option",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Reserve category utility
+      reserve_abs <- c()
+      reserve_value <- scores2[rownames(scores2)=="Reserve",] %>% 
+        select(Value) %>% unlist()
+      
+      ###High-cost agent utility
+      highcost_abs <- c()
+      cost_value <- scores2[rownames(scores2)=="High_cost",] %>% 
+        select(Value) %>% unlist()
+      cost_list <- read_csv("us_drug_cost_list.csv")
+      drug_order <- cost_list %>% distinct(`Generic Name`) %>% unlist()
+      cost_list <- cost_list %>% group_by(`Generic Name`) %>% summarise(min_cost=min(Cost)) %>% ungroup() %>% 
+        mutate(`Generic Name` = factor(`Generic Name`,levels=drug_order)) %>% arrange(`Generic Name`)
+      comb <- combn(cost_list$`Generic Name`, 2, simplify = FALSE)
+      cost_comb <- combn(cost_list$min_cost, 2, function(x) sum(x))
+      cost_list2 <- data.frame(
+        Antimicrobial = sapply(comb, function(x) paste(x, collapse = "_")),
+        min_cost = cost_comb
+      )  
+      cost_list <- cost_list %>% rename(Antimicrobial="Generic Name")
+      cost_list <- data.frame(rbind(cost_list,cost_list2))
+      cost_list <- cost_list %>% mutate(min_cost = min_cost/max(min_cost),
+                                        Antimicrobial = str_replace_all(Antimicrobial,"/","-"))
+      probs_df_2 <- probs_df_2 %>% left_join(cost_list)
+      
+      ###AST R result utility
+      Rval_key <- df %>% select(micro_specimen_id,AMP_R_value:VAN_R_value)
+      
+      ###Attach individual utilities to dataframe
+      probs_df_2 <- probs_df_2 %>% 
+        mutate(value_CDI = cdi_value,
+               util_CDI = abs_calc(value_CDI,prob_CDI),
+               value_tox = tox_value,
+               util_tox = abs_calc(value_tox,prob_tox),
+               UTI_specific = case_when(Antimicrobial %in% uti_specifics ~ 1, TRUE~0),
+               value_UTI = uti_value,
+               util_uti = abs_calc(value_UTI,UTI_specific),
+               Access_agent = case_when(Antimicrobial %in% access_abs ~ 1, TRUE~0),
+               value_access = access_value,
+               util_access = abs_calc(value_access,Access_agent),
+               Oral_agent = case_when(Antimicrobial %in% oral_abs ~ 1, TRUE~0),
+               value_oral = oral_value,
+               util_oral = abs_calc(value_oral,Oral_agent),
+               IV_agent = case_when(Antimicrobial %in% iv_abs ~ 1, TRUE~0),
+               value_iv = iv_value,
+               util_iv = abs_calc(value_iv,IV_agent),
+               Reserve_agent = case_when(Antimicrobial %in% reserve_abs ~ 1, TRUE~0),
+               value_reserve = reserve_value,
+               util_reserve = abs_calc(value_reserve,Reserve_agent),
+               Highcost_agent = min_cost,
+               value_highcost = cost_value,
+               util_highcost = abs_calc(value_highcost,Highcost_agent),
+               single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE))
+      
+      probs_df_2 <- probs_df_2 %>% mutate(CDI_AUC=weight_sq[i])
+      
+      ###Calculate overall utility score
+      probs_df_2 <- probs_df_2 %>% calculate_utilities(R_weight=R_wt_value)
+      print(probs_df_2 %>% filter(Antimicrobial==iterabs[j]) %>% summarise(medac=median(Rx_utility)))
+      
+      ###Filter out combination predictions not present in training dataset
+      abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+        str_replace_all("/","-")
+      probs_df_2 <- probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
+      
+      ###Dataframe for formulary agent sensitivity analysis
+      form_probs_df_2 <- probs_df_2 %>% calculate_utilities(
+        formulary_list = c("Ceftriaxone","Ciprofloxacin"))
+      form_probs_df_2 <- form_probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
+      
+      overall_median <- round(median(probs_df_2 %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
+      
+      best_util <- probs_df_2 %>% group_by(Antimicrobial) %>% summarise(
+        abmeds = median(!!uf)) %>% ungroup() %>% 
+        summarise(bestab = max(abmeds)) %>% unlist()
+      
+      util_row <- probs_df_2 %>% filter(Antimicrobial==iterabs[j]) %>% 
+        summarise(med_util=median(!!uf),
+                  best_ut=best_util,
+                  lower_iqr=quantile(!!uf)[2],
+                  upper_iqr=quantile(!!uf)[4],
+                  spec_value=weight_sq[i],
+                  overall_med=overall_median,
+                  Antimicrobial=iterabs[j])
+      
+      
+      util_cum <- data.frame(rbind(util_cum,util_row))
+      
+    }
+    
+  }
+  
+  util_cum
+  
+}
+util_sens_auc_tox <- function(df,probs_df,uf,min_val,max_val) {
+  
+  uf <- enquo(uf)
+  
+  util_cum <- data.frame(matrix(nrow = 0,ncol=7))
+  colnames(util_cum) <- c("med_util","lower_iqr","upper_iqr","spec_value","overall_med","Antimicrobial")
+  iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
+  probs_df <- probs_df %>% filter(Antimicrobial %in% iterabs)
+  
+  for (j in seq_along(iterabs)) {
+    
+    probs_df_2 <- probs_df
+    
+    results <- read_csv("ADAPT-AST Factors influencing Antimicrobial Prescribing for Urinary Tract Infection.csv")
+    
+    ##Survey results
+    
+    ###Engineer scores dataframe
+    rankings <- results %>% select(10:ncol(results)) %>% dplyr::slice(2:nrow(results))
+    colnames(rankings) <- c("Abelfenide","Acetemran","Adenomadin","Adrevenac",
+                            "Amrodine","Choriotroban","Cormide","Decloxone",
+                            "Dexaset","Endoxolol","Olanzasys","Pansolid",
+                            "Protestryl")
+    Characteristic <- c("AWaRe","CDI","Toxicity","UTI","Oral","IV","Cost")
+    Abelfenide <- c("Reserve","Low","Low","No","Yes","Yes","High")
+    Acetemran <- c("Watch","Low","Low","Yes","Yes","No","Low")
+    Adenomadin <- c("Access","High","Low","No","Yes","Yes","Low")
+    Adrevenac <- c("Watch","High","Low","No","No","Yes","High")
+    Amrodine <- c("Reserve","High","Low","No","No","Yes","High")
+    Choriotroban <- c("Access","Low","High","No","No","Yes","Low")
+    Cormide <- c("Watch","Low","Low","No","No","Yes","High")
+    Decloxone <- c("Watch","Low","High","No","No","Yes","High")
+    Dexaset <- c("Access","Low","Low","No","Yes","Yes","Low")
+    Endoxolol <- c("Access","Low","Low","Yes","Yes","No","Low")
+    Olanzasys <- c("Watch","High","Low","No","No","Yes","Low")
+    Pansolid <- c("Access","Low","Low","No","Yes","No","Low")
+    Protestryl <- c("Watch","High","Low","No","Yes","Yes","Low")
+    characteristics <- data.frame(Abelfenide,Acetemran,Adenomadin,
+                                  Adrevenac,Amrodine,Choriotroban,
+                                  Cormide,Decloxone,Dexaset,
+                                  Endoxolol,Olanzasys,Pansolid,Protestryl) %>% 
+      t() %>% data.frame()
+    
+    colnames(characteristics) <- Characteristic
+    characteristics <- characteristics %>% 
+      mutate(Antibiotic = rownames(characteristics)) %>% relocate(
+        Antibiotic,.before = AWaRe
+      )
+    rownames(characteristics) <- NULL
+    scores <- rankings %>% pivot_longer(Abelfenide:Protestryl)
+    colnames(scores) <- c("Antibiotic","Rank")
+    scores <- scores %>% left_join(characteristics,by="Antibiotic")
+    
+    scores <- scores %>% mutate(Access = case_when(AWaRe=="Access"~1,TRUE~0),
+                                Watch = case_when(AWaRe=="Watch"~1,TRUE~0),
+                                Reserve = case_when(AWaRe=="Reserve"~1,TRUE~0))
+    
+    scores <- scores %>% rename(CDI_highrisk = "CDI",
+                                Toxicity_highrisk = "Toxicity",
+                                UTI_specific = "UTI",
+                                Oral_option = "Oral",
+                                IV_option = "IV",
+                                High_cost = "Cost")
+    scores[scores=="High"] <- "1"
+    scores[scores=="Low"] <- "0"
+    scores[scores=="Yes"] <- "1"
+    scores[scores=="No"] <- "0"
+    
+    scores
+    
+    scores <- scores %>% select(-AWaRe) %>%
+      mutate(across(c(Rank, CDI_highrisk, Toxicity_highrisk, UTI_specific,Access,
+                      Watch,Reserve), as.numeric)) 
+    
+    repeat_val <- nrow(scores)/13
+    seq_rep <- seq(1,nrow(scores)/13)
+    seq_rep1 <- c()
+    
+    for (p in seq_rep) {
+      
+      seq_rep2 <- rep(seq_rep[p],13)
+      seq_rep1 <- append(seq_rep1,seq_rep2)
+      
+      
+    }
+    
+    scores <- scores %>% mutate(choice = case_when(Rank==1~1,TRUE~0),
+                                id = seq_rep1) %>% 
+      mutate(across(Oral_option:High_cost,as.numeric))
+    
+    ##Extracting characteristic Desirability weights
+    
+    ##Apply ridge regression
+    mlogit_data <- mlogit.data(scores, choice = "Rank", shape = "long", 
+                               chid.var = "id", alt.var = "Antibiotic", 
+                               ranked = TRUE)
+    
+    formula_no_int <- Rank ~ CDI_highrisk + Toxicity_highrisk +  
+      Oral_option + UTI_specific + IV_option + High_cost + Access + Reserve
+    
+    X <- model.matrix(formula_no_int, data = mlogit_data)
+    y <- mlogit_data$Rank
+    fit <- cv.glmnet(X, y, family = "multinomial", alpha = 0)
+    
+    lambda_min <- fit$lambda.min
+    lambda_1se <- fit$lambda.1se
+    cat("Lambda.min:", lambda_min, "\n")
+    cat("Lambda.1se:", lambda_1se, "\n")
+    
+    tmp_coeffs <- coef(fit, s = "lambda.min")
+    scores <- tmp_coeffs$`TRUE` %>% as.matrix() %>% data.frame()
+    colnames(scores) <- "Value"
+    scores <- scores %>% mutate(Coefficient = rownames(scores),
+                                OR = exp(Value),
+                                OR_dif = OR-1)
+    scores <- scores %>% mutate(colour = case_when(
+      Value > 0 ~ "B", Value < 0 ~ "A"
+    )) %>% dplyr::slice(-1) %>% dplyr::slice(-1)
+    
+    scores <- scores %>% mutate(stan_OR = (OR-1)/max(abs(OR-1)))
+    scores$Coefficient <- c("High CDI risk","High toxicity risk","Oral option",
+                            "UTI-specific","IV option","High cost","Access category",
+                            "Reserve category")
+    
+    scores$Coefficient <- factor(scores$Coefficient, levels= scores %>% arrange(Value) %>% select(Coefficient) %>% unlist())
+    scores$Value <- scores$OR
+    weight_sq <- seq(min_val,max_val,length.out=11)
+    
+    for(i in seq_along(weight_sq)) {
+      
+      scores2 <- scores  
+      R_wt_value <- 1
+      
+      cdi_value <- scores2[rownames(scores2)=="CDI_highrisk",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Toxicity risk utility
+      tox_value <- scores2[rownames(scores2)=="Toxicity_highrisk",] %>% 
+        select(Value) %>% unlist()
+      
+      
+      ###UTI-specific utility
+      uti_specifics <- c("Nitrofurantoin")
+      uti_value <- scores2[rownames(scores2)=="UTI_specific",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Access category utility
+      access_abs <- c("AMP","SAM","CZO",
+                      "GEN","SXT","NIT") %>% ab_name() %>% 
+        str_replace("/","-")
+      access_combos <- combn(access_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+      access_abs <- c(access_abs, access_combos)
+      
+      access_value <- scores2[rownames(scores2)=="Access",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Oral option utility
+      oral_abs <- c("AMP","SAM","CIP",
+                    "SXT","NIT") %>% ab_name() %>% 
+        str_replace("/","-")
+      oral_combos <- combn(oral_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+      oral_abs <- c(oral_abs, oral_combos)
+      
+      oral_value <- scores2[rownames(scores2)=="Oral_option",] %>% 
+        select(Value) %>% unlist()
+      
+      ###IV option utility
+      iv_abs <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
+                  "GEN","SXT","VAN") %>% ab_name() %>% 
+        str_replace("/","-") 
+      iv_combos <- combn(iv_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+      iv_abs <- c(iv_abs, iv_combos)
+      
+      iv_value <- scores2[rownames(scores2)=="IV_option",] %>% 
+        select(Value) %>% unlist()
+      
+      ###Reserve category utility
+      reserve_abs <- c()
+      reserve_value <- scores2[rownames(scores2)=="Reserve",] %>% 
+        select(Value) %>% unlist()
+      
+      ###High-cost agent utility
+      highcost_abs <- c()
+      cost_value <- scores2[rownames(scores2)=="High_cost",] %>% 
+        select(Value) %>% unlist()
+      cost_list <- read_csv("us_drug_cost_list.csv")
+      drug_order <- cost_list %>% distinct(`Generic Name`) %>% unlist()
+      cost_list <- cost_list %>% group_by(`Generic Name`) %>% summarise(min_cost=min(Cost)) %>% ungroup() %>% 
+        mutate(`Generic Name` = factor(`Generic Name`,levels=drug_order)) %>% arrange(`Generic Name`)
+      comb <- combn(cost_list$`Generic Name`, 2, simplify = FALSE)
+      cost_comb <- combn(cost_list$min_cost, 2, function(x) sum(x))
+      cost_list2 <- data.frame(
+        Antimicrobial = sapply(comb, function(x) paste(x, collapse = "_")),
+        min_cost = cost_comb
+      )  
+      cost_list <- cost_list %>% rename(Antimicrobial="Generic Name")
+      cost_list <- data.frame(rbind(cost_list,cost_list2))
+      cost_list <- cost_list %>% mutate(min_cost = min_cost/max(min_cost),
+                                        Antimicrobial = str_replace_all(Antimicrobial,"/","-"))
+      probs_df_2 <- probs_df_2 %>% left_join(cost_list)
+      
+      ###AST R result utility
+      Rval_key <- df %>% select(micro_specimen_id,AMP_R_value:VAN_R_value)
+      
+      ###Attach individual utilities to dataframe
+      probs_df_2 <- probs_df_2 %>% 
+        mutate(value_CDI = cdi_value,
+               util_CDI = abs_calc(value_CDI,prob_CDI),
+               value_tox = tox_value,
+               util_tox = abs_calc(value_tox,prob_tox),
+               UTI_specific = case_when(Antimicrobial %in% uti_specifics ~ 1, TRUE~0),
+               value_UTI = uti_value,
+               util_uti = abs_calc(value_UTI,UTI_specific),
+               Access_agent = case_when(Antimicrobial %in% access_abs ~ 1, TRUE~0),
+               value_access = access_value,
+               util_access = abs_calc(value_access,Access_agent),
+               Oral_agent = case_when(Antimicrobial %in% oral_abs ~ 1, TRUE~0),
+               value_oral = oral_value,
+               util_oral = abs_calc(value_oral,Oral_agent),
+               IV_agent = case_when(Antimicrobial %in% iv_abs ~ 1, TRUE~0),
+               value_iv = iv_value,
+               util_iv = abs_calc(value_iv,IV_agent),
+               Reserve_agent = case_when(Antimicrobial %in% reserve_abs ~ 1, TRUE~0),
+               value_reserve = reserve_value,
+               util_reserve = abs_calc(value_reserve,Reserve_agent),
+               Highcost_agent = min_cost,
+               value_highcost = cost_value,
+               util_highcost = abs_calc(value_highcost,Highcost_agent),
+               single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE))
+      
+      probs_df_2 <- probs_df_2 %>% mutate(tox_AUC=weight_sq[i])
+      
+      ###Calculate overall utility score
+      probs_df_2 <- probs_df_2 %>% calculate_utilities(R_weight=R_wt_value)
+      print(probs_df_2 %>% filter(Antimicrobial==iterabs[j]) %>% summarise(medac=median(Rx_utility)))
+      
+      ###Filter out combination predictions not present in training dataset
+      abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+        str_replace_all("/","-")
+      probs_df_2 <- probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
+      
+      ###Dataframe for formulary agent sensitivity analysis
+      form_probs_df_2 <- probs_df_2 %>% calculate_utilities(
+        formulary_list = c("Ceftriaxone","Ciprofloxacin"))
+      form_probs_df_2 <- form_probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
+      
+      overall_median <- round(median(probs_df_2 %>% select(!!uf) %>% unlist() %>%  as.numeric()),3)
+      
+      best_util <- probs_df_2 %>% group_by(Antimicrobial) %>% summarise(
+        abmeds = median(!!uf)) %>% ungroup() %>% 
+        summarise(bestab = max(abmeds)) %>% unlist()
+      
+      util_row <- probs_df_2 %>% filter(Antimicrobial==iterabs[j]) %>% 
+        summarise(med_util=median(!!uf),
+                  best_ut=best_util,
+                  lower_iqr=quantile(!!uf)[2],
+                  upper_iqr=quantile(!!uf)[4],
+                  spec_value=weight_sq[i],
+                  overall_med=overall_median,
+                  Antimicrobial=iterabs[j])
+      
+      
+      util_cum <- data.frame(rbind(util_cum,util_row))
+      
+    }
+    
+  }
+  
+  util_cum
+  
+}
+
+###Data visualisation of analysis varying AUCs
+auc_sens_plot <- function(df,measure) {
+  
+  iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
+  sens_plots <- list()
+  
+  for(i in seq_along(iterabs)) {
+    
+    df_spec_plot <- df %>% filter(Antimicrobial==iterabs[i])
+    med_plot <- df_spec_plot %>% mutate(Antimicrobial="All antimicrobials",
+                                        med_util=overall_med,
+                                        lower_iqr=overall_med,
+                                        upper_iqr=overall_med)
+    best_plot <- df_spec_plot %>% mutate(Antimicrobial="Best antimicrobial",
+                                         med_util=best_ut,
+                                         lower_iqr=best_ut,
+                                         upper_iqr=best_ut)
+    df_spec_plot <- data.frame(rbind(df_spec_plot,med_plot,best_plot))
+    
+    df_spec_plot$Antimicrobial <- factor(df_spec_plot$Antimicrobial,
+                                         levels=c("All antimicrobials","Best antimicrobial",
+                                                  iterabs[i]))
+    
+    df_plot <- ggplot(df_spec_plot, aes(x = spec_value)) +
+      geom_line(aes(y = as.numeric(med_util), group = Antimicrobial, color = Antimicrobial)) +
+      geom_ribbon(aes(y = as.numeric(med_util),
+                      ymin = as.numeric(lower_iqr),
+                      ymax = as.numeric(upper_iqr),
+                      group = Antimicrobial, fill = Antimicrobial), alpha = 0.3) +
+      xlim(0,1) +
+      ggtitle(glue("Effect of varying {iterabs[i]} prediction\nAUROC on {iterabs[i]} {measure} utility")) +
+      xlab(glue("AUROC for {iterabs[i]} susceptibility prediction")) +
+      ylab(glue("{measure} utility")) +
+      theme_minimal()+
+      theme(panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank())
+    
+    sens_plots[[i]] <- df_plot
+    
+    ggsave(glue("auc_sensplot_{iterabs[i]}_{measure}.pdf"), plot = df_plot, device = "pdf", width = 6, height = 4,
+           path="/Users/alexhoward/Documents/Projects/UDAST_code")
+    
+    print(df_plot)
+    
+  }
+  
+  grid_plot <- plot_grid(plotlist = sens_plots, ncol = 3)
+  
+  ggsave(glue("auc_sens_plots_grid.pdf"), plot = grid_plot, width = 20, height = 30)
+  
+}
+auc_sens_plot_2 <- function(df,measure,auc_type) {
+  
+  iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
+  sens_plots <- list()
+  
+  for(i in seq_along(iterabs)) {
+    
+    df_spec_plot <- df %>% filter(Antimicrobial==iterabs[i])
+    med_plot <- df_spec_plot %>% mutate(Antimicrobial="All antimicrobials",
+                                        med_util=overall_med,
+                                        lower_iqr=overall_med,
+                                        upper_iqr=overall_med)
+    best_plot <- df_spec_plot %>% mutate(Antimicrobial="Best antimicrobial",
+                                         med_util=best_ut,
+                                         lower_iqr=best_ut,
+                                         upper_iqr=best_ut)
+    df_spec_plot <- data.frame(rbind(df_spec_plot,med_plot,best_plot))
+    
+    df_spec_plot$Antimicrobial <- factor(df_spec_plot$Antimicrobial,
+                                         levels=c("All antimicrobials","Best antimicrobial",
+                                                  iterabs[i]))
+    
+    df_plot <- ggplot(df_spec_plot, aes(x = spec_value)) +
+      geom_line(aes(y = as.numeric(med_util), group = Antimicrobial, color = Antimicrobial)) +
+      geom_ribbon(aes(y = as.numeric(med_util),
+                      ymin = as.numeric(lower_iqr),
+                      ymax = as.numeric(upper_iqr),
+                      group = Antimicrobial, fill = Antimicrobial), alpha = 0.3) +
+      xlim(0,1) +
+      ggtitle(glue("Effect of varying {auc_type} prediction\nAUROC on {iterabs[i]} {measure} utility")) +
+      xlab(glue("AUROC for {iterabs[i]} susceptibility prediction")) +
+      ylab(glue("{measure} utility")) +
+      theme_minimal()+
+      theme(panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank())
+    
+    sens_plots[[i]] <- df_plot
+    
+    ggsave(glue("auc_{auc_type}_sensplot_{iterabs[i]}_{measure}.pdf"), plot = df_plot, device = "pdf", width = 6, height = 4,
+           path="/Users/alexhoward/Documents/Projects/UDAST_code")
+    
+    print(df_plot)
+    
+  }
+  
+  grid_plot <- plot_grid(plotlist = sens_plots, ncol = 3)
+  
+  ggsave(glue("{auc_type}_auc_sens_plots_grid.pdf"), plot = grid_plot, width = 20, height = 30)
+  
+}
+
+###Data visualisation of characteristic probability sensitivity analysis
+dens_sens_plot_2 <- function(df,characteristic,measure,char_col) {
+  
+  char_col <- enquo(char_col)
+  
+  iterabs <- all_singles %>% ab_name() %>% str_replace("/","-")
+  sens_plots <- list()
+  
+  for(i in seq_along(iterabs)) {
+    
+    df_spec_plot <- df %>% filter(Antimicrobial==iterabs[i])
+    med_plot <- df_spec_plot %>% mutate(Antimicrobial="All antimicrobials",
+                                        med_util=overall_med,
+                                        lower_iqr=overall_med,
+                                        upper_iqr=overall_med)
+    best_plot <- df_spec_plot %>% mutate(Antimicrobial="Best antimicrobial",
+                                         med_util=best_ut,
+                                         lower_iqr=best_ut,
+                                         upper_iqr=best_ut)
+    df_spec_plot <- data.frame(rbind(df_spec_plot,med_plot,best_plot))
+    
+    df_spec_plot$Antimicrobial <- factor(df_spec_plot$Antimicrobial,
+                                         levels=c("All antimicrobials","Best antimicrobial",
+                                                  iterabs[i]))
+    
+    df_plot <- ggplot(df_spec_plot, aes(x = !!char_col)) +
+      geom_line(aes(y = as.numeric(med_util), group = Antimicrobial, color = Antimicrobial)) +
+      geom_ribbon(aes(y = as.numeric(med_util),
+                      ymin = as.numeric(lower_iqr),
+                      ymax = as.numeric(upper_iqr),
+                      group = Antimicrobial, fill = Antimicrobial), alpha = 0.3) +
+      ggtitle(glue("Effect of {characteristic} on\n{iterabs[i]} {measure} utility")) +
+      xlab(glue("{characteristic}")) +
+      ylab(glue("{measure} utility")) +
+      theme_minimal()+
+      theme(panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank())
+    
+    sens_plots[[i]] <- df_plot
+    
+    ggsave(glue("dens_sens_2_{iterabs[i]}_{measure}.pdf"), plot = df_plot, device = "pdf", width = 6, height = 4,
+           path="/Users/alexhoward/Documents/Projects/UDAST_code")
+    
+    print(df_plot)
+    
+  }
+  
+  grid_plot <- plot_grid(plotlist = sens_plots, ncol = 3)
+  
+  ggsave(glue("{characteristic}_sens_plots_grid.pdf"), plot = grid_plot, width = 20, height = 30)
+  
+}
+
+###Separated-specialty sensitivity analysis
+spec_sens_analysis <- function(df,results_df,specialty) {
+  
+  ###Engineer scores dataframe
+  rankings <- results_df %>% select(10:ncol(results_df)) %>% dplyr::slice(2:nrow(results_df))
+  colnames(rankings) <- c("Abelfenide","Acetemran","Adenomadin","Adrevenac",
+                          "Amrodine","Choriotroban","Cormide","Decloxone",
+                          "Dexaset","Endoxolol","Olanzasys","Pansolid",
+                          "Protestryl")
+  Characteristic <- c("AWaRe","CDI","Toxicity","UTI","Oral","IV","Cost")
+  Abelfenide <- c("Reserve","Low","Low","No","Yes","Yes","High")
+  Acetemran <- c("Watch","Low","Low","Yes","Yes","No","Low")
+  Adenomadin <- c("Access","High","Low","No","Yes","Yes","Low")
+  Adrevenac <- c("Watch","High","Low","No","No","Yes","High")
+  Amrodine <- c("Reserve","High","Low","No","No","Yes","High")
+  Choriotroban <- c("Access","Low","High","No","No","Yes","Low")
+  Cormide <- c("Watch","Low","Low","No","No","Yes","High")
+  Decloxone <- c("Watch","Low","High","No","No","Yes","High")
+  Dexaset <- c("Access","Low","Low","No","Yes","Yes","Low")
+  Endoxolol <- c("Access","Low","Low","Yes","Yes","No","Low")
+  Olanzasys <- c("Watch","High","Low","No","No","Yes","Low")
+  Pansolid <- c("Access","Low","Low","No","Yes","No","Low")
+  Protestryl <- c("Watch","High","Low","No","Yes","Yes","Low")
+  characteristics <- data.frame(Abelfenide,Acetemran,Adenomadin,
+                                Adrevenac,Amrodine,Choriotroban,
+                                Cormide,Decloxone,Dexaset,
+                                Endoxolol,Olanzasys,Pansolid,Protestryl) %>% 
+    t() %>% data.frame()
+  
+  colnames(characteristics) <- Characteristic
+  characteristics <- characteristics %>% 
+    mutate(Antibiotic = rownames(characteristics)) %>% relocate(
+      Antibiotic,.before = AWaRe
+    )
+  rownames(characteristics) <- NULL
+  scores <- rankings %>% pivot_longer(Abelfenide:Protestryl)
+  colnames(scores) <- c("Antibiotic","Rank")
+  scores <- scores %>% left_join(characteristics,by="Antibiotic")
+  
+  scores <- scores %>% mutate(Access = case_when(AWaRe=="Access"~1,TRUE~0),
+                              Watch = case_when(AWaRe=="Watch"~1,TRUE~0),
+                              Reserve = case_when(AWaRe=="Reserve"~1,TRUE~0))
+  
+  scores <- scores %>% rename(CDI_highrisk = "CDI",
+                              Toxicity_highrisk = "Toxicity",
+                              UTI_specific = "UTI",
+                              Oral_option = "Oral",
+                              IV_option = "IV",
+                              High_cost = "Cost")
+  scores[scores=="High"] <- "1"
+  scores[scores=="Low"] <- "0"
+  scores[scores=="Yes"] <- "1"
+  scores[scores=="No"] <- "0"
+  
+  scores
+  
+  scores <- scores %>% select(-AWaRe) %>%
+    mutate(across(c(Rank, CDI_highrisk, Toxicity_highrisk, UTI_specific,Access,
+                    Watch,Reserve), as.numeric)) 
+  
+  repeat_val <- nrow(scores)/13
+  seq_rep <- seq(1,nrow(scores)/13)
+  seq_rep1 <- c()
+  
+  for (i in seq_rep) {
+    
+    seq_rep2 <- rep(seq_rep[i],13)
+    seq_rep1 <- append(seq_rep1,seq_rep2)
+    
+    
+  }
+  
+  scores <- scores %>% mutate(choice = case_when(Rank==1~1,TRUE~0),
+                              id = seq_rep1) %>% 
+    mutate(across(Oral_option:High_cost,as.numeric))
+  
+  ##Extracting characteristic importance weights
+  
+  ###Apply ranked logit regression
+  mlogit_data <- mlogit.data(scores, 
+                             choice = "Rank", 
+                             shape = "long", 
+                             chid.var = "id", 
+                             alt.var = "Antibiotic", 
+                             ranked = TRUE)
+  
+  formula_no_int <- Rank ~ CDI_highrisk + Toxicity_highrisk +  
+    Oral_option + UTI_specific + IV_option + High_cost + Access + Reserve | 0
+  rol_model <- mlogit(formula_no_int, data = mlogit_data, method = "bfgs")
+  coefficients <- coef(rol_model)
+  scores <- data.frame(
+    Coefficient = names(coefficients),
+    Value = coefficients,
+    OR = exp(coefficients),
+    OR_dif = exp(coefficients) - 1
+  )
+  
+  ###Add coefficients to scores dataframe
+  scores <- scores %>% 
+    mutate(stan_OR = (OR - 1) / max(abs(OR - 1))) %>% 
+    mutate(colour = case_when(
+      Value > 0 ~ "B", 
+      Value < 0 ~ "A"
+    )) %>% 
+    mutate(Coefficient = c("High CDI risk","High toxicity risk","Oral option",
+                           "UTI-specific","IV option","High cost","Access category",
+                           "Reserve category")) %>% 
+    arrange(Value)
+  scores_rownames <- rownames(scores)
+  
+  # Approximate confidence intervals using bootstrap approach
+  boot_coefs <- matrix(NA, nrow = 1000, ncol = length(coef(mlogit(formula_no_int, data = mlogit_data, method = "bfgs"))))
+  for (i in 1:1000) {
+    boot_index <- sample(unique(mlogit_data$id), replace = TRUE)
+    boot_mlogit <- mlogit_data %>% subset(id %in% boot_index)
+    boot_model <- mlogit(formula_no_int, data = boot_mlogit, method = "bfgs")
+    boot_coefs[i, ] <- coef(boot_model)
+  }
+  iqs <- data.frame(Coefficient=factor(names(coef(boot_model))),Q5=NA,Q95=NA)
+  iqs <- iqs %>% mutate(Coefficient=case_when(
+    grepl("CDI",Coefficient)~ "High CDI risk",
+    grepl("Toxicity",Coefficient)~ "High toxicity risk",
+    grepl("UTI",Coefficient)~ "UTI-specific",
+    grepl("Access",Coefficient)~ "Access category",
+    grepl("Reserve",Coefficient)~ "Reserve category",
+    TRUE~Coefficient
+  )) %>% 
+    mutate(Coefficient=str_replace_all(Coefficient,"_"," "))
+  for (i in 1:ncol(boot_coefs)) {
+    
+    iqs$Q5[i] <- quantile(boot_coefs[,i],probs=seq(0,1,0.05))['5%']
+    iqs$Q95[i] <- quantile(boot_coefs[,i],probs=seq(0,1,0.05))['95%']
+    
+  }
+  scores <- scores %>% left_join(iqs)
+  rownames(scores) <- scores_rownames
+  
+  ###Export unstandardised weights for reference
+  unstan_vals <- scores %>% select(Value) %>% 
+    mutate(Name = c("Wc", "Wt", "Wo", "Wu", "Wi", "Wh", "Wa", "Wr"))
+  write_csv(unstan_vals, "unstand_weights.csv")
+  
+  ###Set default R weight value
+  R_wt_value <- 0
+  
+  ###Visualise odds ratios for antimicrobial characteristics
+  scores$Coefficient <- factor(scores$Coefficient, levels=
+                                 scores %>% arrange(Value) %>% 
+                                 select(Coefficient) %>% unlist())
+  
+  sens_features <- ggplot(scores,aes(x=Value,y=Coefficient,fill=colour)) +
+    geom_col() +
+    geom_hline(aes(yintercept=0)) +
+    ylab("Drug property") +
+    xlab("Coefficient value for drug selection probability") +
+    ggtitle(glue("The effect of different antimicrobial drug properties on\n{specialty} clinician prescribing preference in the UTI\nscenario discrete choice experiment"))+
+    geom_vline(xintercept = 0,colour="grey40")+
+    geom_errorbar(aes(xmin = Q5, xmax = Q95), width = 0.1,colour="grey40")+
+    theme_minimal()+
+    theme(panel.grid = element_blank(),
+          legend.position = "None")
+  
+  ggsave(glue("{specialty}_importances.pdf"), plot = sens_features, device = "pdf", width = 8, height = 4,
+         path="/Users/alexhoward/Documents/Projects/UDAST_code")
+  print(sens_features)
+  
+  
+  ###Antimicrobial dummy variables in probability prediction dataframe
+  df$abx_name_ <- as.factor(df$Antimicrobial)
+  df <- df %>% mutate(
+    abx_name_ = str_replace_all(abx_name_,"-",".")
+  )
+  dummy_vars <- model.matrix(~ abx_name_ - 1, data = df)
+  df <- cbind(df, dummy_vars) %>% tibble() %>% 
+    select(-abx_name_)
+  
+  ##Utility score calculation
+  
+  ###CDI risk utility
+  cdi_value <- scores[rownames(scores)=="CDI_highrisk",] %>% 
+    select(Value) %>% unlist()
+  
+  ###Toxicity risk utility
+  tox_value <- scores[rownames(scores)=="Toxicity_highrisk",] %>% 
+    select(Value) %>% unlist()
+  
+  ###UTI-specific utility
+  uti_specifics <- c("Nitrofurantoin")
+  uti_value <- scores[rownames(scores)=="UTI_specific",] %>% 
+    select(Value) %>% unlist()
+  
+  ###Access category utility
+  access_abs <- c("AMP","SAM","CZO",
+                  "GEN","SXT","NIT") %>% ab_name() %>% 
+    str_replace("/","-")
+  access_combos <- combn(access_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+  access_abs <- c(access_abs, access_combos)
+  
+  access_value <- scores[rownames(scores)=="Access",] %>% 
+    select(Value) %>% unlist()
+  
+  ###Oral option utilituy
+  oral_abs <- c("AMP","SAM","CIP",
+                "SXT","NIT") %>% ab_name() %>% 
+    str_replace("/","-")
+  oral_combos <- combn(oral_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+  oral_abs <- c(oral_abs, oral_combos)
+  
+  oral_value <- scores[rownames(scores)=="Oral_option",] %>% 
+    select(Value) %>% unlist()
+  
+  ###IV option utility
+  iv_abs <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
+              "GEN","SXT","VAN") %>% ab_name() %>% 
+    str_replace("/","-") 
+  iv_combos <- combn(iv_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+  iv_abs <- c(iv_abs, iv_combos)
+  
+  iv_value <- scores[rownames(scores)=="IV_option",] %>% 
+    select(Value) %>% unlist()
+  
+  ###Reserve category utility
+  reserve_abs <- c()
+  reserve_value <- scores[rownames(scores)=="Reserve",] %>% 
+    select(Value) %>% unlist()
+  
+  ###High-cost agent utility
+  highcost_abs <- c()
+  cost_value <- scores[rownames(scores)=="High_cost",] %>% 
+    select(Value) %>% unlist()
+  cost_list <- read_csv("us_drug_cost_list.csv")
+  drug_order <- cost_list %>% distinct(`Generic Name`) %>% unlist()
+  cost_list <- cost_list %>% group_by(`Generic Name`) %>% summarise(min_cost=min(Cost)) %>% ungroup() %>% 
+    mutate(`Generic Name` = factor(`Generic Name`,levels=drug_order)) %>% arrange(`Generic Name`)
+  comb <- combn(cost_list$`Generic Name`, 2, simplify = FALSE)
+  cost_comb <- combn(cost_list$min_cost, 2, function(x) sum(x))
+  cost_list2 <- data.frame(
+    Antimicrobial = sapply(comb, function(x) paste(x, collapse = "_")),
+    min_cost = cost_comb
+  )  
+  cost_list <- cost_list %>% rename(Antimicrobial="Generic Name")
+  cost_list <- data.frame(rbind(cost_list,cost_list2))
+  cost_list <- cost_list %>% mutate(min_cost = min_cost/max(min_cost),
+                                    Antimicrobial = str_replace_all(Antimicrobial,"/","-"))
+  df <- df %>% left_join(cost_list)
+  
+  ###AST R result utility
+  Rval_key <- ur_util %>% select(micro_specimen_id,AMP_R_value:VAN_R_value)
+  
+  ###Attach individual utilities to dataframe
+  df <- df %>% 
+    mutate(value_CDI = cdi_value,
+           util_CDI = abs_calc(value_CDI,prob_CDI),
+           value_tox = tox_value,
+           util_tox = abs_calc(value_tox,prob_tox),
+           UTI_specific = case_when(Antimicrobial %in% uti_specifics ~ 1, TRUE~0),
+           value_UTI = uti_value,
+           util_uti = abs_calc(value_UTI,UTI_specific),
+           Access_agent = case_when(Antimicrobial %in% access_abs ~ 1, TRUE~0),
+           value_access = access_value,
+           util_access = abs_calc(value_access,Access_agent),
+           Oral_agent = case_when(Antimicrobial %in% oral_abs ~ 1, TRUE~0),
+           value_oral = oral_value,
+           util_oral = abs_calc(value_oral,Oral_agent),
+           IV_agent = case_when(Antimicrobial %in% iv_abs ~ 1, TRUE~0),
+           value_iv = iv_value,
+           util_iv = abs_calc(value_iv,IV_agent),
+           Reserve_agent = case_when(Antimicrobial %in% reserve_abs ~ 1, TRUE~0),
+           value_reserve = reserve_value,
+           util_reserve = abs_calc(value_reserve,Reserve_agent),
+           Highcost_agent = min_cost,
+           value_highcost = cost_value,
+           util_highcost = abs_calc(value_highcost,Highcost_agent),
+           single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE)
+    ) %>% left_join(Rval_key,by="micro_specimen_id")
+  
+  df <- df %>% left_join(auc_df,by="Antimicrobial")
+  df$CDI_AUC <- auc_df %>% filter(Antimicrobial=="CDI") %>%
+    select(AUC) %>% unlist
+  df$tox_AUC <- auc_df %>% filter(Antimicrobial=="toxicity") %>%
+    select(AUC) %>% unlist
+  df <- df %>% left_join(recall_df,by="Antimicrobial")
+  df$CDI_recall <- recall_df %>% filter(Antimicrobial=="CDI") %>%
+    select(recall) %>% unlist
+  df$tox_recall <- recall_df %>% filter(Antimicrobial=="toxicity") %>%
+    select(recall) %>% unlist
+  df <- df %>% left_join(precision_df,by="Antimicrobial")
+  df$CDI_precision <- precision_df %>% filter(Antimicrobial=="CDI") %>%
+    select(precision) %>% unlist
+  df$tox_precision <- precision_df %>% filter(Antimicrobial=="toxicity") %>%
+    select(precision) %>% unlist
+  df <- df %>% left_join(accuracy_df,by="Antimicrobial")
+  df$CDI_accuracy <- accuracy_df %>% filter(Antimicrobial=="CDI") %>%
+    select(accuracy) %>% unlist
+  df$tox_accuracy <- accuracy_df %>% filter(Antimicrobial=="toxicity") %>%
+    select(accuracy) %>% unlist
+  df <- df %>% left_join(f1_score_df,by="Antimicrobial")
+  df$CDI_f1_score <- f1_score_df %>% filter(Antimicrobial=="CDI") %>%
+    select(f1_score) %>% unlist
+  df$tox_f1_score <- f1_score_df %>% filter(Antimicrobial=="toxicity") %>%
+    select(f1_score) %>% unlist
+  
+  ###Calculate overall utility score
+  df <- df %>% calculate_utilities(R_weight = R_wt_value)
+  
+  ##Utility analysis
+  
+  ###Utility data visualisation
+  df %>% group_by(Antimicrobial) %>% 
+    summarise(Median_util=median(Rx_utility)) %>% 
+    arrange(desc(Median_util))
+  formulary_agents <- c()
+  
+  df
+  
+}
+
+###Susceptibility plot
+susc_plotter_overall <- function(df,df2,subset="",measure,suffix="",agent_col1,agent_name1,agent_col2,agent_name2,variable) {
+  
+  agent_col1 <- enquo(agent_col1)
+  agent_col2 <- enquo(agent_col2)
+  
+  df$Metric <- factor(df$Metric, levels=c("All agents","Access agents","IV agents","Oral agents"))
+  
+  if (grepl("severity", variable)) {
+    
+    if (grepl("Access", suffix)&!grepl("inpatient", suffix)) {
+      
+      susplot <- ggplot(df, aes(x = Weight, y = Percentage, group = Metric, color = Metric, fill = Metric)) +
+        geom_area(position = "identity", alpha = 0.6) +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(df2)) * 100, color = "gray16") +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(df2)) * 100, color = "gray16") +
+        geom_hline(linetype = "dashed", yintercept = 70, color = "darkgreen") +
+        ylim(0, 100) +
+        theme_minimal() +
+        theme(
+          panel.grid.major.x = element_blank(),
+          panel.grid.major.y = element_blank(),
+          panel.grid.minor.x = element_blank(),
+          panel.grid.minor.y = element_blank()
+        ) +
+        ggtitle(glue("Urine isolate susceptibility to {subset}antimicrobial recommended\n{suffix}")) +
+        xlab(glue("{variable}")) +
+        ylab("Percentage of isolates susceptible to recommendation") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(df2)) * 100 + 2, label = glue(agent_name1), hjust = 1.1, color = "gray16") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(df2)) * 100 + 2, label = glue(agent_name2), hjust = 1.1, color = "gray16") +
+        annotate("text", x = Inf, y = 72, label = "UN Access target", hjust = 1.1, color = "darkgreen") +
+        scale_x_continuous(breaks = seq(0,3))
+      
+    } else if (!grepl("Access", suffix)&!grepl("inpatient", suffix)) {
+      susplot <- ggplot(df, aes(x = Weight, y = Percentage, group = Metric, color = Metric, fill = Metric)) +
+        geom_area(position = "identity", alpha = 0.6) +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(df2)) * 100, color = "gray16") +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(df2)) * 100, color = "gray16") +
+        ylim(0, 100) +
+        theme_minimal() +
+        theme(
+          panel.grid.major.x = element_blank(),
+          panel.grid.major.y = element_blank(),
+          panel.grid.minor.x = element_blank(),
+          panel.grid.minor.y = element_blank()
+        ) +
+        ggtitle(glue("Urine isolate susceptibility to {subset}antimicrobial recommended\n{suffix}")) +
+        xlab(glue("{variable}")) +
+        ylab("Percentage of isolates susceptible to recommendation") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(df2)) * 100 + 2, label = glue(agent_name1), hjust = 1.1, color = "gray16") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(df2)) * 100 + 2, label = glue(agent_name2), hjust = 1.1, color = "gray16") +
+        scale_x_continuous(breaks = seq(0,3))
+      
+    } else {
+      
+      susplot <- ggplot(df, aes(x = Weight, y = Percentage, group = Metric, color = Metric, fill = Metric)) +
+        geom_area(position = "identity", alpha = 0.6) +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(df2)) * 100, color = "gray16") +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(df2)) * 100, color = "gray16") +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(ABX_PX_result == "S")) / nrow(df2)) * 100, color = "gray16") +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(ABX_PX_result == "S" & ab_px%in%all_access)) / nrow(df2)) * 100, color = "gray16") +
+        geom_hline(linetype = "dashed", yintercept = 70, color = "darkgreen") +
+        ylim(0, 100) +
+        theme_minimal() +
+        theme(
+          panel.grid.major.x = element_blank(),
+          panel.grid.major.y = element_blank(),
+          panel.grid.minor.x = element_blank(),
+          panel.grid.minor.y = element_blank()
+        ) +
+        ggtitle(glue("Urine isolate susceptibility to {subset}antimicrobial recommended\n{suffix}")) +
+        xlab(glue("{variable}")) +
+        ylab("Percentage of isolates susceptible to recommendation") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(df2)) * 100 + 2, label = glue(agent_name1), hjust = 1.1, color = "gray16") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(df2)) * 100 + 2, label = glue(agent_name2), hjust = 1.1, color = "gray16") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(ABX_PX_result == "S")) / nrow(df2)) * 100 + 2, label = "Antibiotic prescribed", hjust = 1.1, color = "gray16") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(ABX_PX_result == "S"& ab_px%in%all_access)) / nrow(df2)) * 100 + 2, label = "Access antibiotic prescribed", hjust = 1.1, color = "gray16") +
+        annotate("text", x = Inf, y = 72, label = "UN Access target", hjust = 1.1, color = "darkgreen") +
+        scale_x_continuous(breaks = seq(0,3))
+    }
+    
+  } else {
+    
+    if (grepl("Access", suffix)&!grepl("inpatient", suffix)) {
+      susplot <- ggplot(df, aes(x = Weight, y = Percentage, group = Metric, color = Metric, fill = Metric)) +
+        geom_area(position = "identity", alpha = 0.6) +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(df2)) * 100, color = "gray16") +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(df2)) * 100, color = "gray16") +
+        geom_hline(linetype = "dashed", yintercept = 70, color = "darkgreen") +
+        ylim(0, 100) +
+        theme_minimal() +
+        theme(
+          panel.grid.major.x = element_blank(),
+          panel.grid.major.y = element_blank(),
+          panel.grid.minor.x = element_blank(),
+          panel.grid.minor.y = element_blank()
+        ) +
+        ggtitle(glue("Urine isolate susceptibility to {subset}antimicrobial recommended\n{suffix}")) +
+        xlab(glue("{variable}")) +
+        ylab("Percentage of isolates susceptible to recommendation") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(df2)) * 100 + 2, label = glue(agent_name1), hjust = 1.1, color = "gray16") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(df2)) * 100 + 2, label = glue(agent_name2), hjust = 1.1, color = "gray16") +
+        annotate("text", x = Inf, y = 72, label = "UN Access target", hjust = 1.1, color = "darkgreen")
+      
+    } else if (!grepl("Access", suffix)&!grepl("inpatient", suffix)) {
+      
+      susplot <- ggplot(df, aes(x = Weight, y = Percentage, group = Metric, color = Metric, fill = Metric)) +
+        geom_area(position = "identity", alpha = 0.6) +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(df2)) * 100, color = "gray16") +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(df2)) * 100, color = "gray16") +
+        ylim(0, 100) +
+        theme_minimal() +
+        theme(
+          panel.grid.major.x = element_blank(),
+          panel.grid.major.y = element_blank(),
+          panel.grid.minor.x = element_blank(),
+          panel.grid.minor.y = element_blank()
+        ) +
+        ggtitle(glue("Urine isolate susceptibility to {subset}antimicrobial recommended\n{suffix}")) +
+        xlab(glue("{variable}")) +
+        ylab("Percentage of isolates susceptible to recommendation") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(df2)) * 100 + 2, label = glue(agent_name1), hjust = 1.1, color = "gray16") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(df2)) * 100 + 2, label = glue(agent_name2), hjust = 1.1, color = "gray16")
+    } else {
+      
+      susplot <- ggplot(df, aes(x = Weight, y = Percentage, group = Metric, color = Metric, fill = Metric)) +
+        geom_area(position = "identity", alpha = 0.6) +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(df2)) * 100, color = "gray16") +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(df2)) * 100, color = "gray16") +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(ABX_PX_result == "S")) / nrow(df2)) * 100, color = "gray16") +
+        geom_hline(linetype = "dashed", yintercept = (nrow(df2 %>% filter(ABX_PX_result == "S" & ab_px%in%all_access)) / nrow(df2)) * 100, color = "gray16") +
+        ylim(0, 100) +
+        theme_minimal() +
+        theme(
+          panel.grid.major.x = element_blank(),
+          panel.grid.major.y = element_blank(),
+          panel.grid.minor.x = element_blank(),
+          panel.grid.minor.y = element_blank()
+        ) +
+        ggtitle(glue("Urine isolate susceptibility to {subset}antimicrobial recommended\n{suffix}")) +
+        xlab(glue("{variable}")) +
+        ylab("Percentage of isolates susceptible to recommendation") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(!!agent_col1 == "S" | !!agent_col1 == "I")) / nrow(df2)) * 100 + 2, label = glue(agent_name1), hjust = 1.1, color = "gray16") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(!!agent_col2 == "S" | !!agent_col2 == "I")) / nrow(df2)) * 100 + 2, label = glue(agent_name2), hjust = 1.1, color = "gray16") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(ABX_PX_result == "S")) / nrow(df2)) * 100 + 2, label = "Antibiotic prescribed", hjust = 1.1, color = "gray16") +
+        annotate("text", x = Inf, y = (nrow(df2 %>% filter(ABX_PX_result == "S"& ab_px%in%all_access)) / nrow(df2)) * 100 + 2, label = "Access antibiotic prescribed", hjust = 1.1, color = "gray16") +
+        scale_x_continuous(breaks = seq(0,3))
+      
+    }
+  }
+  
+  
+  
+  ggsave(glue("{subset}_{measure}_{suffix}_susplot.pdf"), plot = susplot, device = "pdf", width = 10, height = 6,
+         path="/Users/alexhoward/Documents/Projects/UDAST_code")
+  
+  susplot <<-susplot
+  
+  print(susplot)
+  
+}
+
+###Prioritisation by treatment utility
+util_mk1 = function(df,spec_id,panel_size,ab_list=names(combined_antimicrobial_map)) {
+  df %>% filter(micro_specimen_id==spec_id) %>%
+    filter(Antimicrobial%in%ab_list) %>%
+    arrange(desc(Rx_utility)) %>% select(Antimicrobial,Rx_utility) %>% 
+    mutate(Rx_utility = round(Rx_utility,1)) %>% dplyr::slice(1:panel_size) %>% 
+    rename(`Antimicrobial ranking` = "Antimicrobial",`Rx Utility` = "Rx_utility")
+  
+}
+
+###Prioritisation by AST utility
+util_mk2 = function(df,spec_id,panel_size,ab_list=names(combined_antimicrobial_map)) {
+  df %>% filter(micro_specimen_id==spec_id) %>%
+    filter(Antimicrobial%in%ab_list) %>%
+    arrange(desc(AST_utility)) %>% select(Antimicrobial,AST_utility) %>% 
+    mutate(AST_utility = round(AST_utility,1)) %>% dplyr::slice(1:panel_size) %>% 
+    rename(`Antimicrobial ranking` = "Antimicrobial",`AST Utility` = "AST_utility")
+  
+}
+
+###Prioritisation by Intravenous utility
+util_mk3 = function(df,spec_id,panel_size,ab_list=names(combined_antimicrobial_map)) {
+  df %>% filter(micro_specimen_id==spec_id) %>%
+    filter(Antimicrobial%in%ab_list) %>% 
+    arrange(desc(Urosepsis_Rx_utility)) %>% select(Antimicrobial,Urosepsis_Rx_utility) %>% 
+    mutate(Urosepsis_Rx_utility = round(Urosepsis_Rx_utility,1)) %>% dplyr::slice(1:panel_size) %>% 
+    rename(`Antimicrobial ranking` = "Antimicrobial",`Intravenous Rx Utility` = "Urosepsis_Rx_utility")
+  
+}
+
+###Prioritisation by Oral utility
+util_mk4 = function(df,spec_id,panel_size,ab_list=names(combined_antimicrobial_map)) {
+  df %>% filter(micro_specimen_id==spec_id) %>%
+    filter(Antimicrobial%in%ab_list) %>%
+    arrange(desc(Outpatient_Rx_utility)) %>% select(Antimicrobial,Outpatient_Rx_utility) %>% 
+    mutate(Outpatient_Rx_utility = round(Outpatient_Rx_utility,1)) %>% dplyr::slice(1:panel_size) %>% 
+    rename(`Antimicrobial ranking` = "Antimicrobial",`Oral Rx Utility` = "Outpatient_Rx_utility")
+  
+}
+
+###Assigning treatment recommendations
+assign_PDRx <- function(df,probab_df,method_used,ab_list1=ab_singles) {
+  
+  test_recs <-  data.frame(matrix(nrow=length(ab_list1),ncol=0))
+  
+  for (i in 1:nrow(df)) {
+    
+    rec <- probab_df %>% util_mk1(spec_id = df$micro_specimen_id[i], panel_size = length(ab_list1),
+                                  ab_list=ab_list1) %>% 
+      select(1)
+    
+    test_recs <- cbind(test_recs,rec)
+    
+    print(glue("{round((i/nrow(df)) * 100,0)}%"))
+    
+  }
+  
+  test_recs <- data.frame(t(test_recs))
+  test_recs <- data.frame(cbind(df$micro_specimen_id,test_recs))
+  testrec_cols <- c("micro_specimen_id")
+  
+  for(i in 1:length(ab_list1)) {
+    
+    testrec_cols[i+1] <- paste0(method_used,i)
+    
+  }
+  
+  colnames(test_recs) <- testrec_cols
+  
+  df %>% 
+    left_join(test_recs,by="micro_specimen_id") 
+  
+}
+
+###Assigning Intravenous treatment recommendations
+assign_Intravenous <- function(df,probab_df,method_used,ab_list1=iv_ab_singles) {
+  
+  
+  
+  test_recs <-  data.frame(matrix(nrow=length(ab_list1),ncol=0))
+  
+  for (i in 1:nrow(df)) {
+    
+    rec <- probab_df %>% util_mk3(spec_id = df$micro_specimen_id[i], panel_size = length(ab_list1),ab_list=ab_list1) %>% 
+      select(1)
+    
+    test_recs <- cbind(test_recs,rec)
+    
+    print(glue("{round((i/nrow(df)) * 100,0)}%"))
+    
+  }
+  
+  test_recs <- data.frame(t(test_recs))
+  test_recs <- data.frame(cbind(df$micro_specimen_id,test_recs))
+  testrec_cols <- c("micro_specimen_id")
+  
+  for(i in 1:length(ab_list1)) {
+    
+    testrec_cols[i+1] <- paste0(method_used,i)
+    
+  }
+  
+  colnames(test_recs) <- testrec_cols
+  
+  df %>% 
+    left_join(test_recs,by="micro_specimen_id") 
+  
+}
+
+###Assigning Oral treatment recommendations
+assign_Oral <- function(df,probab_df,method_used,ab_list1=oral_ab_singles) {
+  
+  
+  test_recs <-  data.frame(matrix(nrow=length(ab_list1),ncol=0))
+  
+  for (i in 1:nrow(df)) {
+    
+    rec <- probab_df %>% util_mk4(spec_id = df$micro_specimen_id[i], panel_size = length(ab_list1),ab_list=ab_list1) %>% 
+      select(1)
+    
+    test_recs <- cbind(test_recs,rec)
+    
+    print(glue("{round((i/nrow(df)) * 100,0)}%"))
+    
+  }
+  
+  test_recs <- data.frame(t(test_recs))
+  test_recs <- data.frame(cbind(df$micro_specimen_id,test_recs))
+  testrec_cols <- c("micro_specimen_id")
+  
+  for(i in 1:length(ab_list1)) {
+    
+    testrec_cols[i+1] <- paste0(method_used,i)
+    
+  }
+  
+  colnames(test_recs) <- testrec_cols
+  
+  df %>% 
+    left_join(test_recs,by="micro_specimen_id") 
+  
+}
+
+###Assigning standard recommendations
+assign_standard_AST <- function(df,choice_1=NA,choice_2=NA,choice_3=NA,
+                                choice_4=NA,choice_5=NA,choice_6=NA) {
+  
+  df %>% mutate(
+    STANDARD_AST_1 = choice_1,
+    STANDARD_AST_2 = choice_2,
+    STANDARD_AST_3 = choice_3,
+    STANDARD_AST_4 = choice_4,
+    STANDARD_AST_5 = choice_5,
+    STANDARD_AST_6 = choice_6
+  )
+  
+}
+assign_standard_IV <- function(df,choice_1=NA,choice_2=NA,choice_3=NA,
+                               choice_4=NA,choice_5=NA,choice_6=NA) {
+  
+  df %>% mutate(
+    STANDARD_IV_1 = choice_1,
+    STANDARD_IV_2 = choice_2,
+    STANDARD_IV_3 = choice_3,
+    STANDARD_IV_4 = choice_4,
+    STANDARD_IV_5 = choice_5,
+    STANDARD_IV_6 = choice_6
+  )
+  
+}
+assign_standard_oral <- function(df,choice_1=NA,choice_2=NA,choice_3=NA,
+                                 choice_4=NA,choice_5=NA,choice_6=NA) {
+  
+  df %>% mutate(
+    STANDARD_PO_1 = choice_1,
+    STANDARD_PO_2 = choice_2,
+    STANDARD_PO_3 = choice_3,
+    STANDARD_PO_4 = choice_4,
+    STANDARD_PO_5 = choice_5,
+    STANDARD_PO_6 = choice_6
+  )
+  
+}
+
+###Binding labels for plot dataframes
+label_binder <- function(vec,label) {
+  
+  data.frame(vec,Metric=label,Weight=weightseq)
+  
+}
+
+###Antimicrobial name mapping
+replace_values <- function(column, map) {
+  column %>%
+    as.character() %>%
+    sapply(function(x) if (x %in% names(map)) map[[x]] else x)
+}
+reverse_values <- function(column, map) {
+  column %>%
+    as.character() %>%
+    sapply(function(x) if (x %in% map) names(map)[map == x] else x)
+}
+
+###Illness severity result checker
+result_checker <- function(df,probs_df,acuity_score) {
+  
+  df <- df %>% filter(acuity==acuity_score)  
+  probs_df <- probs_df %>% semi_join(
+    df,by="micro_specimen_id"
+  )
+  
+  
+  urines_abx <- df
+  
+  iv_res <- nrow(df %>% filter(PDIVRx_1_result=='S'|PDIVRx_1_result=='I'))
+  po_res <- nrow(df %>% filter(PDPORx_1_result=='S'|PDPORx_1_result=='I'))
+  overall_res <- nrow(df %>% filter(PDRx_1_result=='S'|PDRx_1_result=='I'))
+  
+  iv_perc <- iv_res/nrow(df)*100
+  po_perc <- po_res/nrow(df)*100
+  overall_perc <- overall_res/nrow(df)*100
+  
+  iv_s_access <- (nrow(df %>% filter((PDIVRx_1_result=='S'|PDIVRx_1_result=='I')&
+                                       Intravenous_1 %in% access_singles))/
+                    nrow(df)) * 100
+  po_s_access <- (nrow(df %>% filter((PDPORx_1_result=='S'|PDPORx_1_result=='I') &
+                                       Oral_1 %in% access_singles))/
+                    nrow(df))*100
+  overall_s_access <- (nrow(df %>% filter((PDRx_1_result=='S'|PDRx_1_result=='I') &
+                                            PDRx_1 %in% access_singles))/
+                         nrow(df))*100
+  overall_s_oral <- (nrow(df %>% filter((PDRx_1_result=='S'|PDRx_1_result=='I') &
+                                          PDRx_1 %in% oral_singles))/
+                       nrow(df))*100
+  overall_s_iv <- (nrow(df %>% filter((PDRx_1_result=='S'|PDRx_1_result=='I') &
+                                        PDRx_1 %in% iv_singles))/
+                     nrow(df))*100
+  
+  urkey <- urines_abx %>% select(micro_specimen_id,PDRx_1) %>% 
+    mutate(Antimicrobial=ab_name(PDRx_1) %>% str_replace("/","-")) %>% 
+    select(-PDRx_1)
+  median_CDI <- probs_df %>% semi_join(urkey,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=median(prob_CDI)) %>% unlist()
+  Q1_CDI <- probs_df %>% semi_join(urkey,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=quantile(prob_CDI)[2]) %>% unlist()
+  Q3_CDI <- probs_df %>% semi_join(urkey,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=quantile(prob_CDI)[4]) %>% unlist()
+  median_tox <- probs_df %>% semi_join(urkey,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=median(prob_tox)) %>% unlist()
+  Q1_tox <- probs_df %>% semi_join(urkey,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=quantile(prob_tox)[2]) %>% unlist()
+  Q3_tox <- probs_df %>% semi_join(urkey,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=quantile(prob_tox)[4]) %>% unlist()
+  median_cost <- probs_df %>% semi_join(urkey,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=median(orig_cost)) %>% unlist()
+  Q1_cost <- probs_df %>% semi_join(urkey,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=quantile(orig_cost)[2]) %>% unlist()
+  Q3_cost <- probs_df %>% semi_join(urkey,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=quantile(orig_cost)[4]) %>% unlist()
+  
+  abrx1_df <- df %>% count(PDRx_1) %>% arrange(desc(n))
+  abrx1_percs <- abrx1_df %>% mutate(
+    Percentage = (n/nrow(df))*100) %>% select(-n)
+  
+  iv_perc <<- iv_perc
+  po_perc <<- po_perc
+  overall_perc <<- overall_perc
+  iv_s_access <<- iv_s_access
+  po_s_access <<- po_s_access
+  overall_s_access <<- overall_s_access
+  overall_s_oral <<- overall_s_oral
+  overall_s_iv <<- overall_s_iv
+  median_CDI <<- median_CDI
+  Q1_CDI <<- Q1_CDI
+  Q3_CDI <<- Q3_CDI
+  median_tox <<- median_tox
+  Q1_tox <<- Q1_tox
+  Q3_tox <<- Q3_tox
+  median_cost <<- median_cost
+  Q1_cost <<- Q1_cost
+  Q3_cost <<- Q3_cost
+  abrx1_df <<- abrx1_df
+  abrx1_percs <<- abrx1_percs
+  
+  ###2nd-lines
+  
+  iv_res_2 <- nrow(df %>% filter(PDIVRx_2_result=='S'|PDIVRx_2_result=='I'))
+  po_res_2 <- nrow(df %>% filter(PDPORx_2_result=='S'|PDPORx_2_result=='I'))
+  overall_res_2 <- nrow(df %>% filter(PDRx_2_result=='S'|PDRx_2_result=='I'))
+  
+  iv_perc_2 <- iv_res_2/nrow(df)*100
+  po_perc_2 <- po_res_2/nrow(df)*100
+  overall_perc_2 <- overall_res_2/nrow(df)*100
+  
+  iv_s_access_2 <- (nrow(df %>% filter((PDIVRx_2_result=='S'|PDIVRx_2_result=='I')&
+                                         Intravenous_2 %in% access_singles))/
+                      nrow(df)) * 100
+  po_s_access_2 <- (nrow(df %>% filter((PDPORx_2_result=='S'|PDPORx_2_result=='I') &
+                                         Oral_2 %in% access_singles))/
+                      nrow(df))*100
+  overall_s_access_2 <- (nrow(df %>% filter((PDRx_2_result=='S'|PDRx_2_result=='I') &
+                                              PDRx_2 %in% access_singles))/
+                           nrow(df))*100
+  overall_s_oral_2 <- (nrow(df %>% filter((PDRx_2_result=='S'|PDRx_2_result=='I') &
+                                            PDRx_2 %in% oral_singles))/
+                         nrow(df))*100
+  overall_s_iv_2 <- (nrow(df %>% filter((PDRx_2_result=='S'|PDRx_2_result=='I') &
+                                          PDRx_2 %in% iv_singles))/
+                       nrow(df))*100
+  
+  urkey_2 <- urines_abx %>% select(micro_specimen_id,PDRx_2) %>% 
+    mutate(Antimicrobial=ab_name(PDRx_2) %>% str_replace("/","-")) %>% 
+    select(-PDRx_2)
+  median_CDI_2 <- probs_df %>% semi_join(urkey_2,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=median(prob_CDI)) %>% unlist()
+  Q1_CDI_2 <- probs_df %>% semi_join(urkey_2,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=quantile(prob_CDI)[2]) %>% unlist()
+  Q3_CDI_2 <- probs_df %>% semi_join(urkey_2,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=quantile(prob_CDI)[4]) %>% unlist()
+  median_tox_2 <- probs_df %>% semi_join(urkey_2,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=median(prob_tox)) %>% unlist()
+  Q1_tox_2 <- probs_df %>% semi_join(urkey_2,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=quantile(prob_tox)[2]) %>% unlist()
+  Q3_tox_2 <- probs_df %>% semi_join(urkey_2,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=quantile(prob_tox)[4]) %>% unlist()
+  median_cost_2 <- probs_df %>% semi_join(urkey_2,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=median(orig_cost)) %>% unlist()
+  Q1_cost_2 <- probs_df %>% semi_join(urkey_2,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=quantile(orig_cost)[2]) %>% unlist()
+  Q3_cost_2 <- probs_df %>% semi_join(urkey_2,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=quantile(orig_cost)[4]) %>% unlist()
+  
+  abrx1_df_2 <- df %>% count(PDRx_2) %>% arrange(desc(n))
+  abrx1_percs_2 <- abrx1_df_2 %>% mutate(
+    Percentage = (n/nrow(df))*100) %>% select(-n)
+  
+  iv_perc_2 <<- iv_perc_2
+  po_perc_2 <<- po_perc_2
+  overall_perc_2 <<- overall_perc_2
+  iv_s_access_2 <<- iv_s_access_2
+  po_s_access_2 <<- po_s_access_2
+  overall_s_access_2 <<- overall_s_access_2
+  overall_s_oral_2 <<- overall_s_oral_2
+  overall_s_iv_2 <<- overall_s_iv_2
+  median_CDI_2 <<- median_CDI_2
+  Q1_CDI_2 <<- Q1_CDI_2
+  Q3_CDI_2 <<- Q3_CDI_2
+  median_tox_2 <<- median_tox_2
+  Q1_tox_2 <<- Q1_tox_2
+  Q3_tox_2 <<- Q3_tox_2
+  median_cost_2 <<- median_cost_2
+  Q1_cost_2 <<- Q1_cost_2
+  Q3_cost_2 <<- Q3_cost_2
+  abrx1_df_2 <<- abrx1_df_2
+  abrx1_percs_2 <<- abrx1_percs_2
+  
+  ###Antibiotics prescribed
+  overall_res_px_abx <- nrow(df %>% filter(Px_Abx_result=='S'|Px_Abx_result=='I'))
+  overall_perc_px_abx <- overall_res_px_abx/nrow(df)*100
+  
+  overall_s_access_px_abx <- (nrow(df %>% filter((Px_Abx_result=='S'|Px_Abx_result=='I') &
+                                                   Px_Abx %in% access_modified_abx_map))/
+                                nrow(df))*100
+  overall_s_oral_px_abx <- (nrow(df %>% filter((Px_Abx_result=='S'|Px_Abx_result=='I') &
+                                                 Px_Abx %in% oral_modified_abx_map))/
+                              nrow(df))*100
+  overall_s_iv_px_abx <- (nrow(df %>% filter((Px_Abx_result=='S'|Px_Abx_result=='I') &
+                                               Px_Abx %in% iv_modified_abx_map))/
+                            nrow(df))*100
+  
+  urkey_abx_px <- urines_abx %>% select(micro_specimen_id,Prescribed_abx) %>% 
+    mutate(Antimicrobial=Prescribed_abx) %>% 
+    select(-Prescribed_abx)
+  median_CDI_px_abx <- probs_df %>% semi_join(urkey_abx_px,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=median(prob_CDI)) %>% unlist()
+  Q1_CDI_px_abx <- probs_df %>% semi_join(urkey_abx_px,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=quantile(prob_CDI)[2]) %>% unlist()
+  Q3_CDI_px_abx <- probs_df %>% semi_join(urkey_abx_px,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=quantile(prob_CDI)[4]) %>% unlist()
+  median_tox_px_abx <- probs_df %>% semi_join(urkey_abx_px,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=median(prob_tox)) %>% unlist()
+  Q1_tox_px_abx <- probs_df %>% semi_join(urkey_abx_px,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=quantile(prob_tox)[2]) %>% unlist()
+  Q3_tox_px_abx <- probs_df %>% semi_join(urkey_abx_px,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=quantile(prob_tox)[4]) %>% unlist()
+  median_cost_px_abx <- probs_df %>% semi_join(urkey_abx_px,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=median(orig_cost)) %>% unlist()
+  Q1_cost_px_abx <- probs_df %>% semi_join(urkey_abx_px,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=quantile(orig_cost)[2]) %>% unlist()
+  Q3_cost_px_abx <- probs_df %>% semi_join(urkey_abx_px,by=c("micro_specimen_id","Antimicrobial")) %>%
+    summarise(med=quantile(orig_cost)[4]) %>% unlist()
+  
+  abrx1_df_px_abx <- df %>% count(Px_Abx) %>% arrange(desc(n))
+  abrx1_percs_px_abx <- abrx1_df_px_abx %>% mutate(
+    Percentage = (n/nrow(df))*100) %>% select(-n)
+  
+  overall_perc_px_abx <<- overall_perc_px_abx
+  overall_s_access_px_abx <<- overall_s_access_px_abx
+  overall_s_oral_px_abx <<- overall_s_oral_px_abx
+  overall_s_iv_px_abx <<- overall_s_iv_px_abx
+  median_CDI_px_abx <<- median_CDI_px_abx
+  Q1_CDI_px_abx <<- Q1_CDI_px_abx
+  Q3_CDI_px_abx <<- Q3_CDI_px_abx
+  median_tox_px_abx <<- median_tox_px_abx
+  Q1_tox_px_abx <<- Q1_tox_px_abx
+  Q3_tox_px_abx <<- Q3_tox_px_abx
+  median_cost_px_abx <<- median_cost_px_abx
+  Q1_cost_px_abx <<- Q1_cost_px_abx
+  Q3_cost_px_abx <<- Q3_cost_px_abx
+  abrx1_df_px_abx <<- abrx1_df_px_abx
+  abrx1_percs_px_abx <<- abrx1_percs_px_abx
+  
+}
 
 ###Counting the number of S or I results per antimicrobial per panel
 number_results_per_panel <- function(df,start_col,end_col,which_abs,result_1,result_2) {
-
+  
   start_col <- enquo(start_col)
   end_col <- enquo(end_col)
   
@@ -325,386 +3764,837 @@ main_dotplotter <- function(df,PDRx_1,standard_1,PDRx_2,standard_2,
   
 }
 
-###Assembling antimicrobial plot dataframe
-abs_df_assemble <- function(pd_df,standard_df) {
+###Determining total number of S or I results provided by personalised panel
+number_SorI_pdast <- function(df,which_abs) {
   
-  minuser <- function(df,abx) {
+  n_all_s <- c()
+  
+  for(i in 1:nrow(df)) {
     
-    df %>% filter(ind==ab_name(abx)) %>% arrange(Approach) %>% select(values)
+    n_ac_s <- sum((df %>%
+                     select(all_of(intersect(df %>% select(PDRx_1:PDRx_6) %>%dplyr::slice(i) %>% unlist(),which_abs))) %>% 
+                     dplyr::slice(i)) == "S" |
+                    (df %>%
+                       select(all_of(intersect(df %>% select(PDRx_1:PDRx_6) %>%dplyr::slice(i) %>% unlist(),which_abs))) %>% 
+                       dplyr::slice(i)) == "I")
     
-    if(nrow(abs_df %>% filter(ind==ab_name(abx)) %>% select(1)) ==2 &
-       abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% dplyr::slice(1) =="PDRx") {
-      
-      abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(1) -
-        abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(2)
-      
-    } else if (nrow(abs_df %>% filter(ind==ab_name(abx)) %>% select(1)) ==2 &
-               abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% dplyr::slice(1) =="Standard"){
-      
-      -(abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(1) -
-          abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(2))
-      
-    } else if (nrow(abs_df %>% filter(ind==ab_name(abx)) %>% select(1)) ==1 &
-               abs_df %>% filter(ind==ab_name(abx)) %>% select(Approach) %>% dplyr::slice(1) =="PDRx") {
-      
-      abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(1)
-      
-    } else {
-      
-      -(abs_df %>% filter(ind==ab_name(abx)) %>% select(1) %>% dplyr::slice(1))
-      
-    }
+    n_all_s <- n_all_s %>% append(n_ac_s)
     
   }
   
-  abs_df <- bind_rows(
-    standard_df %>% data.frame() %>% mutate(Approach = "Standard"),
-    pd_df %>% data.frame() %>% mutate(Approach = "PDRx")
-  ) %>% mutate(ind = ab_name(ind))
-  abs_diffs <- map_df(all_singles, function(abs) {
-    abs_df %>% 
-      minuser(abs) %>% 
-      tibble() %>% 
-      mutate(ind = ab_name(abs))
-  }) %>% 
-    mutate(better = if_else(values > 0, "PDRx", "Standard"),
-           values2 = abs(values)) %>% 
-    left_join(
-      abs_df %>% filter(Approach == "PDRx") %>% select(values, ind) %>% rename(PDRx = values), 
-      by = "ind"
-    ) %>% 
-    left_join(
-      abs_df %>% filter(Approach == "Standard") %>% select(values, ind) %>% rename(Standard = values), 
-      by = "ind"
-    ) %>% 
-    mutate(
-      Standard = if_else(is.na(Standard), 0, Standard),
-      values = if_else(better == "PDRx", PDRx + 200, Standard + 200)
-    )
-  abs_diffs <<- abs_diffs
-  standard_levels <- abs_df %>% filter(Approach == "Standard") %>% arrange(values) %>% pull(ind) 
-  PDRx_levels <- abs_df %>% filter(Approach == "PDRx") %>% filter(!ind %in% standard_levels) %>% arrange(values) %>% pull(ind)
-  abs_df <- abs_df %>% 
-    anti_join(
-      abs_df %>% filter(Approach == "Standard") %>% select(ind), 
-      by = "ind"
-    ) %>% 
-    mutate(Approach = "Standard", values = 0) %>% 
-    bind_rows(abs_df) %>% 
-    mutate(
-      Approach = factor(Approach, levels = c("PDRx", "Standard")),
-      ind = factor(ind, levels = c(PDRx_levels,standard_levels)),
-      aware = if_else(ind %in% ab_name(access_singles), "Access", "Watch")
-    )
-  axiscols <- if_else(
-    abs_df %>% filter(Approach == "Standard") %>% arrange(values) %>% pull(ind) %in% ab_name(access_singles),
-    "seagreen", "darkorange"
-  )
-  
-  axiscols <<- axiscols
-  
-  abs_df
+  n_all_s
   
 }
 
-###Cleveland dot plot of AST results
-cleveland_ab_plot <- function(ab_df,resulttype,addendum="") {
+###Determining total number of S or I results provided by standard panel
+number_SorI_standard <- function(df,which_abs) {
   
-  results_by_ab <- ggplot(ab_df,aes(x=ind,y=values))+
-    geom_line(aes(group=ind),alpha=0.5)+
-    geom_point(aes(color=Approach),size=4) +
-    coord_flip() +
-    scale_color_manual(values=c("#00BFC4","#F8766D"))+
-    geom_text(data = abs_diffs, aes(color = better, 
-                                    label = as.character(glue("+{values2}"))),
-              size = 3,hjust=0.5) +
-    ggtitle(glue("Total number of {resulttype} AST results by antimicrobial agent\n{addendum}"))+
-    xlab("") +
-    ylab(glue("Total number of {resulttype} results")) +
-    theme_minimal() +
-    theme(axis.text.y = element_text(
-      colour = axiscols))
+  n_all_s <- c()
   
-  ggsave(glue("{resulttype}_ab_cleveplot.pdf"), plot = results_by_ab, device = "pdf", width = 10, height = 4,
-         path="/Users/alexhoward/Documents/Projects/UDAST_code")
+  for(i in 1:nrow(df)) {
+    
+    n_ac_s <- sum((df %>%
+                     select(all_of(intersect(df %>% select(STANDARD_AST_1,STANDARD_AST_2,STANDARD_AST_3,
+                                                           STANDARD_AST_4,STANDARD_AST_5,STANDARD_AST_6) %>%dplyr::slice(i) %>% unlist(),which_abs))) %>% 
+                     dplyr::slice(i)) == "S" |
+                    (df %>%
+                       select(all_of(intersect(df %>% select(STANDARD_AST_1,STANDARD_AST_2,STANDARD_AST_3,
+                                                             STANDARD_AST_4,STANDARD_AST_5,STANDARD_AST_6) %>%dplyr::slice(i) %>% unlist(),which_abs))) %>% 
+                       dplyr::slice(i)) == "I")
+    
+    n_all_s <- n_all_s %>% append(n_ac_s)
+    
+  }
   
-  results_by_ab
+  n_all_s
   
 }
 
-###Counting antimicrobial-result matches per paneL
-totaller <- function(panel) {
-  abx_graph %>% filter(Panel==panel) %>% summarise(Total=sum(n)) %>% unlist()
-}
-
-###Counting Access antimicrobial-result matches per paneL
-awaretotaller <- function(panel) {
-  awaresum %>% filter(Panel==panel & AWaRe=="Access" & Result=="S") %>%
-    select(n_results) %>% unlist()
-}
-
-##Uploads and reference lists
-
-###Uploads
-ur_util <- read_csv("ur_util_final.csv")
-urines_abx <- read_csv("ur_util_final.csv")
-abx <- read_csv("interim_abx.csv")
-urines5_desc <- read_csv("urines5_ref.csv")
-pats <- read_csv("patients.csv")
+##Data upload
+util_probs_df <- read_csv("pre_util_probs_df.csv")
+ur_util <- read_csv("interim_ur_util.csv")
+train_abx <- read_csv("train_abx.csv")
+urine_df <- read_csv("pos_urines.csv")
+abx_ref <- read_csv("abx_ref_all_combos.csv")
+vitalsign <- read_csv("vitalsign.csv")
+triage <- read_csv("triage.csv")
+edstays <- read_csv("edstays.csv")
+pyxis <- read_csv("pyxis.csv") %>% rename(drug="name")
 
 ###Reference lists
 all_singles <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
-             "MEM","CIP","GEN","SXT","NIT","VAN")
+                 "MEM","CIP","GEN","SXT","NIT","VAN")
+ab_singles <- all_singles
 all_combos <- combn(all_singles, 2, FUN = function(x) paste(x, collapse = "_"))
 all_abs <- c(all_singles,all_combos)
 iv_singles <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
-            "GEN","SXT","VAN")
+                "GEN","SXT","VAN")
+iv_ab_singles <- iv_singles
 iv_combos <- combn(iv_singles, 2, FUN = function(x) paste(x, collapse = "_"))
 all_ivs <- c(iv_singles, iv_combos)
 oral_singles <- c("AMP","SAM","CIP",
-              "SXT","NIT")
+                  "SXT","NIT")
+oral_ab_singles <- oral_singles
 oral_combos <- combn(oral_singles, 2, FUN = function(x) paste(x, collapse = "_"))
 all_orals <- c(oral_singles, oral_combos)
 access_singles <- c("AMP","SAM","GEN",
-                  "SXT","NIT","CZO")
+                    "SXT","NIT","CZO")
 access_combos <- combn(access_singles, 2, FUN = function(x) paste(x, collapse = "_"))
 all_access <- c(access_singles, access_combos)
 watch_singles <- c("CRO","CAZ","FEP","MEM","TZP","CIP","VAN")
 watch_combos <- combn(watch_singles, 2, FUN = function(x) paste(x, collapse = "_"))
 all_watch <- c(watch_singles, watch_combos)
 
-##Descriptive data
-abx %>% distinct(subject_id,.keep_all = T) %>% count(CDI)
+antimicrobial_map <- c(
+  "Ampicillin" = "AMP",
+  "Ampicillin-sulbactam" = "SAM",
+  "Piperacillin-tazobactam" = "TZP",
+  "Cefazolin" = "CZO",
+  "Ceftriaxone" = "CRO",
+  "Ceftazidime" = "CAZ",
+  "Cefepime" = "FEP",
+  "Meropenem" = "MEM",
+  "Ciprofloxacin" = "CIP",
+  "Gentamicin" = "GEN",
+  "Trimethoprim-sulfamethoxazole" = "SXT",
+  "Nitrofurantoin" = "NIT",
+  "Vancomycin" = "VAN"
+)
+map_combinations <- combn(names(antimicrobial_map), 2, simplify = FALSE)
+combined_antimicrobial_map <- c(
+  antimicrobial_map,
+  setNames(
+    lapply(map_combinations, function(x) paste(antimicrobial_map[x], collapse = "_")),
+    sapply(map_combinations, function(x) paste(x, collapse = " & "))
+  )
+)
 
-###Table 1: Patient/specimen characteristics
-yearkey <- pats %>% distinct(subject_id,.keep_all = T) %>% select(subject_id,anchor_year_group)
-agekey <- pats %>% distinct(subject_id,.keep_all = T) %>% select(subject_id,anchor_age) %>% 
-  mutate(standard_age = case_when(
-    anchor_age<30~18,
-    anchor_age>=30&anchor_age<40~30,
-    anchor_age>=40&anchor_age<50~40,
-    anchor_age>=50&anchor_age<60~50,
-    anchor_age>=60&anchor_age<70~60,
-    anchor_age>=70&anchor_age<80~70,
-    anchor_age>=80&anchor_age<90~80,
-    anchor_age>=90~90,
-  )) %>% select(-anchor_age)
-hadmkey <- hadm %>% distinct(subject_id,.keep_all = T) %>% select(subject_id,race,marital_status,language,insurance)
+singles_map <- combined_antimicrobial_map[combined_antimicrobial_map%in%all_singles]
+iv_singles_map <- combined_antimicrobial_map[combined_antimicrobial_map%in%iv_singles]
+oral_singles_map <- combined_antimicrobial_map[combined_antimicrobial_map%in%oral_singles]
 
-urines5_desc %>% tab_mutater("Urine model") %>% print(n=100)
-tab_mutater <- function(df,dataset,patient_level="Y") {
-  
-  supercounter_1 <- function(df) {
-    
-    counter <- function(df,charac) {
-      
-      charac <- enquo(charac)
-      
-      df %>% count(!!charac) %>% arrange(desc(n)) %>% 
-        mutate(Characteristic=names(.)[1],
-               `n (%)`=glue("{n} ({round((n/nrow(df))*100,1)})")) %>% 
-        rename(Subtype = 1) %>% select(-n)
-      
-    }
-    
-    tibble(rbind(
-      df %>% counter(Gender),
-      df %>% counter(Race),
-      df %>% counter(`Age group`),
-      df %>% counter(`Marital status`),
-      df %>% counter(`Language spoken`),
-      df %>% counter(Insurance),
-      df %>% counter(`Year group`),
-      df %>% counter(`Ampicillin result`),
-      df %>% counter(`Ampicillin/sulbactam result`),
-      df %>% counter(`Piperacillin/tazobactam result`),
-      df %>% counter(`Cefazolin result`),
-      df %>% counter(`Ceftriaxone result`),
-      df %>% counter(`Ceftazidime result`),
-      df %>% counter(`Cefepime result`),
-      df %>% counter(`Meropenem result`),
-      df %>% counter(`Ciprofloxacin result`),
-      df %>% counter(`Gentamicin result`),
-      df %>% counter(`Trimethoprim/sulfamethoxazole result`),
-      df %>% counter(`Nitrofurantoin result`),
-      df %>% counter(`Vancomycin result`)
-    )) %>% relocate(Characteristic,.before = "Subtype")
-    
-  }
 
-  supercounter_2 <- function(df) {
-    
-    counter <- function(df,charac) {
-      
-      charac <- enquo(charac)
-      
-      df %>% count(!!charac) %>% arrange(desc(n)) %>% 
-        mutate(Characteristic=names(.)[1],
-               `n (%)`=glue("{n} ({round((n/nrow(df))*100,1)})")) %>% 
-        rename(Subtype = 1) %>% select(-n)
-      
-    }
-    
-    tibble(rbind(
-      df %>% counter(Gender),
-      df %>% counter(Race),
-      df %>% counter(`Age group`),
-      df %>% counter(`Marital status`),
-      df %>% counter(`Language spoken`),
-      df %>% counter(Insurance),
-      df %>% counter(`Year group`),
-      df %>% counter(CDI),
-      df %>% counter(Toxicity)
-    )) %>% relocate(Characteristic,.before = "Subtype")
-    
-  }
-  
-  if (patient_level=="Y") {
-    
-    df <- df
-    
-  } else {
-    
-    df <- df %>% distinct(subject_id,.keep_all = T)
-    
-  }
-  
-  if ("micro_specimen_id" %in% colnames(df)) {
-  
-df1 <- df %>% mutate(
-  Gender = case_when(MALE ~ "M", TRUE~"F"),
-  Race = case_when(
-    grepl("WHITE",race)~"White",
-    grepl("BLACK",race)~"Black",
-    grepl("ASIAN",race)~"Asian",
-    grepl("HISPANIC",race)~"Hispanic",
-    grepl("UNKNOWN",race)~"Unknown",
-    TRUE~"Other"
-  ),
-  `Marital status` = case_when(
-    grepl("^MARRIED$",marital_status)~"Married",
-    TRUE~"Unmarried/unknown"
-  ),
-  `Age group` = case_when(
-    grepl("18",standard_age)~"18-29",
-    grepl("30",standard_age)~"30-39",
-    grepl("40",standard_age)~"40-49",
-    grepl("50",standard_age)~"50-59",
-    grepl("60",standard_age)~"60-69",
-    grepl("70",standard_age)~"70-79",
-    grepl("80",standard_age)~"80-89",
-    grepl("90",standard_age)~"≥ 90",
-  ),
-  `Language spoken`=case_when(
-    grepl("ENGLISH",language)~"English",
-    TRUE~"Other/unknown",
-  ),
-  Insurance = case_when(
-    grepl("(UNKNOWN|Other)",insurance)~"Other/unknown",
-    TRUE~insurance
-  ),
-  `Genus grown`=case_when(grepl("(Raoul|Haf|Staph)",org_genus)~"Other",
-                          TRUE~org_genus),
-  `Ampicillin result`=AMP,
-  `Ampicillin/sulbactam result`=SAM,
-  `Piperacillin/tazobactam result`=TZP,
- `Cefazolin result`=CZO,
- `Ceftriaxone result`=CRO,
- `Ceftazidime result`=CAZ,
- `Cefepime result`=FEP,
- `Meropenem result`=MEM,
- `Ciprofloxacin result`=CIP,
- `Gentamicin result`=GEN,
-  `Trimethoprim/sulfamethoxazole result`=SXT,
- `Nitrofurantoin result`=NIT,
- `Vancomycin result`=VAN
-) %>% left_join(yearkey) %>% 
-  rename(`Year group`="anchor_year_group") %>% 
-  filter(`Year group`!="2020 - 2022") %>% 
-  supercounter_1()
+##Cleaning observations information
+staykey <- edstays %>% select(stay_id,intime) %>% distinct(stay_id,.keep_all = T) %>% 
+  rename(charttime="intime")
+triage <- triage %>% left_join(staykey) %>% relocate(charttime,.before = "temperature") %>% 
+  mutate(chartdate=as.Date(charttime)) %>% select(subject_id,chartdate,acuity) %>% 
+  filter(!is.na(acuity))
 
-  } else {
+ur_util <- ur_util %>% semi_join(triage,by=c("subject_id","chartdate"))
+util_probs_df <- util_probs_df %>% semi_join(ur_util,by="micro_specimen_id")
+ur_util <- ur_util %>% left_join(triage) %>%
+  distinct(micro_specimen_id,.keep_all = T)
+acuitykey <- ur_util %>% select(micro_specimen_id,acuity)
+util_probs_df <- util_probs_df %>% left_join(acuitykey)
+
+pyxis <- MIMER::clean_antibiotics(pyxis,drug_col=drug)
+
+pyxis <- pyxis %>% filter(is_abx) %>% 
+  mutate(chartdate=as.Date(charttime))
+pyxis <- pyxis %>% mutate(abx_name=case_when(grepl("Piperacillin",abx_name)~
+                                               "Piperacillin/tazobactam",
+                                             TRUE~abx_name))
+pyxis <- pyxis %>% semi_join(ur_util,by=c("chartdate","subject_id"))
+
+pyxis <- pyxis %>%
+  mutate(order = match(abx_name, all_singles %>% ab_name())) %>%
+  distinct(subject_id,chartdate,abx_name,.keep_all = T) %>% 
+  arrange(subject_id,chartdate, order) %>%
+  group_by(subject_id,chartdate) %>%
+  summarize(abx_name = str_c(abx_name, collapse = "_"), .groups = "drop") %>% 
+  ungroup() %>% 
+  mutate(abx_name=str_replace_all(abx_name,"/","-"))
+
+ur_util <- ur_util %>% semi_join(pyxis,by=c("subject_id","chartdate"))
+pyxis_key <- pyxis %>% select(abx_name,subject_id) %>% rename(
+  Prescribed_abx = "abx_name"
+)
+ur_util <- ur_util %>% left_join(pyxis_key)
+modified_abx_map <- combined_antimicrobial_map
+names(modified_abx_map) <- str_replace_all(names(modified_abx_map),
+                                           " & ", "_")
+iv_modified_abx_map <- modified_abx_map[modified_abx_map%in%all_ivs]
+oral_modified_abx_map <- modified_abx_map[modified_abx_map%in%all_orals]
+access_modified_abx_map <- modified_abx_map[modified_abx_map%in%all_access]
+
+ur_util <- ur_util %>% filter(Prescribed_abx%in%names(modified_abx_map))
+ur_util <- ur_util %>% mutate(Px_Abx = replace_values(Prescribed_abx,modified_abx_map))
+
+##Write to CSV
+write_csv(util_probs_df,"util_probs_df_pre_util.csv")
+write_csv(ur_util,"ur_util_pre_recs.csv")
+
+##Calculate utilities
+ur_util <- ur_util %>% mutate(acuity=5-acuity) %>% 
+  mutate(acuity=acuity-1)
+util_probs_df <- util_probs_df %>% mutate(acuity=5-acuity) %>% 
+  mutate(acuity=acuity-1) %>%
+  semi_join(ur_util,by="micro_specimen_id")
+
+util_probs_df <- util_probs_df %>% 
+  calculate_utilities(R_weight = 1)
+
+###Filter out combination predictions not present in training dataset
+abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+  str_replace_all("/","-")
+util_probs_df <- util_probs_df %>% filter(Antimicrobial %in% abx_in_train)
+
+###Dataframe for formulary agent sensitivity analysis
+form_util_probs_df <- util_probs_df %>% calculate_utilities(
+  formulary_list = c("Ceftriaxone","Ciprofloxacin"))
+form_util_probs_df <- form_util_probs_df %>% filter(Antimicrobial %in% abx_in_train)
+
+##Utility analysis
+
+###Utility data visualisation
+util_probs_df %>% group_by(Antimicrobial) %>% filter(Antimicrobial%in%names(singles_map)) %>% 
+  summarise(Median_util=median(Rx_utility)) %>% 
+  arrange(desc(Median_util))
+
+formulary_agents <- c()
+util_probs_df %>% utility_plot(Rx_utility,"Treatment")
+util_probs_df %>% utility_plot(Rx_utility,"Treatment", " (single agent)")
+util_probs_df %>% utility_plot(Rx_utility,"Treatment", " (combinations)")
+util_probs_df %>% utility_plot(Urosepsis_Rx_utility,"Intravenous treatment", " (single agent)")
+util_probs_df %>% utility_plot(Urosepsis_Rx_utility,"Intravenous treatment", " (combinations)")
+util_probs_df %>% utility_plot(Outpatient_Rx_utility,"Oral treatment")
+util_probs_df %>% utility_plot(Outpatient_Rx_utility,"Oral treatment", " (single agent)")
+util_probs_df %>% utility_plot(Outpatient_Rx_utility,"Oral treatment", " (combinations)")
+
+##Individual treatment recommendations
+all_abs <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
+             "MEM","CIP","GEN","SXT","NIT","VAN")
+long_allabs <- all_abs %>% ab_name() %>% str_replace("/","-")
+all_combos <- combn(all_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+ab_singles <- names(singles_map)
+iv_ab_singles <- names(iv_singles_map)
+oral_ab_singles <- names(oral_singles_map)
+
+##Overall
+ur_util <- ur_util %>% assign_PDRx(util_probs_df,"PDRx_") %>% 
+  mutate(across(starts_with("PDRx_"), ~ replace_values(., combined_antimicrobial_map)))
+
+##IV
+ur_util <- ur_util %>% assign_Intravenous(util_probs_df,"Intravenous_") %>% 
+  mutate(across(starts_with("Intravenous_"), ~ replace_values(., combined_antimicrobial_map)))
+
+###Oral
+ur_util <- ur_util %>% assign_Oral(util_probs_df,"Oral_") %>% 
+  mutate(across(starts_with("Oral_"), ~ replace_values(., combined_antimicrobial_map)))
+
+###Standard panel treatment & AST recommendations
+ur_util <- ur_util %>% assign_standard_AST("NIT","SXT","CIP","TZP","GEN","CRO")
+
+ur_util <- ur_util %>% mutate(STANDARD_IV_1="TZP",
+                  STANDARD_IV_2="MEM",
+                  STANDARD_PO_1="NIT",
+                  STANDARD_PO_2="SXT")
+
+##Microsimulation analysis
+ur_util <- ur_util %>%
+  rowwise() %>%
+  mutate(PDIVRx_1_result = get(Intravenous_1),
+         PDIVRx_2_result = get(Intravenous_2),
+         PDPORx_1_result = get(Oral_1),
+         PDPORx_2_result = get(Oral_2),
+         PDRx_1_result = get(PDRx_1),
+         PDRx_2_result = get(PDRx_2),
+         STIVRx_1_result = get(STANDARD_IV_1),
+         STIVRx_2_result = get(STANDARD_IV_2),
+         STPORx_1_result = get(STANDARD_PO_1),
+         STPORx_2_result = get(STANDARD_PO_2),
+         Px_Abx_result = get(Px_Abx)) %>%
+  ungroup()
+
+##Write to CSVs
+write_csv(util_probs_df,"util_probs_df_final.csv")
+write_csv(ur_util,"ur_util_final.csv")
+
+###Significance tests
+n_all <- c(nrow(ur_util), nrow(ur_util))
+
+###All antibiotics
+x_all <- c(nrow(ur_util %>% filter((PDRx_1_result=="S"|PDRx_1_result=="I"))), nrow(ur_util %>% filter((Px_Abx_result=="S"|Px_Abx_result=="I"))))
+perc_all1 <- round(prop.test(x_all, n_all)$estimate[1], 3)
+perc_all2 <- round(prop.test(x_all, n_all)$estimate[2], 3)
+p2_all <- round(prop.test(x_all, n_all)$p.value, 3)
+ci1_all <- round(prop.test(x_all, n_all)$conf.int[1], 3)
+ci2_all <- round(prop.test(x_all, n_all)$conf.int[2], 3)
+glue("Automated recommendation proportion overall: {perc_all1}
+      Actual prescriptions proportion overall: {perc_all2}
+      P value: {p2_all}
+      95% CI of difference: {ci1_all} to {ci2_all}")
+
+##Access antibiotics
+x_acs <- c(nrow(ur_util %>% filter((PDRx_1_result=="S"|PDRx_1_result=="I")&PDRx_1%in%access_singles)), nrow(ur_util %>% filter((Px_Abx_result=="S"|Px_Abx_result=="I")&Px_Abx%in%access_modified_abx_map)))
+perc_acs1 <- round(prop.test(x_acs, n_all)$estimate[1], 3)
+perc_acs2 <- round(prop.test(x_acs, n_all)$estimate[2], 3)
+p2_acs <- round(prop.test(x_acs, n_all)$p.value, 3)
+ci1_acs <- round(prop.test(x_acs, n_all)$conf.int[1], 3)
+ci2_acs <- round(prop.test(x_acs, n_all)$conf.int[2], 3)
+glue("Automated recommendation proportion Access: {perc_acs1}
+      Actual prescriptions proportion Access: {perc_acs2}
+      P value: {p2_acs}
+      95% CI of difference: {ci1_acs} to {ci2_acs}")
+
+###Oral antibiotics
+x_orals <- c(nrow(ur_util %>% filter((PDRx_1_result=="S"|PDRx_1_result=="I")&PDRx_1%in%oral_singles)), nrow(ur_util %>% filter((Px_Abx_result=="S"|Px_Abx_result=="I")&Px_Abx%in%oral_modified_abx_map)))
+perc_orals1 <- round(prop.test(x_orals, n_all)$estimate[1], 3)
+perc_orals2 <- round(prop.test(x_orals, n_all)$estimate[2], 3)
+p2_orals <- round(prop.test(x_orals, n_all)$p.value, 3)
+ci1_orals <- round(prop.test(x_orals, n_all)$conf.int[1], 3)
+ci2_orals <- round(prop.test(x_orals, n_all)$conf.int[2], 3)
+glue("Automated recommendation proportion orals: {perc_orals1}
+      Actual prescriptions proportion orals: {perc_orals2}
+      P value: {p2_orals}
+      95% CI of difference: {ci1_orals} to {ci2_orals}")
+
+###IV antibiotics
+x_ivs <- c(nrow(ur_util %>% filter((PDRx_1_result=="S"|PDRx_1_result=="I")&PDRx_1%in%iv_singles)), nrow(ur_util %>% filter((Px_Abx_result=="S"|Px_Abx_result=="I")&Px_Abx%in%iv_modified_abx_map)))
+perc_ivs1 <- round(prop.test(x_ivs, n_all)$estimate[1], 3)
+perc_ivs2 <- round(prop.test(x_ivs, n_all)$estimate[2], 3)
+p2_ivs <- round(prop.test(x_ivs, n_all)$p.value, 3)
+ci1_ivs <- round(prop.test(x_ivs, n_all)$conf.int[1], 3)
+ci2_ivs <- round(prop.test(x_ivs, n_all)$conf.int[2], 3)
+glue("Automated recommendation proportion IVs: {perc_ivs1}
+      Actual prescriptions proportion IVs: {perc_ivs2}
+      P value: {p2_ivs}
+      95% CI of difference: {ci1_ivs} to {ci2_ivs}")
+
+###Illness severity sensitivity analysis
+iv_perclist <- c()
+po_perclist <- c()
+overall_perclist <- c()
+ivac_list <- c()
+poac_list <- c()
+ovac_list <- c()
+ovor_list <- c()
+oviv_list <- c()
+pdrx1_list <- data.frame(PDRx_1=as.ab(ab_singles))
+percs_list <- data.frame(PDRx_1=as.ab(ab_singles))
+
+iv_perclist_2 <- c()
+po_perclist_2 <- c()
+overall_perclist_2 <- c()
+ivac_list_2 <- c()
+poac_list_2 <- c()
+ovac_list_2 <- c()
+ovor_list_2 <- c()
+oviv_list_2 <- c()
+pdrx1_list_2 <- data.frame(PDRx_2=as.ab(ab_singles))
+percs_list_2 <- data.frame(PDRx_2=as.ab(ab_singles))
+
+cam <- combined_antimicrobial_map %>% unlist()
+names(cam) <- NULL
+overall_perclist_px_abx <- c()
+ovac_list_px_abx <- c()
+ovor_list_px_abx <- c()
+oviv_list_px_abx <- c()
+pdrx1_list_px_abx <- data.frame(Px_Abx=cam)
+percs_list_px_abx <- data.frame(Px_Abx=cam)
+weightseq <- seq(0,3)
+
+cdi_medlist <- c()
+cdi_q1list <- c()
+cdi_q3list <- c()
+tox_medlist <- c()
+tox_q1list <- c()
+tox_q3list <- c()
+cost_medlist <- c()
+cost_q1list <- c()
+cost_q3list <- c()
+cdi_medlist_2 <- c()
+cdi_q1list_2 <- c()
+cdi_q3list_2 <- c()
+tox_medlist_2 <- c()
+tox_q1list_2 <- c()
+tox_q3list_2 <- c()
+cost_medlist_2 <- c()
+cost_q1list_2 <- c()
+cost_q3list_2 <- c()
+cdi_medlist_px_abx <- c()
+cdi_q1list_px_abx <- c()
+cdi_q3list_px_abx <- c()
+tox_medlist_px_abx <- c()
+tox_q1list_px_abx <- c()
+tox_q3list_px_abx <- c()
+cost_medlist_px_abx <- c()
+cost_q1list_px_abx <- c()
+cost_q3list_px_abx <- c()
+
+combined_antimicrobial_map
+
+for(weight in seq_along(weightseq)) {
   
-    df1 <- df %>% left_join(hadmkey) %>% left_join(agekey) %>% 
-      mutate(
-      Gender = case_when(MALE ~ "M", TRUE~"F"),
-      Race = case_when(
-        grepl("WHITE",race)~"White",
-        grepl("BLACK",race)~"Black",
-        grepl("ASIAN",race)~"Asian",
-        grepl("HISPANIC",race)~"Hispanic",
-        grepl("UNKNOWN",race)~"Unknown",
-        TRUE~"Other"
-      ),
-      `Marital status` = case_when(
-        grepl("^MARRIED$",marital_status)~"Married",
-        TRUE~"Unmarried/unknown"
-      ),
-      `Age group` = case_when(
-        grepl("18",standard_age)~"18-29",
-        grepl("30",standard_age)~"30-39",
-        grepl("40",standard_age)~"40-49",
-        grepl("50",standard_age)~"50-59",
-        grepl("60",standard_age)~"60-69",
-        grepl("70",standard_age)~"70-79",
-        grepl("80",standard_age)~"80-89",
-        grepl("90",standard_age)~"≥ 90",
-      ),
-      `Language spoken`=case_when(
-        grepl("ENGLISH",language)~"English",
-        TRUE~"Other/unknown",
-      ),
-      Insurance = case_when(
-        grepl("(UNKNOWN|Other)",insurance)~"Other/unknown",
-        TRUE~insurance
-      ),
-      CDI = case_when(CDI~"CDI",TRUE~NA),
-      Toxicity = case_when(overall_tox~"Toxicity",
-                           TRUE~NA)
-    ) %>% left_join(yearkey) %>% 
-      rename(`Year group`="anchor_year_group") %>% 
-      filter(`Year group`!="2020 - 2022") %>% 
-      supercounter_2() %>% filter(!is.na(Subtype)) %>% 
-      mutate(Characteristic=case_when(grepl("(CDI|Toxicity)",Characteristic)~"Antibiotic outcome",
-                                      TRUE~Characteristic)
-             )
-    
+  result_checker(ur_util,util_probs_df,weightseq[weight])
+  
+  iv_perclist <- c(iv_perclist,iv_perc)
+  po_perclist <- c(po_perclist,po_perc)
+  overall_perclist <- c(overall_perclist,overall_perc)
+  ivac_list <- c(ivac_list,iv_s_access)
+  poac_list <- c(poac_list,po_s_access)
+  ovac_list <- c(ovac_list,overall_s_access)
+  ovor_list <- c(ovor_list,overall_s_oral)
+  oviv_list <- c(oviv_list,overall_s_iv)
+  pdrx1_list <- pdrx1_list %>% left_join(abrx1_df,by="PDRx_1")
+  colnames(pdrx1_list)[weightseq[weight]+2] <- weightseq[weight]
+  percs_list <- percs_list %>% left_join(abrx1_percs,by="PDRx_1")
+  colnames(percs_list)[weightseq[weight]+2] <- weightseq[weight]
+  
+  iv_perclist_2 <- c(iv_perclist_2,iv_perc_2)
+  po_perclist_2 <- c(po_perclist_2,po_perc_2)
+  overall_perclist_2 <- c(overall_perclist_2,overall_perc_2)
+  ivac_list_2 <- c(ivac_list_2,iv_s_access_2)
+  poac_list_2 <- c(poac_list_2,po_s_access_2)
+  ovac_list_2 <- c(ovac_list_2,overall_s_access_2)
+  ovor_list_2 <- c(ovor_list_2,overall_s_oral_2)
+  oviv_list_2 <- c(oviv_list_2,overall_s_iv_2)
+  pdrx1_list_2 <- pdrx1_list_2 %>% left_join(abrx1_df_2,by="PDRx_2")
+  colnames(pdrx1_list_2)[weightseq[weight]+2] <- weightseq[weight]
+  percs_list_2 <- percs_list_2 %>% left_join(abrx1_percs_2,by="PDRx_2")
+  colnames(percs_list_2)[weightseq[weight]+2] <- weightseq[weight]
+  
+  overall_perclist_px_abx <- c(overall_perclist_px_abx,overall_perc_px_abx)
+  ovac_list_px_abx <- c(ovac_list_px_abx,overall_s_access_px_abx)
+  ovor_list_px_abx <- c(ovor_list_px_abx,overall_s_oral_px_abx)
+  oviv_list_px_abx <- c(oviv_list_px_abx,overall_s_iv_px_abx)
+  pdrx1_list_px_abx <- pdrx1_list_px_abx %>% left_join(abrx1_df_px_abx,by="Px_Abx")
+  colnames(pdrx1_list_px_abx)[weightseq[weight]+2] <- weightseq[weight]
+  percs_list_px_abx <- percs_list_px_abx %>% left_join(abrx1_percs_px_abx,by="Px_Abx")
+  colnames(percs_list_px_abx)[weightseq[weight]+2] <- weightseq[weight]
+  
+  cdi_medlist <- c(cdi_medlist,median_CDI)
+  cdi_q1list <- c(cdi_q1list,Q1_CDI)
+  cdi_q3list <- c(cdi_q3list,Q3_CDI)
+  tox_medlist <- c(tox_medlist,median_tox)
+  tox_q1list <- c(tox_q1list,Q1_tox)
+  tox_q3list <- c(tox_q3list,Q3_tox)
+  cost_medlist <- c(cost_medlist,median_cost)
+  cost_q1list <- c(cost_q1list,Q1_cost)
+  cost_q3list <- c(cost_q3list,Q3_cost)
+  
+  cdi_medlist_2 <- c(cdi_medlist_2,median_CDI_2)
+  cdi_q1list_2 <- c(cdi_q1list_2,Q1_CDI_2)
+  cdi_q3list_2 <- c(cdi_q3list_2,Q3_CDI_2)
+  tox_medlist_2 <- c(tox_medlist_2,median_tox_2)
+  tox_q1list_2 <- c(tox_q1list_2,Q1_tox_2)
+  tox_q3list_2 <- c(tox_q3list_2,Q3_tox_2)
+  cost_medlist_2 <- c(cost_medlist_2,median_cost_2)
+  cost_q1list_2 <- c(cost_q1list_2,Q1_cost_2)
+  cost_q3list_2 <- c(cost_q3list_2,Q3_cost_2)
+  
+  cdi_medlist_px_abx <- c(cdi_medlist_px_abx,median_CDI_px_abx)
+  cdi_q1list_px_abx <- c(cdi_q1list_px_abx,Q1_CDI_px_abx)
+  cdi_q3list_px_abx <- c(cdi_q3list_px_abx,Q3_CDI_px_abx)
+  tox_medlist_px_abx <- c(tox_medlist_px_abx,median_tox_px_abx)
+  tox_q1list_px_abx <- c(tox_q1list_px_abx,Q1_tox_px_abx)
+  tox_q3list_px_abx <- c(tox_q3list_px_abx,Q3_tox_px_abx)
+  cost_medlist_px_abx <- c(cost_medlist_px_abx,median_cost_px_abx)
+  cost_q1list_px_abx <- c(cost_q1list_px_abx,Q1_cost_px_abx)
+  cost_q3list_px_abx <- c(cost_q3list_px_abx,Q3_cost_px_abx)
+  
 }
 
-colnames(df1)[3] <- glue("{dataset} {colnames(df1)[3]}")
+iv_perclist <- iv_perclist %>% label_binder("All agents")
+po_perclist <- po_perclist %>% label_binder("All agents")
+overall_perclist <- overall_perclist %>% label_binder("All agents")
+ivac_list <- ivac_list %>% label_binder("Access agents")
+poac_list <- poac_list %>% label_binder("Access agents")
+ovac_list <- ovac_list %>% label_binder("Access agents")
+ovor_list <- ovor_list %>% label_binder("Oral agents")
+oviv_list <- oviv_list %>% label_binder("IV agents")
+iv_perclist <- iv_perclist %>% rename(Percentage = "vec")
+po_perclist <- po_perclist %>% rename(Percentage = "vec")
+overall_perclist <- overall_perclist %>% rename(Percentage = "vec")
+ivac_list <- ivac_list %>% rename(Percentage = "vec")
+poac_list <- poac_list %>% rename(Percentage = "vec")
+ovac_list <- ovac_list %>% rename(Percentage = "vec")
+ovor_list <- ovor_list %>% rename(Percentage = "vec")
+oviv_list <- oviv_list %>% rename(Percentage = "vec")
 
-return(df1)
+iv_perclist_2 <- iv_perclist_2 %>% label_binder("All agents")
+po_perclist_2 <- po_perclist_2 %>% label_binder("All agents")
+overall_perclist_2 <- overall_perclist_2 %>% label_binder("All agents")
+ivac_list_2 <- ivac_list_2 %>% label_binder("Access agents")
+poac_list_2 <- poac_list_2 %>% label_binder("Access agents")
+ovac_list_2 <- ovac_list_2 %>% label_binder("Access agents")
+ovor_list_2 <- ovor_list_2 %>% label_binder("Oral agents")
+oviv_list_2 <- oviv_list_2 %>% label_binder("IV agents")
+iv_perclist_2 <- iv_perclist_2 %>% rename(Percentage = "vec")
+po_perclist_2 <- po_perclist_2 %>% rename(Percentage = "vec")
+overall_perclist_2 <- overall_perclist_2 %>% rename(Percentage = "vec")
+ivac_list_2 <- ivac_list_2 %>% rename(Percentage = "vec")
+poac_list_2 <- poac_list_2 %>% rename(Percentage = "vec")
+ovac_list_2 <- ovac_list_2 %>% rename(Percentage = "vec")
+ovor_list_2 <- ovor_list_2 %>% rename(Percentage = "vec")
+oviv_list_2 <- oviv_list_2 %>% rename(Percentage = "vec")
 
-}
+overall_perclist_px_abx <- overall_perclist_px_abx %>% label_binder("All agents")
+ovac_list_px_abx <- ovac_list_px_abx %>% label_binder("Access agents")
+ovor_list_px_abx <- ovor_list_px_abx %>% label_binder("Oral agents")
+oviv_list_px_abx <- oviv_list_px_abx %>% label_binder("IV agents")
+overall_perclist_px_abx <- overall_perclist_px_abx %>% rename(Percentage = "vec")
+ovac_list_px_abx <- ovac_list_px_abx %>% rename(Percentage = "vec")
+ovor_list_px_abx <- ovor_list_px_abx %>% rename(Percentage = "vec")
+oviv_list_px_abx <- oviv_list_px_abx %>% rename(Percentage = "vec")
 
-desc_tab <-  abx %>% tab_mutater("Prescription model","N") %>% 
-  full_join(urines5_desc %>% tab_mutater("Urine model")) %>% 
-  left_join(ur_util %>% tab_mutater("Urine microsimulation"))
-totals <- list("Total","Patients",
-               glue("{as.character(nrow(abx %>% distinct(subject_id)))} (100)"),
-               glue("{as.character(nrow(urines5_desc))} (100)"),
-               glue("{as.character(nrow(ur_util))} (100)")
-            )
-desc_tab[nrow(desc_tab)+1,] <- totals
-desc_tab <- desc_tab %>% mutate(Characteristic=case_when(
-  Characteristic==lag(Characteristic)~"",
-  TRUE~Characteristic
+iv_xg_plot_df <- data.frame(rbind(
+  iv_perclist,ivac_list
+))
+po_xg_plot_df <- data.frame(rbind(
+  po_perclist,poac_list
+))
+overall_xg_plot_df <- data.frame(rbind(
+  overall_perclist,ovac_list,ovor_list,oviv_list
 ))
 
-write_csv(desc_tab,"uf_desctab.csv")
+overall_xg_plot_df_2 <- data.frame(rbind(
+  overall_perclist_2,ovac_list_2,ovor_list_2,oviv_list_2
+))
 
-###Table 2: Prescription characteristics
+overall_xg_plot_df_px_abx <- data.frame(rbind(
+  overall_perclist_px_abx,ovac_list_px_abx,ovor_list_px_abx,oviv_list_px_abx
+))
 
-ab_tab <- abx %>% mutate(abx_name=str_replace_all(abx_name,"_"," & ")) %>% count(abx_name) %>% 
-  arrange(desc(n)) %>% mutate(abx_name=case_when(
-    n/nrow(abx)<0.0025~"Other",TRUE~abx_name
-  )) %>% group_by(abx_name) %>%
-  summarise(n=sum(n)) %>% ungroup() %>% print(n=100) %>% 
-  arrange(desc(n)) %>% 
-  mutate(n=glue("{n} ({round((n/nrow(abx))*100,1)})")) %>%
-  rename(`n (%)`="n",`Antibiotic(s)`="abx_name")
+###Recommendations (1st line)
+pdrx1_list[is.na(pdrx1_list)] <- 0
+percs_list[is.na(percs_list)] <- 0
+pdrx1_df <- percs_list %>% filter(rowSums(select(.,2:ncol(percs_list)))!=0)
+pdrx1_df <- melt(pdrx1_df)
+colnames(pdrx1_df) <- c("Antimicrobial","Illness severity","Percentage of first-line recommendations")
+pdrx1_df <- pdrx1_df %>% mutate(Antimicrobial = ab_name(Antimicrobial))
 
-write_csv(ab_tab,"ab_tab.csv")
+write_csv(pdrx1_df,"abplot_df.csv")
+
+abplot <- ggplot(pdrx1_df,aes(x=`Illness severity`,y=`Percentage of first-line recommendations`,group=Antimicrobial,colour=Antimicrobial))+
+  geom_line()+
+  theme_minimal()+
+  theme(panel.grid = element_blank())+
+  ggtitle("First-line automated recommendations according to illness severity")+
+  scale_x_discrete(breaks = seq(0,3))+
+  ylim(0,100)
+abplot
+ggsave(glue("illness_abplot.pdf"), plot = abplot, device = "pdf", width = 10, height = 5,
+       path="/Users/alexhoward/Documents/Projects/UDAST_code")
+
+###Recommendations (2nd line)
+pdrx1_list_2[is.na(pdrx1_list_2)] <- 0
+percs_list_2[is.na(percs_list_2)] <- 0
+pdrx1_df_2 <- percs_list_2 %>% filter(rowSums(select(.,2:ncol(percs_list_2)))!=0)
+pdrx1_df_2 <- melt(pdrx1_df_2)
+colnames(pdrx1_df_2) <- c("Antimicrobial","Illness severity","Percentage of first-line recommendations")
+pdrx1_df_2 <- pdrx1_df_2 %>% mutate(Antimicrobial = ab_name(Antimicrobial))
+
+write_csv(pdrx1_df_2,"abplot_df_2.csv")
+
+abplot_2 <- ggplot(pdrx1_df_2,aes(x=`Illness severity`,y=`Percentage of first-line recommendations`,group=Antimicrobial,colour=Antimicrobial))+
+  geom_line()+
+  theme_minimal()+
+  theme(panel.grid = element_blank())+
+  ggtitle("Second-line automated recommendations according to illness severity")+
+  scale_x_discrete(breaks = seq(0,3))+
+  ylim(0,100)
+abplot_2
+ggsave(glue("illness_abplot_2.pdf"), plot = abplot_2, device = "pdf", width = 10, height = 5,
+       path="/Users/alexhoward/Documents/Projects/UDAST_code")
+
+###Actually prescribed
+pdrx1_list_px_abx[is.na(pdrx1_list_px_abx)] <- 0
+percs_list_px_abx[is.na(percs_list_px_abx)] <- 0
+pdrx1_df_px_abx <- percs_list_px_abx %>% filter(rowSums(select(.,2:ncol(percs_list_px_abx)))!=0)
+pdrx1_df_px_abx <- melt(pdrx1_df_px_abx)
+colnames(pdrx1_df_px_abx) <- c("Antimicrobial","Illness severity","Percentage of first-line recommendations")
+pdrx1_df_px_abx <- pdrx1_df_px_abx %>% mutate(Antimicrobial=
+                                                reverse_values(Antimicrobial,
+                                                               combined_antimicrobial_map)) %>% 
+  mutate(Antimicrobial=str_replace_all(Antimicrobial,"-","/"))
+
+write_csv(pdrx1_df_px_abx,"abplot_df_px_abx.csv")
+
+abplot_px_abx <- ggplot(pdrx1_df_px_abx,aes(x=`Illness severity`,y=`Percentage of first-line recommendations`,group=Antimicrobial,colour=Antimicrobial))+
+  geom_line()+
+  theme_minimal()+
+  theme(panel.grid = element_blank())+
+  ggtitle("Antibiotics actually prescribed according to illness severity")+
+  scale_x_discrete(breaks = seq(0,3))+
+  ylim(0,100)
+
+ggsave(glue("illness_abplot_px_abx.pdf"), plot = abplot_px_abx, device = "pdf", width = 10, height = 5,
+       path="/Users/alexhoward/Documents/Projects/UDAST_code")
+
+write_csv(iv_xg_plot_df,"iv_xg_plot_df.csv")
+write_csv(po_xg_plot_df,"po_xg_plot_df.csv")
+write_csv(overall_xg_plot_df,"overall_xg_plot_df.csv")
+
+overall_xg_plot_iv <- overall_xg_plot_df %>% filter(!grepl("(access|oral)",Metric,ignore.case=T))
+overall_xg_plot_iv %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Illness severity score",agent_col1=NIT,agent_name1="Nitrofurantoin",
+                                            agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
+                                            suffix="according to illness severity (proportion of antibiotics with an IV option)")
+illplot_1 <- susplot
+overall_xg_plot_oral <- overall_xg_plot_df %>% filter(!grepl("(access|iv)",Metric,ignore.case=T))
+overall_xg_plot_oral %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Illness severity score",agent_col1=NIT,agent_name1="Nitrofurantoin",
+                                              agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
+                                              suffix="according to illness severity (proportion of antibiotics with an oral option)")
+illplot_2 <- susplot
+overall_xg_plot_access <- overall_xg_plot_df %>% filter(!grepl("(oral|iv)",Metric,ignore.case=T))
+overall_xg_plot_access %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Illness severity score",agent_col1=NIT,agent_name1="Nitrofurantoin",
+                                                agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
+                                                suffix="according to illness severity (proportion of WHO Access agents)")
+illplot_3 <- susplot
+
+###2nd line coverage
+write_csv(overall_xg_plot_df_2,"overall_xg_plot_df_2.csv")
+
+overall_xg_plot_iv_2 <- overall_xg_plot_df_2 %>% filter(!grepl("(access|oral)",Metric,ignore.case=T))
+overall_xg_plot_iv_2 %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Illness severity score",agent_col1=NIT,agent_name1="Nitrofurantoin",
+                                            agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
+                                            suffix="according to illness severity (proportion of 2nd-line antibiotics with an IV option)")
+overall_xg_plot_oral_2 <- overall_xg_plot_df_2 %>% filter(!grepl("(access|iv)",Metric,ignore.case=T))
+overall_xg_plot_oral_2 %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Illness severity score",agent_col1=NIT,agent_name1="Nitrofurantoin",
+                                              agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
+                                              suffix="according to illness severity (proportion of 2nd-line antibiotics with an oral option)")
+overall_xg_plot_access_2 <- overall_xg_plot_df_2 %>% filter(!grepl("(oral|iv)",Metric,ignore.case=T))
+overall_xg_plot_access_2 %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Illness severity score",agent_col1=NIT,agent_name1="Nitrofurantoin",
+                                                agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
+                                                suffix="according to illness severity (proportion of 2nd-line WHO Access agents)")
+
+###Prescribed abx coverage
+write_csv(overall_xg_plot_df_px_abx,"overall_xg_plot_df_px_abx.csv")
+
+overall_xg_plot_iv_px_abx <- overall_xg_plot_df_px_abx %>% filter(!grepl("(access|oral)",Metric,ignore.case=T))
+overall_xg_plot_iv_px_abx %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Illness severity score",agent_col1=NIT,agent_name1="Nitrofurantoin",
+                                            agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
+                                            suffix="actual prescriptions according to illness severity (proportion of antibiotics with an IV option)")
+illplot_4 <- susplot
+overall_xg_plot_oral_px_abx <- overall_xg_plot_df_px_abx %>% filter(!grepl("(access|iv)",Metric,ignore.case=T))
+overall_xg_plot_oral_px_abx %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Illness severity score",agent_col1=NIT,agent_name1="Nitrofurantoin",
+                                              agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
+                                              suffix="actual prescriptions according to illness severity (proportion of antibiotics with an oral option)")
+illplot_5 <- susplot
+overall_xg_plot_access_px_abx <- overall_xg_plot_df_px_abx %>% filter(!grepl("(oral|iv)",Metric,ignore.case=T))
+overall_xg_plot_access_px_abx %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Illness severity score",agent_col1=NIT,agent_name1="Nitrofurantoin",
+                                                agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
+                                                suffix="actual prescriptions according to illness severity (proportion of WHO Access agents)")
+
+##CDI, toxicity, and cost
+
+###First-lines
+cdi_df <- data.frame(
+  illness_severity = weightseq,
+  med=cdi_medlist,
+  q1=cdi_q1list,
+  q3=cdi_q3list
+)
+tox_df <- data.frame(
+  illness_severity = weightseq,
+  med=tox_medlist,
+  q1=tox_q1list,
+  q3=tox_q3list
+)
+cost_df <- data.frame(
+  illness_severity = weightseq,
+  med=cost_medlist,
+  q1=cost_q1list,
+  q3=cost_q3list
+)
+
+cdiplot <- ggplot(cdi_df, aes(x = illness_severity)) +
+  geom_line(aes(y = as.numeric(med))) +
+  geom_ribbon(aes(y = as.numeric(med),
+                  ymin = as.numeric(q1),
+                  ymax = as.numeric(q3)), alpha = 0.3) +
+  ggtitle(glue("Effect of varying illness severity on median predicted CDI probability of recommended agent")) +
+  xlab(glue("Illness severity")) +
+  ylab(glue("Median predicted probability of CDI")) +
+  theme_minimal()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_blank())
+
+ggsave(glue("cdiplot.pdf"), plot = cdiplot, device = "pdf", width = 8, height = 4,
+       path="/Users/alexhoward/Documents/Projects/UDAST_code")
+
+toxplot <- ggplot(tox_df, aes(x = illness_severity)) +
+  geom_line(aes(y = as.numeric(med))) +
+  geom_ribbon(aes(y = as.numeric(med),
+                  ymin = as.numeric(q1),
+                  ymax = as.numeric(q3)), alpha = 0.3) +
+  ggtitle(glue("Effect of varying illness severity on median predicted toxicity probability of recommended agent")) +
+  xlab(glue("Illness severity")) +
+  ylab(glue("Median predicted probability of toxicity")) +
+  theme_minimal()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_blank())
+
+ggsave(glue("toxplot.pdf"), plot = toxplot, device = "pdf", width = 8, height = 4,
+       path="/Users/alexhoward/Documents/Projects/UDAST_code")
+
+costplot <- ggplot(cost_df, aes(x = illness_severity)) +
+  geom_line(aes(y = as.numeric(med))) +
+  geom_ribbon(aes(y = as.numeric(med),
+                  ymin = as.numeric(q1),
+                  ymax = as.numeric(q3)), alpha = 0.3) +
+  ggtitle(glue("Effect of varying illness severity on median cost of recommended agents")) +
+  xlab(glue("Illness severity")) +
+  ylab(glue("Median minimum agent cost (USD)")) +
+  theme_minimal()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_blank())
+
+ggsave(glue("costplot.pdf"), plot = costplot, device = "pdf", width = 8, height = 4,
+       path="/Users/alexhoward/Documents/Projects/UDAST_code")
+
+write_csv(cdi_df,"cdi_df.csv")
+write_csv(tox_df,"tox_df.csv")
+write_csv(cost_df,"cost_df.csv")
+
+###Second-lines
+cdi_df_2 <- data.frame(
+  illness_severity = weightseq,
+  med=cdi_medlist_2,
+  q1=cdi_q1list_2,
+  q3=cdi_q3list_2
+)
+tox_df_2 <- data.frame(
+  illness_severity = weightseq,
+  med=tox_medlist_2,
+  q1=tox_q1list_2,
+  q3=tox_q3list_2
+)
+cost_df_2 <- data.frame(
+  illness_severity = weightseq,
+  med=cost_medlist_2,
+  q1=cost_q1list_2,
+  q3=cost_q3list_2
+)
+
+cdiplot_2 <- ggplot(cdi_df_2, aes(x = illness_severity)) +
+  geom_line(aes(y = as.numeric(med))) +
+  geom_ribbon(aes(y = as.numeric(med),
+                  ymin = as.numeric(q1),
+                  ymax = as.numeric(q3)), alpha = 0.3) +
+  ggtitle(glue("Effect of varying illness severity on median predicted CDI probability of recommended agent")) +
+  xlab(glue("Illness severity")) +
+  ylab(glue("Median predicted probability of CDI")) +
+  theme_minimal()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_blank())
+
+ggsave(glue("cdiplot_2.pdf"), plot = cdiplot_2, device = "pdf", width = 8, height = 4,
+       path="/Users/alexhoward/Documents/Projects/UDAST_code")
+
+toxplot_2 <- ggplot(tox_df_2, aes(x = illness_severity)) +
+  geom_line(aes(y = as.numeric(med))) +
+  geom_ribbon(aes(y = as.numeric(med),
+                  ymin = as.numeric(q1),
+                  ymax = as.numeric(q3)), alpha = 0.3) +
+  ggtitle(glue("Effect of varying illness severity on median predicted toxicity probability of recommended agent")) +
+  xlab(glue("Illness severity")) +
+  ylab(glue("Median predicted probability of toxicity")) +
+  theme_minimal()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_blank())
+
+ggsave(glue("toxplot.pdf_2"), plot = toxplot_2, device = "pdf", width = 8, height = 4,
+       path="/Users/alexhoward/Documents/Projects/UDAST_code")
+
+costplot_2 <- ggplot(cost_df_2, aes(x = illness_severity)) +
+  geom_line(aes(y = as.numeric(med))) +
+  geom_ribbon(aes(y = as.numeric(med),
+                  ymin = as.numeric(q1),
+                  ymax = as.numeric(q3)), alpha = 0.3) +
+  ggtitle(glue("Effect of varying illness severity on median cost of recommended agents")) +
+  xlab(glue("Illness severity")) +
+  ylab(glue("Median minimum agent cost (USD)")) +
+  theme_minimal()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_blank())
+
+ggsave(glue("costplot_2.pdf"), plot = costplot_2, device = "pdf", width = 8, height = 4,
+       path="/Users/alexhoward/Documents/Projects/UDAST_code")
+
+write_csv(cdi_df_2,"cdi_df_2.csv")
+write_csv(tox_df_2,"tox_df_2.csv")
+write_csv(cost_df_2,"cost_df_2.csv")
+
+###Actual
+cdi_df_px_abx <- data.frame(
+  illness_severity = weightseq,
+  med=cdi_medlist_px_abx,
+  q1=cdi_q1list_px_abx,
+  q3=cdi_q3list_px_abx
+)
+tox_df_px_abx <- data.frame(
+  illness_severity = weightseq,
+  med=tox_medlist_px_abx,
+  q1=tox_q1list_px_abx,
+  q3=tox_q3list_px_abx
+)
+cost_df_px_abx <- data.frame(
+  illness_severity = weightseq,
+  med=cost_medlist_px_abx,
+  q1=cost_q1list_px_abx,
+  q3=cost_q3list_px_abx
+)
+
+cdiplot_px_abx <- ggplot(cdi_df_px_abx, aes(x = illness_severity)) +
+  geom_line(aes(y = as.numeric(med))) +
+  geom_ribbon(aes(y = as.numeric(med),
+                  ymin = as.numeric(q1),
+                  ymax = as.numeric(q3)), alpha = 0.3) +
+  ggtitle(glue("Effect of varying illness severity on median predicted CDI probability of recommended agent")) +
+  xlab(glue("Illness severity")) +
+  ylab(glue("Median predicted probability of CDI")) +
+  theme_minimal()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_blank())
+
+ggsave(glue("cdiplot_px_abx.pdf"), plot = cdiplot_px_abx, device = "pdf", width = 8, height = 4,
+       path="/Users/alexhoward/Documents/Projects/UDAST_code")
+
+toxplot_px_abx <- ggplot(tox_df_px_abx, aes(x = illness_severity)) +
+  geom_line(aes(y = as.numeric(med))) +
+  geom_ribbon(aes(y = as.numeric(med),
+                  ymin = as.numeric(q1),
+                  ymax = as.numeric(q3)), alpha = 0.3) +
+  ggtitle(glue("Effect of varying illness severity on median predicted toxicity probability of recommended agent")) +
+  xlab(glue("Illness severity")) +
+  ylab(glue("Median predicted probability of toxicity")) +
+  theme_minimal()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_blank())
+
+ggsave(glue("toxplot.pdf_px_abx"), plot = toxplot_px_abx, device = "pdf", width = 8, height = 4,
+       path="/Users/alexhoward/Documents/Projects/UDAST_code")
+
+costplot_px_abx <- ggplot(cost_df_px_abx, aes(x = illness_severity)) +
+  geom_line(aes(y = as.numeric(med))) +
+  geom_ribbon(aes(y = as.numeric(med),
+                  ymin = as.numeric(q1),
+                  ymax = as.numeric(q3)), alpha = 0.3) +
+  ggtitle(glue("Effect of varying illness severity on median cost of recommended agents")) +
+  xlab(glue("Illness severity")) +
+  ylab(glue("Median minimum agent cost (USD)")) +
+  theme_minimal()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_blank())
+
+ggsave(glue("costplot_px_abx.pdf"), plot = costplot_px_abx, device = "pdf", width = 8, height = 4,
+       path="/Users/alexhoward/Documents/Projects/UDAST_code")
+
+write_csv(cdi_df_px_abx,"cdi_df_px_abx.csv")
+write_csv(tox_df_px_abx,"tox_df_px_abx.csv")
+write_csv(cost_df_px_abx,"cost_df_px_abx.csv")
+
 
 ##AST performance analysis - number of results per panel
 
@@ -720,304 +4610,96 @@ write_csv(acs_df,"uf_ast_sourcedata_aware_dotplot.csv")
 main_aware_plot <- acs_df %>% main_dotplotter("PDRx\nall S","Standard\nall S","PDRx\nall Access S","Standard\nall Access S",
                                               "All agents","WHO access agents")
 
-###Dot plot of number of all R results and Access R results per panel
-accessr_aware_plot <- acs_df %>% main_dotplotter("PDAST\nall R","Standard\nall R","PDAST\nall Access R","Standard\nall Access R",
-                                                 "All agents (R)","WHO access agents (R)","(Access agent resistance)")
+###Total number of S or I results provided by personalised panel
+ur_util$n_allS_PDRx6 <- ur_util %>% number_SorI_pdast(all_abs)
 
-##AST performance analysis - number of S results per antimicrobial agent
+###Number of Access category S or I results provided by personalised panel
+access_abs <- all_access
+ur_util$n_acS_PDRx6 <- ur_util %>% number_SorI_pdast(access_abs)
 
-###Count S results per antimicrobial for personalised approach
-pdast_all_singles <- ur_util %>% number_ab_results(PDAST_1,PDAST_6,all_singles,"S","I")
+###Total number of S or I results provided by standard panel
+ur_util$n_allS_standard6 <- ur_util %>% number_SorI_standard(all_abs)
 
-###Count S results per antimicrobial for standard approach
-standard_all_singles <- ur_util %>% number_ab_results(STANDARD_AST_1,STANDARD_AST_6,all_singles,"S","I")
+###Number of Access category S or I results provided by standard panel
+ur_util$n_acS_standard6 <- ur_util %>% number_SorI_standard(access_abs)
 
-###Count R results per antimicrobial for personalised approach
-pdast_all_singles_r <- ur_util %>% number_ab_results(PDAST_1,PDAST_6,all_singles,"R","NT")
+###Significance testing
+p_acs <- round(wilcox.test(ur_util %>% pull(n_acS_PDRx6), ur_util %>% pull(n_acS_standard6), paired = TRUE, conf.int = TRUE)$p.value, 3)
+p_all <- round(wilcox.test(ur_util %>% pull(n_allS_PDRx6), ur_util %>% pull(n_allS_standard6), paired = TRUE, conf.int = TRUE)$p.value, 3)
 
-###Count R results per antimicrobial for standard approach
-standard_all_singles_r <- ur_util %>% number_ab_results(STANDARD_AST_1,STANDARD_AST_6,all_singles,"R","NT")
+z_access <- statistic(wilcoxsign_test(as.formula(paste0(quo_text(ur_util$n_acS_PDRx6), " ~ ", quo_text(ur_util$n_acS_standard6))), data = ur_util), "standardized")[1]
+acs_effectsize <- round(z_access / sqrt(nrow(ur_util)), 3)
 
-###Cleveland dot plot of number of S results per antimicrobial agent
-abs_df <- abs_df_assemble(pdast_all_singles,standard_all_singles)
-write_csv(abs_df,"s_uf_sourcedata_abs_cleveplot.csv")
-s_results_by_ab <- abs_df %>% cleveland_ab_plot("susceptible")
+z_all <- statistic(wilcoxsign_test(as.formula(paste0(quo_text(ur_util$n_allS_PDRx6), " ~ ", quo_text(ur_util$n_allS_standard6))), data = ur_util), "standardized")[1]
+all_effectsize <- round(z_all / sqrt(nrow(ur_util)), 3)
 
-###Join current antimicrobial prescription to urines dataframe
-ab_key <- abx %>% filter(is_abx) %>% 
-  select(subject_id,starttime,stoptime)
-urines_abx <- urines_abx %>% left_join(ab_key,by="subject_id") %>% 
-  mutate(on_ab = case_when(
-    storetime > starttime & storetime < stoptime ~ TRUE,
-    TRUE ~ FALSE )) %>% filter(on_ab)
+glue("All results:
+      Median {median(ur_util$n_allS_PDRx6)} overall S/I results per specimen (IQR {quantile(ur_util$n_allS_PDRx6)[2]} to {quantile(ur_util$n_allS_PDRx6)[4]})
+      Median {median(ur_util$n_allS_standard6)} overall S/I results per specimen (IQR {quantile(ur_util$n_allS_standard6)[2]} to {quantile(ur_util$n_allS_standard6)[4]})
+      p {ifelse(p_all<0.001,'<0.001',p_all)}, effect size {all_effectsize}
+      
+      Access results:
+      Median {median(ur_util$n_acS_PDRx6)} Access S/I results per specimen (IQR {quantile(ur_util$n_acS_PDRx6)[2]} to {quantile(ur_util$n_acS_PDRx6)[4]})
+      Median {median(ur_util$n_acS_standard6)} Access S/I results per specimen (IQR {quantile(ur_util$n_acS_standard6)[2]} to {quantile(ur_util$n_acS_standard6)[4]})
+      p {ifelse(p_acs<0.001,'<0.001',p_acs)}, effect size {acs_effectsize}")
 
-###Convert I to S and NT to R
-urref <- urines_abx %>% select(AMP:VAN)
-urref[urref=="NT"] <- "R"
-urref[urref=="I"] <- "S"
-urines_abx[,18:30] <- urref
+write_csv(util_probs_df,"util_probs_df_manuscript.csv")
+write_csv(ur_util,"ur_util_manuscript.csv")
 
-##Analysis of AST results for the antimicrobial agent the patient is prescribed
+##Sensitivity analysis
 
-###Find prescribed antimicrobial-result matches
-urines_abx <- urines_abx %>% 
-  mutate(on_standard = case_when(as.ab(abx_name)==STANDARD_AST_1 ~ NIT,
-                                 as.ab(abx_name)==STANDARD_AST_2 ~ SXT,
-                                 as.ab(abx_name)==STANDARD_AST_3 ~ CIP,
-                                 as.ab(abx_name)==STANDARD_AST_4 ~ TZP,
-                                 as.ab(abx_name)==STANDARD_AST_5 ~ GEN,
-                                 as.ab(abx_name)==STANDARD_AST_6 ~ CRO,
-                                 TRUE ~ "NT")) %>%
-  rowwise() %>%
-  mutate(on_PDAST = case_when(
-    as.ab(abx_name) == PDAST_1 ~ get(PDAST_1),
-    as.ab(abx_name) == PDAST_2 ~ get(PDAST_2),
-    as.ab(abx_name) == PDAST_3 ~ get(PDAST_3),
-    as.ab(abx_name) == PDAST_4 ~ get(PDAST_4),
-    as.ab(abx_name) == PDAST_5 ~ get(PDAST_5),
-    as.ab(abx_name) == PDAST_6 ~ get(PDAST_6),
-    TRUE ~ "NT"
-  )) %>%
-  ungroup()
+###Stem reference lists
+all_abs <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
+             "MEM","CIP","GEN","SXT","NIT","VAN")
+long_allabs <- all_abs %>% ab_name() %>% str_replace("/","-")
+all_combos <- combn(all_abs, 2, FUN = function(x) paste(x, collapse = "_"))
+all_abs <- c(all_abs, all_combos)
+long_allcombos <- combn(long_allabs, 2, FUN = function(x) paste(x, collapse = "_"))
+long_allabs <- c(long_allabs, long_allcombos)
 
-###Prepare data frame for bar plot
-ablist <- all_singles %>% ab_name() %>% str_replace("-","/")
-urines_abx <- urines_abx %>% filter(abx_name %in% ablist)
-abx_graph1 <- urines_abx %>% count(abx_name,on_standard,on_PDAST) %>% 
-  filter(!(on_standard=="NT" & on_PDAST=="NT")) %>% 
-  mutate(Panel=case_when(on_standard!="NT"~"Standard",TRUE~"PDAST"),
-         Result=case_when(Panel=="PDAST"~on_PDAST,TRUE~on_standard))
-abx_graph2 <- abx_graph1 %>% filter(on_standard!="NT" & on_PDAST!="NT") %>% 
-  mutate(Panel="PDAST",Result=on_PDAST)
-abx_graph <- abx_graph1 %>% rbind(abx_graph2)
-access_abs <- c("AMP","SAM","CZO",
-                "GEN","SXT","NIT")
-watch_abs <- c("TZP","CRO","CAZ",
-               "FEP","MEM","CIP","VAN")
-axiscols <- ifelse(abx_graph %>% group_by(abx_name) %>% 
-                     mutate(n=sum(n)) %>% 
-                     arrange(n) %>% ungroup() %>% 
-                     distinct(abx_name) %>% unlist() %in% ab_name(access_abs),"seagreen",
-                   "darkorange")
-abx_graph$abx_name <- factor(abx_graph$abx_name,
-                             levels=abx_graph %>% group_by(abx_name) %>% 
-                               mutate(n=sum(n)) %>% 
-                               arrange(n) %>% ungroup() %>% 
-                               distinct(abx_name) %>% unlist())
-max_count <- ceiling(abx_graph1 %>% select(-Panel,-Result) %>% 
-                       group_by(abx_name) %>% mutate(n=sum(n)) %>% arrange(desc(n)) %>%
-                       ungroup() %>% dplyr::slice(1) %>% select(n) %>% unlist() /25) * 25
+###Sensitivity analysis varying resistance probabilities
+all_singles <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP","MEM","CIP","GEN","SXT","NIT","VAN") %>% ab_name() %>% 
+  str_replace("/","-")
+rx_dens_sens <- ur_util %>% dens_sens(util_probs_df,Rx_utility)
+rx_dens_sens %>% dens_sens_plot("Treatment")
 
-write_csv(abx_graph,"uf_sourcedata_prescr_abx.csv")
+###Sensitivity analysis varying weighting values of different factors
+uti_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"UTI_specific",-2,2)
+access_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"Access",-2,2)
+oral_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"Oral_option",-2,2)
+iv_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"IV_option",-2,2)
+cdi_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"CDI_highrisk",-2,2)
+tox_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"Toxicity_highrisk",-2,2)
+highcost_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"High_cost",-2,2)
+reserve_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"Reserve",-2,2)
+R_sens_df <- ur_util %>% R_util_sens(util_probs_df,Rx_utility,0,20)
 
-###Data visualisation of antimicrobial-result matches
-abx_prescribed <- ggplot(abx_graph, aes(x = abx_name, y = if_else(Panel == "Standard", -n, n),
-                                        fill = Result,color=Result)) +
-  geom_bar(stat = "identity", width=0.85,position = "stack") +
-  scale_y_continuous(
-    limits = c(-max_count, max_count), 
-    breaks = seq(-max_count, max_count, by = 25), 
-    labels = abs(seq(-max_count, max_count, by = 25)) 
-  ) +
-  coord_flip() +
-  labs(y = "Number of results", x = "Antimicrobial agent prescribed",
-       fill = "Result") +
-  theme_minimal() +
-  theme(axis.text.y = element_text(size = 12), 
-        axis.title.y = element_text(size = 14),
-        axis.title.x = element_text(size = 14),
-        legend.title = element_text(size = 14),
-        legend.text = element_text(size = 12)) +
-  scale_x_discrete(expand = expansion(mult = c(0.1, 0.2))) +
-  geom_hline(yintercept = 0,linetype="solid",color="black") +
-  ggtitle("Results provided for the antimicrobial agent prescribed (inpatients)") +
-  geom_text(x=13.5,y=-100,label="Standard approach",color="#3C3C3C",size=4) +
-  geom_text(x=13.5,y=100,label="Personalised approach",color="#3C3C3C",size=4) +
-  theme(plot.title = element_text(size = 16, margin = margin(b = 20)),
-        panel.grid.minor.y = element_blank(),
-        panel.grid.minor.x = element_blank(),
-        panel.grid.major.x = element_blank(),
-        axis.text.y = element_text(
-          colour = axiscols))
+uti_sens_df %>% util_sens_plot("Treatment","UTI-specificity")
+access_sens_df %>% util_sens_plot("Treatment","Access category")
+oral_sens_df %>% util_sens_plot("Treatment","Oral option")
+iv_sens_df %>% util_sens_plot("Treatment","IV option")
+cdi_sens_df %>% util_sens_plot("Treatment","CDI")
+tox_sens_df %>% util_sens_plot("Treatment","Toxicity")
+highcost_sens_df %>% util_sens_plot("Treatment","Cost")
+reserve_sens_df %>% util_sens_plot("Treatment","Reserve category")
+R_sens_df %>% R_util_sens_plot("Treatment","Illness severity")
 
-ggsave("uf_abx_prescribed.pdf", plot = abx_prescribed, device = "pdf", width = 10, height = 4,
-       path="/Users/alexhoward/Documents/Projects/UDAST_code")
+###Sensitivity analysis with variation of CDI and toxicity risk
+cdi_prob_df <- ur_util %>% cdi_prob_sens(util_probs_df,Rx_utility,"cdi_prob","prob_CDI",cdi_prob,prob_CDI,"CDI")
+tox_prob_df <- ur_util %>% tox_prob_sens(util_probs_df,Rx_utility,"tox_prob","prob_tox",tox_prob,prob_tox,"toxicity")
 
-###Counting the total number of antimicrobial-result matches per paneL
-PDAST_total <- totaller("PDAST")
-Standard_total <- totaller("Standard")
-glue("The personalised approach provided {PDAST_total} results for antimicrobial
-     agents patients were currently prescribed, versus {Standard_total} results
-     provided by the standard panel")
-ur_util %>% filter(!is.na(abx_name)) %>% nrow()
+cdi_prob_df %>% dens_sens_plot_2("CDI probability","Treatment",cdi_prob)
+tox_prob_df %>% dens_sens_plot_2("toxicity probability","Treatment",tox_prob)
 
-###Counting the total number of S and R results for prescribed agents per panel by AWaRe category
-abx_graph <- abx_graph %>% 
-  mutate(AWaRe = case_when(abx_name %in% ab_name(access_abs) ~ "Access",
-                           TRUE ~ "Watch"))
-awaresum <- abx_graph %>% group_by(Panel,Result,AWaRe) %>% 
-  summarise(n_results=sum(n)) %>% ungroup()
-print(awaresum)
-PDAST_S <- awaretotaller("PDAST")
-Standard_S <- awaretotaller(("Standard"))
-glue("The personalised approach provided {PDAST_S} 'S' results for Access category
-      antimicrobial agents patients were currently prescribed, versus {Standard_S} 
-      comparable results provided by the standard panel")
+###Sensitivity analysis with variation of AUC
+auc_prob_df <- util_sens_auc(ur_util,util_probs_df,Rx_utility,0,1)
+cdi_auc_prob_df <- util_sens_auc_cdi(ur_util,util_probs_df,Rx_utility,0,1)
+tox_auc_prob_df <- util_sens_auc_tox(ur_util,util_probs_df,Rx_utility,0,1)
 
-###Counting cases where on Watch abx and an Access S alternative / IVOST was provided
-urines_abx <- urines_abx %>% rowwise() %>%
-  mutate(on_PDAST1 = case_when(
-    PDAST_1 %in% access_abs ~ get(PDAST_1),TRUE~"NT"),
-    on_PDAST2 = case_when(
-      PDAST_2 %in% access_abs ~ get(PDAST_2),TRUE~"NT"),
-    on_PDAST3 = case_when(
-      PDAST_3 %in% access_abs ~ get(PDAST_3),TRUE~"NT"),
-    on_PDAST4 = case_when(
-      PDAST_4 %in% access_abs ~ get(PDAST_4),TRUE~"NT"),
-    on_PDAST5 = case_when(
-      PDAST_5 %in% access_abs ~ get(PDAST_5),TRUE~"NT"),
-    on_PDAST6 = case_when(
-      PDAST_6 %in% access_abs ~ get(PDAST_6),TRUE~"NT")
-  ) %>%
-  ungroup() %>% mutate(
-    PDAST_S_in_range = apply(select(., "on_PDAST1":"on_PDAST6"), 1, function(row) {
-      any(row == "S")
-    }),
-    Standard_S_in_range = case_when(GEN=="S"|NIT=="S"|
-                                      SXT=="S" ~ TRUE,
-                                    TRUE ~ FALSE),
-    PDAST_ac_alt = case_when(PDAST_S_in_range & abx_name %in% ab_name(watch_abs) ~ TRUE,
-                             TRUE ~ FALSE),
-    Standard_ac_alt = case_when(Standard_S_in_range & abx_name %in% ab_name(watch_abs) ~ TRUE,
-                                TRUE ~ FALSE))
-n_ac_switch_pdast <- sum(urines_abx$PDAST_ac_alt)
-n_ac_switch_standard <- sum(urines_abx$Standard_ac_alt)
-ivs_only <- c("CRO","TZP","FEP","MEM","CAZ","VAN")
-urines_abx <- urines_abx %>% mutate(PDAST_gen_out = case_when(
-  PDAST_ac_alt & NIT!="S"&SXT!="S"&AMP!="S"&SAM!="S"&CZO!="S" ~FALSE,
-  TRUE~TRUE
-),
-PDAST_ivost = case_when(abx_name %in% ab_name(ivs_only) &
-                          PDAST_ac_alt & NIT=="S"|SXT=="S"|AMP=="S"|SAM=="S" ~TRUE,
-                        TRUE~FALSE
-),
-Standard_ivost = case_when( abx_name %in% ab_name(ivs_only) &
-                              Standard_ac_alt & NIT=="S"|SXT=="S"|AMP=="S"|SAM=="S" ~TRUE,
-                            TRUE~FALSE
-))
+auc_prob_df %>% auc_sens_plot("Treatment")
+cdi_auc_prob_df %>% auc_sens_plot_2("Treatment","CDI")
+tox_auc_prob_df %>% auc_sens_plot_2("Treatment","Toxicity")
 
-n_pdast_ivost <- sum(urines_abx$PDAST_ivost)
-n_standard_ivost <- sum(urines_abx$Standard_ivost)
-
-glue("The personalised approach provided an opportunity to switch from a
-     prescribed Watch category agent to an Access category agent in {n_ac_switch_pdast}
-     instances, compared to {n_ac_switch_standard} instances using the standard approach.
-     
-     The personalised approach provided an step-down from an IV agent to an Access
-     category oral agent in {n_pdast_ivost} cases compared to {n_standard_ivost} cases
-     using the standard approach
-     
-     ")
-
-###Susceptible and resistant results for the agent recommended for treatment
-urines_abx <- ur_util
-urref <- urines_abx %>% select(AMP:VAN)
-urref[urref=="NT"] <- "R"
-urref[urref=="I"] <- "S"
-urines_abx[,18:30] <- urref
-urines_abx <- urines_abx %>%
-  rowwise() %>%
-  mutate(PDIVRx_1_result = get(Intravenous_1),
-         PDIVRx_2_result = get(Intravenous_2),
-         PDPORx_1_result = get(Oral_1),
-         PDPORx_2_result = get(Oral_2),
-         PDRx_1_result = get(PDRx_1),
-         PDRx_2_result = get(PDRx_2),
-         STIVRx_1_result = get(STANDARD_IV_1),
-         STIVRx_2_result = get(STANDARD_IV_2),
-         STPORx_1_result = get(STANDARD_PO_1),
-         STPORx_2_result = get(STANDARD_PO_2)) %>%
-  ungroup()
-
-###Data visualisation of antimicrobial-result matches
-
-abx_graph <- urines_abx %>% ab_rec_df(Intravenous_1,"Intravenous_1",PDIVRx_1_result,STIVRx_1_result,
-                                      urines_abx %>% distinct(STANDARD_IV_1) %>% ab_name())
-write_csv(abx_graph,"uf_sourcedata_prescr_abx.csv")
-abx_graph %>% ab_result_graph("first","intravenous",9,900)
-
-abx_graph_2 <- urines_abx %>% ab_rec_df(Intravenous_2,"Intravenous_2",PDIVRx_2_result,STIVRx_2_result,
-                                        urines_abx %>% distinct(STANDARD_IV_2) %>% ab_name())
-write_csv(abx_graph_2,"uf_sourcedata_prescr_abx_2.csv")
-abx_graph_2 %>% ab_result_graph("second","intravenous",11,900)
-
-abx_graph_3 <- urines_abx %>% ab_rec_df(Oral_1,"Oral_1",PDPORx_1_result,STPORx_1_result,
-                                        urines_abx %>% distinct(STANDARD_PO_1) %>% ab_name())
-write_csv(abx_graph_3,"uf_sourcedata_prescr_abx_3.csv")
-abx_graph_3 %>% ab_result_graph("first","oral",5.65,900)
-
-abx_graph_4 <- urines_abx %>% ab_rec_df(Oral_2,"Oral_2",PDIVRx_2_result,STPORx_2_result,
-                                        urines_abx %>% distinct(STANDARD_PO_2) %>% ab_name())
-write_csv(abx_graph_4,"uf_sourcedata_prescr_abx_4.csv")
-abx_graph_4 %>% ab_result_graph("second","oral",5.65,1000)
-
-###Comparison of antimicrobial agents prescribed and recommended
-urines_abx <- urines_abx %>% filter(!grepl("_",abx_name))
-urines_abx <- urines_abx %>% mutate(
-  Wa_Ac_S_IV = case_when(
-  PDIVRx_1_result=="S"&Intravenous_1%in%(access_abs)&
-    abx_name%in%(watch_abs %>% ab_name()) ~ TRUE,TRUE~FALSE),
-  Wa_Ac_S_PO = case_when(
-    PDPORx_1_result=="S"&Oral_1%in%(access_abs)&
-      abx_name%in%(watch_abs %>% ab_name()) ~ TRUE,TRUE~FALSE),
-  Ac_Wa_IV = case_when(
-    Intravenous_1%in%(watch_abs)&
-      abx_name%in%(access_abs %>% ab_name()) ~ TRUE,TRUE~FALSE),
-  Ac_Wa_PO = case_when(
-    Oral_1%in%(watch_abs)&
-      abx_name%in%(access_abs %>% ab_name()) ~ TRUE,TRUE~FALSE)
-)
-
-ur_util <- ur_util %>%
-  rowwise() %>%
-  mutate(PDIVRx_1_result = get(Intravenous_1),
-         PDIVRx_2_result = get(Intravenous_2),
-         PDPORx_1_result = get(Oral_1),
-         PDPORx_2_result = get(Oral_2),
-         PDRx_1_result = get(PDRx_1),
-         PDRx_2_result = get(PDRx_2),
-         STIVRx_1_result = get(STANDARD_IV_1),
-         STIVRx_2_result = get(STANDARD_IV_2),
-         STPORx_1_result = get(STANDARD_PO_1),
-         STPORx_2_result = get(STANDARD_PO_2)) %>%
-  ungroup()
-
-all_res <- nrow(ur_util %>% filter(PDRx_1_result=='R'))
-iv_res <- nrow(ur_util %>% filter(PDIVRx_1_result=='R'))
-po_res <- nrow(ur_util %>% filter(PDPORx_1_result=='R'))
-
-glue("Where an IV agent was required, the personalised approach recommended a switch from a
-     prescribed Watch category agent to an effective Access category agent in 
-     {round((sum(urines_abx$Wa_Ac_S_IV)/nrow(urines_abx))*100,1)}% (n={sum(urines_abx$Wa_Ac_S_IV)}) of prescriptions.
-     
-     Where an oral agent was required, the personalised approach recommended a switch from a
-     prescribed Watch category agent to an effective Access category agent in 
-     {round((sum(urines_abx$Wa_Ac_S_PO)/nrow(urines_abx))*100,1)}% (n={sum(urines_abx$Wa_Ac_S_PO)}) of prescriptions.
-     
-     Overall, the personalised approach recommended an agent with a subsequent resistant result in
-     {round(all_res/nrow(ur_util)*100,1)}% (n={all_res}) of cases where urine culture was sent.
-     
-     Where an IV agent was required, the personalised approach recommended an agent with a subsequent resistant result in
-     {round(iv_res/nrow(ur_util)*100,1)}% (n={iv_res}) of cases where urine culture was sent.
-     
-     Where an oral agent was required, the personalised approach recommended an agent with a subsequent resistant result in
-     {round(po_res/nrow(ur_util)*100,1)}% (n={po_res}) of cases where urine culture was sent.
-     
-     ")
-
-ur_util %>% filter(PDRx_1_result=="S") %>% nrow()/nrow(ur_util)
-urines_abx %>% filter(PDPORx_1_result=="R") %>% filter(org_fullname=="Escherichia coli") %>% count(Oral_1) %>% arrange(desc(n))
-urines_abx %>% filter(PDIVRx_1_result=="R") %>% count(Intravenous_1) %>% arrange(desc(n))
-ur_util %>% filter(PDRx_1%in%access_singles) %>% nrow()/nrow(ur_util)
-write_csv(ur_util,"ur_util_microsim.csv")
-
+###Write utility function dataframes
+write_csv(util_probs_df,"utility_dataframe.csv")
+write_csv(form_util_probs_df,"form_utility_dataframe.csv")
