@@ -20,12 +20,12 @@ calculate_utilities <- function(df,formulary_list=c(),R_weight=1,MEWS=1) {
   df <- df %>% mutate(overall_util=util_uti + util_access +
                         util_oral + 
                         util_reserve + util_highcost 
-                      + util_tox*tox_AUC + util_CDI*CDI_AUC + util_iv*MEWS*R_weight,
+                      + util_tox + util_CDI + util_iv*MEWS^2*R_weight,
                       short_util = util_uti + util_access +
                         util_oral + util_iv +
                         util_reserve + util_highcost 
                       + util_tox + util_CDI,
-                      S_utility = S*overall_util*AUC,
+                      S_utility = S*overall_util,
                       AMPR_utility = case_when(
                         Antimicrobial=="Ampicillin" ~
                           abs(R_weight)*AMP_R_value*R, TRUE~0
@@ -2548,6 +2548,7 @@ dens_sens_plot_2 <- function(df,characteristic,measure,char_col) {
 
 ###Separated-specialty sensitivity analysis
 spec_sens_analysis <- function(df,results_df,specialty) {
+
 ###Engineer scores dataframe
 rankings <- results_df %>% select(10:ncol(results_df)) %>% dplyr::slice(2:nrow(results_df))
 colnames(rankings) <- c("Abelfenide","Acetemran","Adenomadin","Adrevenac",
@@ -2874,152 +2875,6 @@ micro <- read_csv("micro_clean2.csv")
 mic_ref <- micro %>% anti_join(ur_util,by="subject_id")
 results <- read_csv("ADAPT-AST Factors influencing Antimicrobial Prescribing for Urinary Tract Infection.csv")
 
-###Make AUC list
-antimicrobial_map <- c(
-  "Ampicillin" = "AMP",
-  "Ampicillin-sulbactam" = "SAM",
-  "Piperacillin-tazobactam" = "TZP",
-  "Cefazolin" = "CZO",
-  "Ceftriaxone" = "CRO",
-  "Ceftazidime" = "CAZ",
-  "Cefepime" = "FEP",
-  "Meropenem" = "MEM",
-  "Ciprofloxacin" = "CIP",
-  "Gentamicin" = "GEN",
-  "Trimethoprim-sulfamethoxazole" = "SXT",
-  "Nitrofurantoin" = "NIT",
-  "Vancomycin" = "VAN"
-)
-
-map_combinations <- combn(names(antimicrobial_map), 2, simplify = FALSE)
-combined_antimicrobial_map <- c(
-  antimicrobial_map,
-  setNames(
-    lapply(map_combinations, function(x) paste(antimicrobial_map[x], collapse = "_")),
-    sapply(map_combinations, function(x) paste(x, collapse = "_"))
-  )
-)
-abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
-  str_replace_all("/","-")
-combined_antimicrobial_map <- combined_antimicrobial_map[names(combined_antimicrobial_map) %in% abx_in_train]
-metrics_ablist <- c(combined_antimicrobial_map,"CDI","toxicity")
-
-###Performance metrics summary
-auc_df <- data.frame(matrix(nrow=length(metrics_ablist),ncol=0))
-auc_df$Antimicrobial <- metrics_ablist
-for (i in 1:length(metrics_ablist)) {
-  
-  auc_df[i,2] <- read_csv(glue("metrics_{metrics_ablist[i]}.csv")) %>% select(contains("AUC"))
-  
-}
-colnames(auc_df) <- c("Antimicrobial","AUC")
-auc_df$Antimicrobial[1:37] <- names(metrics_ablist)[1:37]
-auc_df[38,1] <- "CDI"
-auc_df[39,1] <- "toxicity"
-auc_df$Antimicrobial <- as.character(auc_df$Antimicrobial)
-write_csv(auc_df,"auc_df.csv")
-recall_df <- data.frame(matrix(nrow=length(metrics_ablist),ncol=0))
-recall_df$Antimicrobial <- metrics_ablist
-for (i in 1:length(metrics_ablist)) {
-  
-  recall_df[i,2] <- read_csv(glue("metrics_{metrics_ablist[i]}.csv")) %>% select(contains("Recall"))
-  
-}
-colnames(recall_df) <- c("Antimicrobial","recall")
-recall_df$Antimicrobial[1:37] <- names(metrics_ablist)[1:37]
-recall_df[38,1] <- "CDI"
-recall_df[39,1] <- "toxicity"
-recall_df$Antimicrobial <- as.character(recall_df$Antimicrobial)
-write_csv(recall_df,"recall_df.csv")
-precision_df <- data.frame(matrix(nrow=length(metrics_ablist),ncol=0))
-precision_df$Antimicrobial <- metrics_ablist
-for (i in 1:length(metrics_ablist)) {
-  
-  precision_df[i,2] <- read_csv(glue("metrics_{metrics_ablist[i]}.csv")) %>% select(contains("Precision"))
-  
-}
-colnames(precision_df) <- c("Antimicrobial","precision")
-precision_df$Antimicrobial[1:37] <- names(metrics_ablist)[1:37]
-precision_df[38,1] <- "CDI"
-precision_df[39,1] <- "toxicity"
-precision_df$Antimicrobial <- as.character(precision_df$Antimicrobial)
-write_csv(precision_df,"precision_df.csv")
-accuracy_df <- data.frame(matrix(nrow=length(metrics_ablist),ncol=0))
-accuracy_df$Antimicrobial <- metrics_ablist
-for (i in 1:length(metrics_ablist)) {
-  
-  accuracy_df[i,2] <- read_csv(glue("metrics_{metrics_ablist[i]}.csv")) %>% select(contains("Accuracy"))
-  
-}
-colnames(accuracy_df) <- c("Antimicrobial","accuracy")
-accuracy_df$Antimicrobial[1:37] <- names(metrics_ablist)[1:37]
-accuracy_df[38,1] <- "CDI"
-accuracy_df[39,1] <- "toxicity"
-accuracy_df$Antimicrobial <- as.character(accuracy_df$Antimicrobial)
-write_csv(accuracy_df,"accuracy_df.csv")
-f1_score_df <- data.frame(matrix(nrow=length(metrics_ablist),ncol=0))
-f1_score_df$Antimicrobial <- metrics_ablist
-for (i in 1:length(metrics_ablist)) {
-  
-  f1_score_df[i,2] <- read_csv(glue("metrics_{metrics_ablist[i]}.csv")) %>% select(contains("F1"))
-  
-}
-colnames(f1_score_df) <- c("Antimicrobial","f1_score")
-f1_score_df$Antimicrobial[1:37] <- names(metrics_ablist)[1:37]
-f1_score_df[38,1] <- "CDI"
-f1_score_df[39,1] <- "toxicity"
-f1_score_df$Antimicrobial <- as.character(f1_score_df$Antimicrobial)
-write_csv(f1_score_df,"f1_score_df.csv")
-
-metrics_manus_table <- auc_df %>% left_join(precision_df,by="Antimicrobial") %>% 
-  left_join(recall_df,by="Antimicrobial") %>%
-  left_join(f1_score_df,by="Antimicrobial") %>%
-  left_join(accuracy_df,by="Antimicrobial") %>% 
-  rename(Model="Antimicrobial",AUROC="AUC",Precision="precision",
-         Recall="recall",`F1 score`="f1_score", Accuracy="accuracy") %>% 
-  mutate(across(AUROC:`Accuracy`, ~ round(.x,3)),
-         Model=str_replace_all(Model,"_"," & "))
-metrics_singles_table <- metrics_manus_table %>% dplyr::slice(
-  c(1:13,38:39)
-) %>% mutate(Model=case_when(Model=="toxicity"~"Toxicity",TRUE~Model))
-metrics_combos_table <- metrics_manus_table %>% dplyr::slice(
-  -c(1:13,38:39)
-) %>% mutate(Model=case_when(Model=="toxicity"~"Toxicity",TRUE~Model))
-
-ci_singles_table <- read_csv("ci_singles_table.csv")
-ci_combos_table <- read_csv("ci_combos_table.csv")
-
-
-metrics_singles_table <- metrics_singles_table %>% left_join(ci_singles_table)
-metrics_combos_table <- metrics_combos_table %>% left_join(ci_combos_table)
-
-metrics_singles_table <- metrics_singles_table %>% mutate(
-  AUROC = case_when(!is.na(AUROC_CI)&!is.na(AUROC)~glue("{AUROC} {AUROC_CI}"),
-                    TRUE~glue("{AUROC} (NA)")),
-  Precision = case_when(!is.na(Precision_CI)&!is.na(Precision)~glue("{Precision} {Precision_CI}"),
-                    TRUE~glue("{Precision} (NA)")),
-  Recall = case_when(!is.na(Recall_CI)&!is.na(Recall)~glue("{Recall} {Recall_CI}"),
-                    TRUE~glue("{Recall} (NA)")),
-  Accuracy = case_when(!is.na(Accuracy_CI)&!is.na(Accuracy)~glue("{Accuracy} {Accuracy_CI}"),
-                    TRUE~glue("{Accuracy} (NA)")),
-  `F1 score` = case_when(!is.na(F1_CI)&!is.na(`F1 score`)~glue("{`F1 score`} {F1_CI}"),
-                    TRUE~glue("{`F1 score`} (NA)"))) %>% select(Model:Accuracy)
-
-metrics_combos_table <- metrics_combos_table %>% mutate(
-  AUROC = case_when(!is.na(AUROC_CI)&AUROC_CI!="NA"~glue("{AUROC} {AUROC_CI}"),
-                    TRUE~glue("{AUROC} (NA)")),
-  Precision = case_when(!is.na(Precision_CI)&Precision_CI!="NA"~glue("{Precision} {Precision_CI}"),
-                        TRUE~glue("{Precision} (NA)")),
-  Recall = case_when(!is.na(Recall_CI)&Recall_CI!="NA"~glue("{Recall} {Recall_CI}"),
-                     TRUE~glue("{Recall} (NA)")),
-  Accuracy = case_when(!is.na(Accuracy_CI)&Accuracy_CI!="NA"~glue("{Accuracy} {Accuracy_CI}"),
-                       TRUE~glue("{Accuracy} (NA)")),
-  `F1 score` = case_when(!is.na(F1_CI)&F1_CI!="NA"~glue("{`F1 score`} {F1_CI}"),
-                         TRUE~glue("{`F1 score`} (NA)"))) %>% select(Model:Accuracy)
-
-write_csv(metrics_singles_table,"metrics_singles_table.csv")
-write_csv(metrics_combos_table,"metrics_combos_table.csv")
-
 ###Re-factorising outcome variables on abx dataframes after read-in
 train_abx <- train_abx %>% factorise()
 test_abx <- test_abx %>% factorise()
@@ -3265,6 +3120,11 @@ cost_list <- data.frame(rbind(cost_list,cost_list2))
 cost_list <- cost_list %>% mutate(min_cost = orig_cost/max(orig_cost),
          Antimicrobial = str_replace_all(Antimicrobial,"/","-"))
 util_probs_df <- util_probs_df %>% left_join(cost_list)
+cost_list %>% dplyr::slice(1:13) %>% summarise(
+  MED = Median(orig_cost),
+  iq1 = quantile(orig_cost)[2],
+  iq3 = quantile(orig_cost)[4]
+)
 
 ###AST R result utility
 Rval_key <- ur_util %>% select(micro_specimen_id,AMP_R_value:VAN_R_value)
@@ -3353,60 +3213,6 @@ util_probs_df %>% utility_plot(Outpatient_Rx_utility,"Oral treatment")
 util_probs_df %>% utility_plot(Outpatient_Rx_utility,"Oral treatment", " (single agent)")
 util_probs_df %>% utility_plot(Outpatient_Rx_utility,"Oral treatment", " (combinations)")
 
-##Sensitivity analysis
-
-###Stem reference lists
-all_abs <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
-             "MEM","CIP","GEN","SXT","NIT","VAN")
-long_allabs <- all_abs %>% ab_name() %>% str_replace("/","-")
-all_combos <- combn(all_abs, 2, FUN = function(x) paste(x, collapse = "_"))
-all_abs <- c(all_abs, all_combos)
-long_allcombos <- combn(long_allabs, 2, FUN = function(x) paste(x, collapse = "_"))
-long_allabs <- c(long_allabs, long_allcombos)
-
-###Sensitivity analysis varying resistance probabilities
-all_singles <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP","MEM","CIP","GEN","SXT","NIT","VAN") %>% ab_name() %>% 
-  str_replace("/","-")
-rx_dens_sens <- ur_util %>% dens_sens(util_probs_df,Rx_utility)
-rx_dens_sens %>% dens_sens_plot("Treatment")
-
-###Sensitivity analysis varying weighting values of different factors
-uti_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"UTI_specific",-2,2)
-access_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"Access",-2,2)
-oral_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"Oral_option",-2,2)
-iv_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"IV_option",-2,2)
-cdi_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"CDI_highrisk",-2,2)
-tox_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"Toxicity_highrisk",-2,2)
-highcost_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"High_cost",-2,2)
-reserve_sens_df <- ur_util %>% util_sens(util_probs_df,Rx_utility,"Reserve",-2,2)
-R_sens_df <- ur_util %>% R_util_sens(util_probs_df,Rx_utility,0,20)
-
-uti_sens_df %>% util_sens_plot("Treatment","UTI-specificity")
-access_sens_df %>% util_sens_plot("Treatment","Access category")
-oral_sens_df %>% util_sens_plot("Treatment","Oral option")
-iv_sens_df %>% util_sens_plot("Treatment","IV option")
-cdi_sens_df %>% util_sens_plot("Treatment","CDI")
-tox_sens_df %>% util_sens_plot("Treatment","Toxicity")
-highcost_sens_df %>% util_sens_plot("Treatment","Cost")
-reserve_sens_df %>% util_sens_plot("Treatment","Reserve category")
-R_sens_df %>% R_util_sens_plot("Treatment","Illness severity")
-
-###Sensitivity analysis with variation of CDI and toxicity risk
-cdi_prob_df <- ur_util %>% cdi_prob_sens(util_probs_df,Rx_utility,"cdi_prob","prob_CDI",cdi_prob,prob_CDI,"CDI")
-tox_prob_df <- ur_util %>% tox_prob_sens(util_probs_df,Rx_utility,"tox_prob","prob_tox",tox_prob,prob_tox,"toxicity")
-
-cdi_prob_df %>% dens_sens_plot_2("CDI probability","Treatment",cdi_prob)
-tox_prob_df %>% dens_sens_plot_2("toxicity probability","Treatment",tox_prob)
-
-###Sensitivity analysis with variation of AUC
-auc_prob_df <- util_sens_auc(ur_util,util_probs_df,Rx_utility,0,1)
-cdi_auc_prob_df <- util_sens_auc_cdi(ur_util,util_probs_df,Rx_utility,0,1)
-tox_auc_prob_df <- util_sens_auc_tox(ur_util,util_probs_df,Rx_utility,0,1)
-
-auc_prob_df %>% auc_sens_plot("Treatment")
-cdi_auc_prob_df %>% auc_sens_plot_2("Treatment","CDI")
-tox_auc_prob_df %>% auc_sens_plot_2("Treatment","Toxicity")
-
 ###Write utility function dataframes
 write_csv(util_probs_df,"utility_dataframe.csv")
 write_csv(form_util_probs_df,"form_utility_dataframe.csv")
@@ -3475,33 +3281,5 @@ util_gp %>% utility_plot(Outpatient_Rx_utility,"Oral treatment",", general pract
 util_gp %>% utility_plot(Outpatient_Rx_utility,"Oral treatment", " (single agent, general practice)")
 util_gp %>% utility_plot(Outpatient_Rx_utility,"Oral treatment", " (combinations, general practice)")
 
-##Utility manuscript results
 
-###Spread of utility values
-util_probs_df %>% group_by(Antimicrobial) %>% summarise(
-  rq1 = quantile(Rx_utility)[2],rq3=quantile(Rx_utility)[4],riqr=rq3-rq1
-) %>% arrange(desc(riqr))
 
-util_probs_df %>% group_by(Antimicrobial) %>% summarise(
-  q1 = quantile(S)[2],q3=quantile(S)[4],iqr=q3-q1
-) %>% arrange(desc(iqr))
-
-###Median probability of susceptibility
-util_probs_df %>% group_by(Antimicrobial) %>% summarise(
-  med_s = median(S)
-) %>% arrange(desc(med_s))
-
-###Median probability of CDI
-util_probs_df %>% group_by(Antimicrobial) %>% summarise(
-  med_cdi = median(prob_CDI)
-) %>% arrange(desc(med_cdi)) %>% print(n=100)
-
-###Median probability of CDI
-util_probs_df %>% group_by(Antimicrobial) %>% summarise(
-  med_cdi = median(prob_CDI)
-) %>% arrange(desc(med_cdi)) %>% print(n=50)
-
-###Median probability of toxicity
-util_probs_df %>% group_by(Antimicrobial) %>% summarise(
-  med_tox = median(prob_tox)
-) %>% arrange(desc(med_tox)) %>% print(n=50)
