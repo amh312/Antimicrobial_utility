@@ -114,7 +114,151 @@ test_abx <- read_csv("test_abx.csv")
 util_probs_df <- read_csv("probs_df_overall.csv")
 hadm <- read_csv("admissions.csv")
 
-##Read in
+###Make AUC list
+antimicrobial_map <- c(
+  "Ampicillin" = "AMP",
+  "Ampicillin-sulbactam" = "SAM",
+  "Piperacillin-tazobactam" = "TZP",
+  "Cefazolin" = "CZO",
+  "Ceftriaxone" = "CRO",
+  "Ceftazidime" = "CAZ",
+  "Cefepime" = "FEP",
+  "Meropenem" = "MEM",
+  "Ciprofloxacin" = "CIP",
+  "Gentamicin" = "GEN",
+  "Trimethoprim-sulfamethoxazole" = "SXT",
+  "Nitrofurantoin" = "NIT",
+  "Vancomycin" = "VAN"
+)
+
+map_combinations <- combn(names(antimicrobial_map), 2, simplify = FALSE)
+combined_antimicrobial_map <- c(
+  antimicrobial_map,
+  setNames(
+    lapply(map_combinations, function(x) paste(antimicrobial_map[x], collapse = "_")),
+    sapply(map_combinations, function(x) paste(x, collapse = "_"))
+  )
+)
+abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+  str_replace_all("/","-")
+combined_antimicrobial_map <- combined_antimicrobial_map[names(combined_antimicrobial_map) %in% abx_in_train]
+metrics_ablist <- c(combined_antimicrobial_map,"CDI","toxicity")
+
+###Performance metrics summary
+auc_df <- data.frame(matrix(nrow=length(metrics_ablist),ncol=0))
+auc_df$Antimicrobial <- metrics_ablist
+for (i in 1:length(metrics_ablist)) {
+  
+  auc_df[i,2] <- read_csv(glue("metrics_{metrics_ablist[i]}.csv")) %>% select(contains("AUC"))
+  
+}
+colnames(auc_df) <- c("Antimicrobial","AUC")
+auc_df$Antimicrobial[1:37] <- names(metrics_ablist)[1:37]
+auc_df[38,1] <- "CDI"
+auc_df[39,1] <- "toxicity"
+auc_df$Antimicrobial <- as.character(auc_df$Antimicrobial)
+write_csv(auc_df,"auc_df.csv")
+recall_df <- data.frame(matrix(nrow=length(metrics_ablist),ncol=0))
+recall_df$Antimicrobial <- metrics_ablist
+for (i in 1:length(metrics_ablist)) {
+  
+  recall_df[i,2] <- read_csv(glue("metrics_{metrics_ablist[i]}.csv")) %>% select(contains("Recall"))
+  
+}
+colnames(recall_df) <- c("Antimicrobial","recall")
+recall_df$Antimicrobial[1:37] <- names(metrics_ablist)[1:37]
+recall_df[38,1] <- "CDI"
+recall_df[39,1] <- "toxicity"
+recall_df$Antimicrobial <- as.character(recall_df$Antimicrobial)
+write_csv(recall_df,"recall_df.csv")
+precision_df <- data.frame(matrix(nrow=length(metrics_ablist),ncol=0))
+precision_df$Antimicrobial <- metrics_ablist
+for (i in 1:length(metrics_ablist)) {
+  
+  precision_df[i,2] <- read_csv(glue("metrics_{metrics_ablist[i]}.csv")) %>% select(contains("Precision"))
+  
+}
+colnames(precision_df) <- c("Antimicrobial","precision")
+precision_df$Antimicrobial[1:37] <- names(metrics_ablist)[1:37]
+precision_df[38,1] <- "CDI"
+precision_df[39,1] <- "toxicity"
+precision_df$Antimicrobial <- as.character(precision_df$Antimicrobial)
+write_csv(precision_df,"precision_df.csv")
+accuracy_df <- data.frame(matrix(nrow=length(metrics_ablist),ncol=0))
+accuracy_df$Antimicrobial <- metrics_ablist
+for (i in 1:length(metrics_ablist)) {
+  
+  accuracy_df[i,2] <- read_csv(glue("metrics_{metrics_ablist[i]}.csv")) %>% select(contains("Accuracy"))
+  
+}
+colnames(accuracy_df) <- c("Antimicrobial","accuracy")
+accuracy_df$Antimicrobial[1:37] <- names(metrics_ablist)[1:37]
+accuracy_df[38,1] <- "CDI"
+accuracy_df[39,1] <- "toxicity"
+accuracy_df$Antimicrobial <- as.character(accuracy_df$Antimicrobial)
+write_csv(accuracy_df,"accuracy_df.csv")
+f1_score_df <- data.frame(matrix(nrow=length(metrics_ablist),ncol=0))
+f1_score_df$Antimicrobial <- metrics_ablist
+for (i in 1:length(metrics_ablist)) {
+  
+  f1_score_df[i,2] <- read_csv(glue("metrics_{metrics_ablist[i]}.csv")) %>% select(contains("F1"))
+  
+}
+colnames(f1_score_df) <- c("Antimicrobial","f1_score")
+f1_score_df$Antimicrobial[1:37] <- names(metrics_ablist)[1:37]
+f1_score_df[38,1] <- "CDI"
+f1_score_df[39,1] <- "toxicity"
+f1_score_df$Antimicrobial <- as.character(f1_score_df$Antimicrobial)
+write_csv(f1_score_df,"f1_score_df.csv")
+
+metrics_manus_table <- auc_df %>% left_join(precision_df,by="Antimicrobial") %>% 
+  left_join(recall_df,by="Antimicrobial") %>%
+  left_join(f1_score_df,by="Antimicrobial") %>%
+  left_join(accuracy_df,by="Antimicrobial") %>% 
+  rename(Model="Antimicrobial",AUROC="AUC",Precision="precision",
+         Recall="recall",`F1 score`="f1_score", Accuracy="accuracy") %>% 
+  mutate(across(AUROC:`Accuracy`, ~ round(.x,3)),
+         Model=str_replace_all(Model,"_"," & "))
+metrics_singles_table <- metrics_manus_table %>% dplyr::slice(
+  c(1:13,38:39)
+) %>% mutate(Model=case_when(Model=="toxicity"~"Toxicity",TRUE~Model))
+metrics_combos_table <- metrics_manus_table %>% dplyr::slice(
+  -c(1:13,38:39)
+) %>% mutate(Model=case_when(Model=="toxicity"~"Toxicity",TRUE~Model))
+
+ci_singles_table <- read_csv("ci_singles_table.csv")
+ci_combos_table <- read_csv("ci_combos_table.csv")
+
+
+metrics_singles_table <- metrics_singles_table %>% left_join(ci_singles_table)
+metrics_combos_table <- metrics_combos_table %>% left_join(ci_combos_table)
+
+metrics_singles_table <- metrics_singles_table %>% mutate(
+  AUROC = case_when(!is.na(AUROC_CI)&!is.na(AUROC)~glue("{AUROC} {AUROC_CI}"),
+                    TRUE~glue("{AUROC} (NA)")),
+  Precision = case_when(!is.na(Precision_CI)&!is.na(Precision)~glue("{Precision} {Precision_CI}"),
+                    TRUE~glue("{Precision} (NA)")),
+  Recall = case_when(!is.na(Recall_CI)&!is.na(Recall)~glue("{Recall} {Recall_CI}"),
+                    TRUE~glue("{Recall} (NA)")),
+  Accuracy = case_when(!is.na(Accuracy_CI)&!is.na(Accuracy)~glue("{Accuracy} {Accuracy_CI}"),
+                    TRUE~glue("{Accuracy} (NA)")),
+  `F1 score` = case_when(!is.na(F1_CI)&!is.na(`F1 score`)~glue("{`F1 score`} {F1_CI}"),
+                    TRUE~glue("{`F1 score`} (NA)"))) %>% select(Model:Accuracy)
+
+metrics_combos_table <- metrics_combos_table %>% mutate(
+  AUROC = case_when(!is.na(AUROC_CI)&AUROC_CI!="NA"~glue("{AUROC} {AUROC_CI}"),
+                    TRUE~glue("{AUROC} (NA)")),
+  Precision = case_when(!is.na(Precision_CI)&Precision_CI!="NA"~glue("{Precision} {Precision_CI}"),
+                        TRUE~glue("{Precision} (NA)")),
+  Recall = case_when(!is.na(Recall_CI)&Recall_CI!="NA"~glue("{Recall} {Recall_CI}"),
+                     TRUE~glue("{Recall} (NA)")),
+  Accuracy = case_when(!is.na(Accuracy_CI)&Accuracy_CI!="NA"~glue("{Accuracy} {Accuracy_CI}"),
+                       TRUE~glue("{Accuracy} (NA)")),
+  `F1 score` = case_when(!is.na(F1_CI)&F1_CI!="NA"~glue("{`F1 score`} {F1_CI}"),
+                         TRUE~glue("{`F1 score`} (NA)"))) %>% select(Model:Accuracy)
+
+write_csv(metrics_singles_table,"metrics_singles_table.csv")
+write_csv(metrics_combos_table,"metrics_combos_table.csv")
 
 ###Antimicrobial mapping lists
 all_singles <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
