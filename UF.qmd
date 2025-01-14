@@ -22,14 +22,26 @@ library(scales)
 library(coin)
 library(rlang)
 
-##Dataset characteristics
-
+##Read-in
 ur_util <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/ur_util_manuscript.csv")
 util_probs_df <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/util_probs_df_manuscript.csv")
 desc_tab <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/uf_desctab.csv")
 urines5 <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/urines5.csv")
 abx <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/interim_abx.csv")
 ab_tab <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/ab_tab.csv")
+metrics_singles_table <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/metrics_singles_table.csv")
+prim <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/overall_xg_plot_df.csv")
+pdrx <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/abplot_df.csv")
+pdrx_px_abx <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/abplot_df_px_abx.csv")
+cdi_df<- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/cdi_df.csv")
+tox_df<- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/tox_df.csv")
+cost_df<- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/cost_df.csv")
+cdi_df_px_abx<- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/cdi_df_px_abx.csv")
+tox_df_px_abx<- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/tox_df_px_abx.csv")
+cost_df_px_abx<- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/cost_df_px_abx.csv")
+stabmets <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/overall_stability_metrics.csv")
+timemets <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/overall_time_sens_metrics.csv")
+fairmets <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/overall_fairness_metrics.csv")
 
 urt <- function(df,subtype) {
   
@@ -71,8 +83,84 @@ abt2 <- function(df,numb) {
     glue("{abname %>% tolower()} ({perc}%, n={(urtot1) %>% comma()})")
 
 }
+lowsev <- function(df,subtype) {
+  
+  perc_overall <- df %>% filter(Metric==subtype)
+  perc_overall <- perc_overall %>% dplyr::slice(1) %>% select(Percentage) %>% unlist() %>% 
+    round(1)
+  
+  n_overall <- round(nrow(ur_util)*(perc_overall/100)) %>% comma()
+  
+  glue("{perc_overall %>% format(nsmall=1)}% (n={n_overall})")
+  
+}
+hisev <- function(df,subtype) {
+  
+  perc_overall <- df %>% filter(Metric==subtype)
+  perc_overall <- perc_overall %>% dplyr::slice(nrow(perc_overall)) %>% select(Percentage) %>% unlist() %>% round(1)
+  
+  n_overall <- round(nrow(ur_util)*(perc_overall/100)) %>% comma()
+  
+  glue("{perc_overall %>% format(nsmall=1)}% (n={n_overall})")
+  
+}
+lowabx <- function(df) {
+  perc <- df %>% filter(`Illness severity`==0) %>% arrange(desc(`Percentage of first-line recommendations`)) %>%
+    dplyr::slice(1) %>% select(`Percentage of first-line recommendations`) %>% 
+  unlist() %>% round(1)
+  
+  numb <- round(nrow(ur_util)*(perc/100)) %>% comma()
+  
+  glue("{perc %>% format(nsmall=1)}%, n={numb}")
+  
+}
+hiabx <- function(df) {
+  perc <- df %>% filter(`Illness severity`==max(df$`Illness severity`)) %>% arrange(desc(`Percentage of first-line recommendations`)) %>%
+    dplyr::slice(1) %>% select(`Percentage of first-line recommendations`) %>% 
+  unlist() %>% round(1)
+  
+  numb <- round(nrow(ur_util)*(perc/100)) %>% comma()
+  
+  glue("{perc %>% format(nsmall=1)}%, n={numb}")
+  
+}
+zeroprob <- function(df) {
+  df %>% dplyr::slice(1) %>% select(med) %>% round(3) %>% unlist()
+}
+maxprob <- function(df) {
+  df %>% dplyr::slice(nrow(df)) %>% distinct(med) %>% select(med) %>% round(3) %>% unlist()
+}
+aucfilter <- function(df,model) {
+  df %>% filter(Model==model) %>% select(AUROC) %>% unlist()
+}
+utilsum <- function(df,sliceval,type="median") {
 
-##Reference lists
+  if (type=="median") {
+top <- util_probs_df %>% group_by(Antimicrobial) %>% summarise(
+  medvals=median(Rx_utility),
+  iq1=quantile(Rx_utility)[2],
+  iq3=quantile(Rx_utility)[4]
+) %>% ungroup() %>% arrange(desc(medvals)) %>% 
+  dplyr::slice(sliceval) 
+
+medval <- round(top %>% select(medvals) %>% unlist(),3)
+iq1 <- round(top %>% select(iq1) %>% unlist(),3)
+iq3 <- round(top %>% select(iq1) %>% unlist(),3)
+
+glue("{medval}, IQR {iq1} to {iq3}")
+
+  } else {
+    
+    glue("{round(df %>% group_by(Antimicrobial) %>% summarise(
+  medvals=median(Rx_utility),
+  iq1=quantile(Rx_utility)[2],
+  iq3=quantile(Rx_utility)[4]
+) %>% ungroup() %>% mutate(iqr=iq3-iq1) %>% arrange(desc(iqr)) %>% 
+  dplyr::slice(1) %>% select(iqr) %>% unlist(),3)}")
+    
+  }
+}
+
 ###Reference lists
 all_singles <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
                  "MEM","CIP","GEN","SXT","NIT","VAN")
@@ -96,7 +184,6 @@ all_access <- c(access_singles, access_combos)
 watch_singles <- c("CRO","CAZ","FEP","MEM","TZP","CIP","VAN")
 watch_combos <- combn(watch_singles, 2, FUN = function(x) paste(x, collapse = "_"))
 all_watch <- c(watch_singles, watch_combos)
-
 antimicrobial_map <- c(
   "Ampicillin" = "AMP",
   "Ampicillin-sulbactam" = "SAM",
@@ -120,11 +207,9 @@ combined_antimicrobial_map <- c(
     sapply(map_combinations, function(x) paste(x, collapse = " & "))
   )
 )
-
 singles_map <- combined_antimicrobial_map[combined_antimicrobial_map%in%all_singles]
 iv_singles_map <- combined_antimicrobial_map[combined_antimicrobial_map%in%iv_singles]
 oral_singles_map <- combined_antimicrobial_map[combined_antimicrobial_map%in%oral_singles]
-
 modified_abx_map <- combined_antimicrobial_map
 names(modified_abx_map) <- str_replace_all(names(modified_abx_map),
                                            " & ", "_")
@@ -132,96 +217,12 @@ iv_modified_abx_map <- modified_abx_map[modified_abx_map%in%all_ivs]
 oral_modified_abx_map <- modified_abx_map[modified_abx_map%in%all_orals]
 access_modified_abx_map <- modified_abx_map[modified_abx_map%in%all_access]
 
+##S IQR for cefazolin
+wideiqr <- util_probs_df %>% group_by(Antimicrobial) %>% 
+  summarise(iqr=IQR(S)) %>% arrange(desc(iqr)) %>% 
+  dplyr::slice(1) %>% select(iqr) %>% unlist()
 
-#Main microsimulation results
-prim <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/overall_xg_plot_df.csv")
-lowsev <- function(df,subtype) {
-  
-  perc_overall <- df %>% filter(Metric==subtype)
-  perc_overall <- perc_overall %>% dplyr::slice(1) %>% select(Percentage) %>% unlist() %>% 
-    round(1)
-  
-  n_overall <- round(nrow(ur_util)*(perc_overall/100)) %>% comma()
-  
-  glue("{perc_overall %>% format(nsmall=1)}% (n={n_overall})")
-  
-}
-hisev <- function(df,subtype) {
-  
-  perc_overall <- df %>% filter(Metric==subtype)
-  perc_overall <- perc_overall %>% dplyr::slice(nrow(perc_overall)) %>% select(Percentage) %>% unlist() %>% round(1)
-  
-  n_overall <- round(nrow(ur_util)*(perc_overall/100)) %>% comma()
-  
-  glue("{perc_overall %>% format(nsmall=1)}% (n={n_overall})")
-  
-}
-pdrx <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/abplot_df.csv")
-pdrx_px_abx <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/abplot_df_px_abx.csv")
-lowabx <- function(df) {
-  perc <- df %>% filter(`Illness severity`==0) %>% arrange(desc(`Percentage of first-line recommendations`)) %>%
-    dplyr::slice(1) %>% select(`Percentage of first-line recommendations`) %>% 
-  unlist() %>% round(1)
-  
-  numb <- round(nrow(ur_util)*(perc/100)) %>% comma()
-  
-  glue("{perc %>% format(nsmall=1)}%, n={numb}")
-  
-}
-hiabx <- function(df) {
-  perc <- df %>% filter(`Illness severity`==max(df$`Illness severity`)) %>% arrange(desc(`Percentage of first-line recommendations`)) %>%
-    dplyr::slice(1) %>% select(`Percentage of first-line recommendations`) %>% 
-  unlist() %>% round(1)
-  
-  numb <- round(nrow(ur_util)*(perc/100)) %>% comma()
-  
-  glue("{perc %>% format(nsmall=1)}%, n={numb}")
-  
-}
-cdi_df<- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/cdi_df.csv")
-tox_df<- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/tox_df.csv")
-cost_df<- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/cost_df.csv")
-cdi_df_px_abx<- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/cdi_df_px_abx.csv")
-tox_df_px_abx<- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/tox_df_px_abx.csv")
-cost_df_px_abx<- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/cost_df_px_abx.csv")
-zeroprob <- function(df) {
-  df %>% dplyr::slice(1) %>% select(med) %>% round(3) %>% unlist()
-}
-maxprob <- function(df) {
-  df %>% dplyr::slice(nrow(df)) %>% distinct(med) %>% select(med) %>% round(3) %>% unlist()
-}
-
-###Significance testing
-m_aut_all <- median(ur_util$n_allS_PDRx6,na.rm=T)
-m_stan_all <- median(ur_util$n_allS_standard6)
-m_aut_acs <- median(ur_util$n_acS_PDRx6)
-m_stan_acs <- median(ur_util$n_acS_standard6)
-
-iq1aut_all <- quantile(ur_util$n_allS_PDRx6)[2]
-iq1stan_all <- quantile(ur_util$n_allS_standard6)[2]
-iq1aut_acs <- quantile(ur_util$n_acS_PDRx6)[2]
-iq1stan_acs <- quantile(ur_util$n_acS_standard6)[2]
-
-iq3aut_all <- quantile(ur_util$n_allS_PDRx6)[4]
-iq3stan_all <- quantile(ur_util$n_allS_standard6)[4]
-iq3aut_acs <- quantile(ur_util$n_acS_PDRx6)[4]
-iq3stan_acs <- quantile(ur_util$n_acS_standard6)[4]
-
-p_acs <- round(wilcox.test(ur_util %>% pull(n_acS_PDRx6), ur_util %>% pull(n_acS_standard6), paired = TRUE, conf.int = TRUE)$p.value, 3)
-p_all <- round(wilcox.test(ur_util %>% pull(n_allS_PDRx6), ur_util %>% pull(n_allS_standard6), paired = TRUE, conf.int = TRUE)$p.value, 3)
-
-z_access <- statistic(wilcoxsign_test(as.formula(paste0(quo_text(ur_util$n_acS_PDRx6), " ~ ", quo_text(ur_util$n_acS_standard6))), data = ur_util), "standardized")[1]
-acs_effectsize <- round(z_access / sqrt(nrow(ur_util)), 3)
-
-z_all <- statistic(wilcoxsign_test(as.formula(paste0(quo_text(ur_util$n_allS_PDRx6), " ~ ", quo_text(ur_util$n_allS_standard6))), data = ur_util), "standardized")[1]
-all_effectsize <- round(z_all / sqrt(nrow(ur_util)), 3)
-
-wil_all <- glue("(median {m_aut_all}, IQR {iq1aut_all} to {iq3aut_all} versus median {m_stan_all}, IQR {iq1stan_all} to {iq3stan_all}, p{ifelse(p_all<0.001,'<0.001',paste('=',p_all))}, effect size {all_effectsize})")
-
-wil_acs <- glue("(median {m_aut_acs}, IQR {iq1aut_acs} to {iq3aut_acs} versus median {m_stan_acs}, IQR {iq1stan_acs} to {iq3stan_acs}, p{ifelse(p_acs<0.001,'<0.001',paste('=',p_acs))}, effect size {acs_effectsize})")
-
-
-###Significance tests
+##Chi-squared tests for proportions of first-line coverage
 n_all <- c(nrow(ur_util), nrow(ur_util))
 
 ###All antibiotics
@@ -263,6 +264,35 @@ ci1_ivs <- round(prop.test(x_ivs, n_all)$conf.int[1], 3)
 ci2_ivs <- round(prop.test(x_ivs, n_all)$conf.int[2], 3)
 
 chi_ivs <- glue("({perc_ivs1} versus {perc_ivs2}, 95% CI of difference {ci1_ivs} to {ci2_ivs}, p{ifelse(p2_ivs<0.001,'<0.001',paste(' =',p2_ivs))})")
+
+##Wilcoxon test for numbers of antibiotics with coverage in teh top six
+m_aut_all <- median(ur_util$n_allS_PDRx6,na.rm=T)
+m_stan_all <- median(ur_util$n_allS_standard6)
+m_aut_acs <- median(ur_util$n_acS_PDRx6)
+m_stan_acs <- median(ur_util$n_acS_standard6)
+
+iq1aut_all <- quantile(ur_util$n_allS_PDRx6)[2]
+iq1stan_all <- quantile(ur_util$n_allS_standard6)[2]
+iq1aut_acs <- quantile(ur_util$n_acS_PDRx6)[2]
+iq1stan_acs <- quantile(ur_util$n_acS_standard6)[2]
+
+iq3aut_all <- quantile(ur_util$n_allS_PDRx6)[4]
+iq3stan_all <- quantile(ur_util$n_allS_standard6)[4]
+iq3aut_acs <- quantile(ur_util$n_acS_PDRx6)[4]
+iq3stan_acs <- quantile(ur_util$n_acS_standard6)[4]
+
+p_acs <- round(wilcox.test(ur_util %>% pull(n_acS_PDRx6), ur_util %>% pull(n_acS_standard6), paired = TRUE, conf.int = TRUE)$p.value, 3)
+p_all <- round(wilcox.test(ur_util %>% pull(n_allS_PDRx6), ur_util %>% pull(n_allS_standard6), paired = TRUE, conf.int = TRUE)$p.value, 3)
+
+z_access <- statistic(wilcoxsign_test(as.formula(paste0(quo_text(ur_util$n_acS_PDRx6), " ~ ", quo_text(ur_util$n_acS_standard6))), data = ur_util), "standardized")[1]
+acs_effectsize <- round(z_access / sqrt(nrow(ur_util)), 3)
+
+z_all <- statistic(wilcoxsign_test(as.formula(paste0(quo_text(ur_util$n_allS_PDRx6), " ~ ", quo_text(ur_util$n_allS_standard6))), data = ur_util), "standardized")[1]
+all_effectsize <- round(z_all / sqrt(nrow(ur_util)), 3)
+
+wil_all <- glue("(median {m_aut_all}, IQR {iq1aut_all} to {iq3aut_all} versus median {m_stan_all}, IQR {iq1stan_all} to {iq3stan_all}, p{ifelse(p_all<0.001,'<0.001',paste('=',p_all))}, effect size {all_effectsize})")
+
+wil_acs <- glue("(median {m_aut_acs}, IQR {iq1aut_acs} to {iq3aut_acs} versus median {m_stan_acs}, IQR {iq1stan_acs} to {iq3stan_acs}, p{ifelse(p_acs<0.001,'<0.001',paste('=',p_acs))}, effect size {acs_effectsize})")
 
 ```
 
@@ -449,7 +479,7 @@ The characteristics of the MIMIC-IV urine culture and prescription datasets used
 
 Final training hyperparameters used for each clinical prediction model are summarised in Appendix 7, and predictor variable contributions to predictive performance are summarised in Appendix 8. The presence and/or absence of previously-detected resistance to an antibiotic in the last year was one of the largest contributors to predictive accuracy for urine pathogen susceptibility to that antibiotic in most models. Gender and age group were large contributors to antibiotic susceptibility predictive performance in all models. Hospital admission in the last year, age over 65, previous CDI, and previous acute kidney injury in the last year were among the largest contributors to predictive performance for both *C. difficile* infection (CDI) and antibiotic toxicity.
 
-Receiver operating characteristic (ROC) curves and performance metrics for models predicting single-antibiotic susceptibility, CDI, and toxicity in the single validation run on the validation dataset are summarised in Figure 2 and Table 1 respectively. ROC curves and performance metrics for models predicting susceptibility to 2-antibiotic combinations are summarised in Appendix 9 and Appendix 10 respectively.
+Receiver operating characteristic (ROC) curves and performance metrics for models predicting single-antibiotic susceptibility, CDI, and toxicity in the single validation run on the validation dataset are summarised in Figure 2 and Table 1 respectively. ROC curves and performance metrics for models predicting susceptibility to 2-antibiotic combinations are summarised in Appendix 9 and Appendix 10 respectively. The model that predicted CDI following an antibiotic prescription had the highest predictive performance, with an AUROC of `r aucfilter(metrics_singles_table,"CDI")`. The model that predicted Ampicillin coverage of the urinary pathogen had the lowest predictive performance, with an AUROC of `r aucfilter(metrics_singles_table,"Ampicillin")`. Of the 13 other prediction models, 10 produced AUROCs between 0.7 and 0.8, and 3 between 0.65 and 0.7 (ampicillin/sulbactam, gentamicin, and trimethoprim/sulfamethoxazole).
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -477,7 +507,7 @@ Performance metrics from the model fairness analyses are summarised in Appendix 
 
 ## Discrete choice experiment
 
-The coefficients from the ranked logit analysis of the discrete choice experiment across all specialties are displayed in Figure 3, and the coefficients by individual specialty are displayed in Appendix 14. Overall, an antibiotic being specific to urinary tract infection in its licensed indication appeared to have the most positive effect on its probability of selection in the discrete choice experiment, and high toxicity risk the greatest negative effect on its probability of selection. High antibiotic cost appeared to have the least effect on probability of antibiotic selection, exhibiting a minimal positive effect with the approximated 95% confidence interval crossing the line of no effect.
+The coefficients from the ranked logit analysis of the discrete choice experiment across all specialties are displayed in Figure 3, and the coefficients by individual specialty are displayed in Appendix 14. Overall, an antibiotic being specific to urinary tract infection in its licensed indication appeared to have the most positive effect on its probability of selection in the discrete choice experiment, and high toxicity risk the greatest negative effect on its probability of selection. High antibiotic cost appeared to have the least effect on probability of antibiotic selection, exhibiting a minimal positive effect with the approximated 95% confidence interval crossing the line of no effect.\
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -499,7 +529,7 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility
 
 Figure 4: Distributions of antimicrobial choice utility values for patients across the microsimulation dataset.\
 
-At the lowest illness severity score (zero), nitrofurantoin had the highest median treatment choice utility in the microsimulation dataset. For single-agent treatment, five of the six antibiotics with the highest median utility were WHO Access agents - the only exception to this was piperacillin-tazobactam, which placed fourth overall amongst single agents. The lowest placed WHO Access antibiotic was ampicillin (or amoxicillin), which placed 12th out of 13 agents. Vancomycin was the lowest-placed antibiotic choice for most patients in terms of median utility across the population. The widest spread in utility values was observed for cefazolin (IQR 1.57), reflecting the fact that predicted probability of susceptibility to cefazolin varied the most across the population (IQR 0.28).
+Nitrofurantoin had the highest median utility across the population (`r utilsum(util_probs_df,1,"median")`). For single-agent treatment, four of the six antibiotics with the highest median utility were WHO Access agents (nitrofurantoin, gentamicin, ampicillin/sulbactam, and trimethoprim/sulfamethoxazole) and two were Watch agents (piperacillin/tazobactam and ciprofloxacin). The lowest placed WHO Access antibiotic was ampicillin (or amoxicillin), which placed 12th out of 13 antibiotics. Vancomycin had the lowest median utility across the population (`r utilsum(util_probs_df,13,"median")`). The widest spread in utility values was observed for cefazolin ( IQR `r utilsum(util_probs_df,1,"IQR")`), reflecting the fact that predicted probability of susceptibility to cefazolin varied the most across the population (IQR `r round(wideiqr,3)`).
 
 Nitrofurantoin was the highest-placed agent for all prescriber specialties in terms of median utility across the population, and the placement of other agents was more variable. The largest differences observed between antibiotic utility values were between general practice and intensive care – agents with oral routes of administration ranked higher in the former, while those with intravenous routes of administration ranked higher in the latter. When two-agent combinations were included in the general analysis, ampicillin plus gentamicin became the second-placed treatment option in terms of median utility across the population (behind nitrofurantoin), meropenem plus vancomycin the third, and piperacillin-tazobactam plus ciprofloxacin the fourth.
 
@@ -542,9 +572,11 @@ When combinations of antimicrobial agents were included (Appendix 20), automated
 
 Artificially improving the accuracy of probability predictions (Appendix 21) increased the proportion of organisms covered by first-line treatment recommendations for all levels of illness severity (98.8%), preserving 28.3% Access and 30% oral antibiotic recommendations even at the highest levels of illness severity while increasing the number of recommendations with IV preparations to 98.7%.
 
-Increasing median nitrofurantoin predicted resistance probability (Appendix 22) reduced the proportion of first-line automated recommendation organism coverage to a nadir of 65.5% at a median resistance probability of 43.3%. As nitrofurantoin resistance predictions rose above 50%, the coverage proportion rose to 78.9% as the algorithm selected more gentamicin, ampicillin/sulbactam, and cefazolin as first-line therapy instead of nitrofurantoin.
+Sequentially increasing the illness severity score of the whole population in parallel (Appendix 22) resulted in a rise in urine pathogen coverage as illness severity increased.
 
-When extreme discrete choice experiment results were simulated (Appendix 23) oral antibiotics appropriately scored higher and more expensive antibiotics scored lower, with ciprofloxacin exhibiting the highest median utility value. An unanticipated effect was a strongly negative ranked logit coefficient for UTI-specificity, resulting in a low median utility value for nitrofurantoin. To address suspected collinearity as a cause for this phenomenon, UTI-specificity was removed from one antibiotic option with an oral route of administration and added to an antibiotic without an oral route of adminstration – this action resolved the effect and resulted in a positive coefficient value for UTI-specificity (Appendix 24).\
+Increasing median nitrofurantoin predicted resistance probability (Appendix 23) reduced the proportion of first-line automated recommendation organism coverage to a nadir of 65.5% at a median resistance probability of 43.3%. As nitrofurantoin resistance predictions rose above 50%, the coverage proportion rose to 78.9% as the algorithm selected more gentamicin, ampicillin/sulbactam, and cefazolin as first-line therapy instead of nitrofurantoin.
+
+When extreme discrete choice experiment results were simulated (Appendix 24) oral antibiotics appropriately scored higher and more expensive antibiotics scored lower, with ciprofloxacin exhibiting the highest median utility value. An unanticipated effect was a strongly negative ranked logit coefficient for UTI-specificity, resulting in a low median utility value for nitrofurantoin. To address suspected collinearity as a cause for this phenomenon, UTI-specificity was removed from one antibiotic option with an oral route of administration and added to an antibiotic without an oral route of adminstration – this action resolved the effect and resulted in a positive coefficient value for UTI-specificity (Appendix 25).\
 
 # Discussion
 
