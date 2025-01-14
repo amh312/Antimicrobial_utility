@@ -324,10 +324,10 @@ Appendix 18: Sensitivity analyses demonstrating the effect of varying all utilit
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of WHO Access agents, 2nd-line)_susplot.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of orally-administrable agents, 2nd-line)_susplot.pdf")
-knitr::include_graphics(normalizePath("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of IV-administrable agents, 2nd-line)_susplot.pdf"))
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/ilness_2ndplot.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of 2nd-line WHO Access agents)_susplot.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of 2nd-line antibiotics with an oral option)_susplot.pdf")
+knitr::include_graphics(normalizePath("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of 2nd-line antibiotics with an IV option)_susplot.pdf"))
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/illness_abplot_2.pdf")
 
 ```
 
@@ -338,9 +338,9 @@ Appendix 19: Changes in the proportion of urine organism coverage with second-li
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of WHO Access agents, combinations included)_susplot.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of orally-administrable agents, combinations included)_susplot.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of IV-administrable agents, combinations included)_susplot.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of WHO Access agents, including combinations)_susplot.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of antibiotics with an oral option, including combinations)_susplot.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of antibiotics with an IV option, including combinations)_susplot.pdf")
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/ilness_comboplot.pdf")
 
 ```
@@ -352,17 +352,31 @@ Appendix 20: Changes in the proportion of urine organism coverage with first-lin
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of WHO Access agents, improved probability predictions)_susplot.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of orally-administrable agents, improved probability predictions)_susplot.pdf")
-knitr::include_graphics(normalizePath("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of IV-administrable agents, improved probability predictions)_susplot.pdf"))
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/ilness_impplot.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of recommended WHO Access agents, improved predictions)_susplot.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of recommended antibiotics with an oral option, improved predictions)_susplot.pdf")
+knitr::include_graphics(normalizePath("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of recommended antibiotics with an IV option, improved predictions)_susplot.pdf"))
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/illness_abplot_imp.pdf")
 
 ```
 
 Appendix 21: Changes in the proportion of urine organism coverage with first-line treatment recommendations overall, Access treatment recommendations, treatment recommendations with oral preparations, and treatment recommendations with intravenous preparations as the illness severity of the population was increased (improved probability predictions).\
 \
 
-## Appendix 22: Sensitivity analysis (nitrofurantoin resistance)
+## Appendix 22: Illness severity sensitivity analysis (continued ascending illness severity)
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_illness severity sensitivity analysis (proportion of WHO Access agents)_susplot.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_illness severity sensitivity analysis (proportion of antibiotics with an oral option)_susplot.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_illness severity sensitivity analysis (proportion of antibiotics with an IV option)_susplot.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/illness_abplot_ill.pdf")
+
+```
+
+Appendix 22: Changes in the proportion of urine organism coverage with first-line treatment recommendations overall, Access treatment recommendations, treatment recommendations with oral preparations, and treatment recommendations with intravenous preparations as the illness severity of the population was increased for the whole population in tandem until treatment recommendations stopped changing.\
+\
+
+## Appendix 23: Nitrofurantoin resistance sensitivity analysis
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -376,7 +390,7 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/nitres_
 Appendix 22: Changes in the proportion of urine organism coverage with first-line treatment recommendations overall, Access treatment recommendations, treatment recommendations with oral preparations, and treatment recommendations with intravenous preparations as the median predicted probability of nitrofurantoin resistance was varied between zero and one.\
 \
 
-## Appendix 23: Discrete choice experiment edge case sensitivity analysis
+## Appendix 24: Discrete choice experiment edge case sensitivity analysis
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -392,7 +406,7 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall
 Appendix 23: Discrete choice experiment edge case sensitivity analysis where many identical responses were simlated in which oral administration options were prioritised.\
 \
 
-## Appendix 24: Discrete choice experiment edge case sensitivity analysis (collinearity reduced)
+## Appendix 25: Discrete choice experiment edge case sensitivity analysis (collinearity reduced)
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
