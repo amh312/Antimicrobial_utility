@@ -1,5 +1,5 @@
 ---
-title: "Automating personalised antibiotic choices using a machine learning-based utility function: a microsimulation study"
+title: "A utility function for precise antibiotic decision-making: a machine learning and simulation study"
 format:
   docx:
     reference-doc: doc_template.docx
@@ -336,11 +336,11 @@ A utility function could power decision support tools that leverage data, machin
 
 ## Background
 
-Data-driven decision support tools that incorporate machine learning may improve individual and population outcomes from antibiotic treatment. To achieve this a utility function is required that quantifies the value of different antibiotic treatment options. Here, we construct and assess a utility function that personalises antibiotic treatments for urinary tract infection (UTI) by combining machine learning algorithms with real-world expert prescriber experience. 
+Data-driven decision support tools that incorporate machine learning could improve individual and population outcomes from antibiotic treatment. To achieve this a utility function is required that quantifies the value of different antibiotic treatment options. Here, we construct and assess a utility function that personalises antibiotic treatments for urinary tract infection (UTI) by combining machine learning with expert prescriber experience. 
 
 ## Methods
 
-Retrospective healthcare data were used to calculate treatment utility for 13 antibiotics in `r nrow(ur_util) %>% comma()` patients whose urine was sent for culture. A utility function that incorporated probability predictions, importance weighting, and illness severity inputs was developed. The proportion of urine pathogens covered by WHO Access category, oral, and intravenous utility-based personalised UTI treatment recommendations were compared to those actually prescribed, and the number of overall and Access antibiotics in the top six recommendations were compared to a standard panel.
+Retrospective healthcare data were used to calculate treatment utility for 13 antibiotics in `r nrow(ur_util) %>% comma()` patients whose urine was sent for culture. A utility function that combined probability predictions, importance weighting, and illness severity inputs was developed. The proportion of urine pathogens covered by WHO Access category, oral, and intravenous utility-based treatment recommendations were compared to those actually prescribed. The number of overall and Access antibiotics in the top six recommendations were compared to a standard panel.
 
 ## Findings
 
@@ -348,7 +348,7 @@ Compared to antibiotics actually prescribed, the utility function recommendation
 
 ## Interpretation
 
-A utility function could improve individual and population outcomes from antibiotic treatment by leveraging machine learning and prescriber experience to balance the risk of antibiotic failure against the risk of antibiotic harm. Decision support tools that tailor treatments to diverse individuals and populations should be tested in clinical studies
+A utility function could improve individual and population antibiotic treatment outcomes by leveraging machine learning and prescriber experience to balance risks of antibiotic failure against antibiotic harm. Decision support tools based on the utility function that tailor treatments to diverse populations should be tested in clinical studies.
 
 ## Funding
 
@@ -356,53 +356,44 @@ Funded in part by the Wellcome Trust grant ref: 226691/Z/22/Z. Supported by the 
 
 # Introduction
 
-Antimicrobial resistance (AMR) is a significant threat to the delivery of global healthcare.[@walshAntimicrobialResistanceAddressing2023] In September 2024, the United Nations General Assembly (UNGA) committed to ensuring that the safest, cheapest antibiotics with the lowest AMR risk (World Health Organisation \[WHO\] Access Category antibiotics) make up 70% of global antibiotic use in healthcare by 2030.[@un2024_amr] The challenge in achieving this goal is determining when it is safe to empirically use Access agents, which often have a narrower spectrum of activity and will therefore be avoided in favour of more harmful Watch category agents to ensure treatment efficacy. This issue is compounded when there is doubt about the presence of resistance and/or there are significant adverse consequences for incorrect choices (e.g., treatment of systemically unwell patients). [@howardPersonalisedAntimicrobialSusceptibility2024, @rheeTrendsEmpiricBroadSpectrum2024]
+Antimicrobial resistance (AMR) is a threat to delivery of global healthcare.[@walshAntimicrobialResistanceAddressing2023] The United Nations General Assembly (UNGA) recently committed to prioritising global use of antibiotics that generate less AMR (World Health Organisation \[WHO\] Access Category).[@un2024_amr] Determining when to use Access antibiotics is challenging — they often have narrower spectra of activity so AMR-generating Watch Category antibiotics are often used instead to ensure efficacy, particularly when there is uncertainty about resistance and/or severe consequences of failure (e.g., sepsis).[@howardPersonalisedAntimicrobialSusceptibility2024, @rheeTrendsEmpiricBroadSpectrum2024]
 
-Algorithmic support of antimicrobial treatment choice is a potential means to deliver optimally precise antimicrobial therapy—this approach can quantify the probability of resistance and treatment outcomes using clinical prediction models that combine characteristics of the drug, patient, and pathogen.[@corbinPersonalizedAntibiogramsMachine2022] Its usefulness supporting holistic prescribing decisions, however, is hampered by the lack of a robust utility function, a mathematical equation to quantify the value of different antibiotic treatment options based on machine learning predictions and intuition derived from domain knowledge/experience.[@staderAlgorithmsDontHave2024,@walshUtilityFunctionsAutonomic2004] Antibiotic treatment suggestions using a utility function might give prescribers the confidence to safely use Access category antibiotics when appropriate, while compromising on Access antibiotic use in situations where treatment efficacy needs to be prioritised (e.g., where risk of resistance and/or clinical deterioration from untreated infection is high). 
+Algorithmically supporting antibiotic treatment choice could help increase Access antibiotic use by predicting AMR and treatment outcomes using models that combine antibiotic, patient, and pathogen characteristics.[@corbinPersonalizedAntibiogramsMachine2022] Turning predictions into holistic prescribing decisions requires a utility function, an equation that combines predictions with domain knowledge to quantify the value of antibiotic treatment options.[@staderAlgorithmsDontHave2024,@walshUtilityFunctionsAutonomic2004] A utility function may give prescribers confidence to use Access antibiotics when appropriate by advising when their use needs to be avoided to prioritise efficacy.
 
-Here, we describe a urinary tract infection (UTI) antibiotic choice automation approach, built on a utility function that combines machine learning prediction of treatment outcomes with prescriber-informed outcome values/costs, and illness severity. The aims of this study are to firstly assess whether UTI treatment recommendations based on the utility function can successfully cover urinary pathogens using at least 70% Access category antibiotics, and secondly to assess whether recommendations adapt appropriately to prioritise organism coverage and intravenous antibiotics as illness severity increases.  
+Here, we describe a utility function that makes urinary tract infection (UTI) antibiotic treatment choices by combining algorithmic predictions with expert domain knowledge and illness severity score. The aims of this simulation study are to assess the potential of this approach to increase the proportion or Access and oral antibiotic use without compromising on likelihood of treatment efficacy.
 
 # Methods
 
 ## Ethics
 
-The study complied with the PhysioNet MIMIC-IV dataset Data Use Agreement 1.5.0 and Health Data License. Approval was also obtained for a discrete choice experiment (an antibiotic ranking scenario task undertaken by prescribers) from the NHS Health Research Authority (HRA). A review was undertaken by a UK Research Ethics Committee (IRAS 330186), which determined that full ethics committee review was not required.
+The study complied with the PhysioNet MIMIC-IV dataset Data Use Agreement 1.5.0. Approval was also obtained for an prescriber antibiotic ranking scenario task from the NHS Health Research Authority (HRA). A UK Research Ethics Committee (IRAS 330186) determined that ethics committee review was not required.
 
 ## Data sources and processing
 
 The study required four datasets:
 
-1. Urine culture data to train clinical prediction models to predict the probability of a specified antibiotic providing coverage of the urine pathogen grown, i.e., the probability that the urinary pathogen will be susceptible to that antibiotic.
-2. Antibiotic prescription data to train clinical prediction models to predict the probability of *Clostridioides difficile* infection (CDI) and drug toxicity following exposure to a specified antibiotic.
-3. A second set of urine culture data for patients presenting to the Emergency Department, to perform a microsimulation study comparing utility function antibiotic recommendations against those actually prescribed.
-4. A set of antibiotic rankings from real-world clinicians who had performed a discrete choice experiment (an antibiotic ranking exercise in response to a survey with clinical UTI vignette).
+1.  Urine culture data to train models to predict probability of an antibiotic covering the UTI pathogen, i.e., the pathogen being susceptible to the antibiotic.
+2.  Antibiotic prescription data to train models to predict probability of *Clostridioides difficile* infection (CDI) and drug toxicity following antibiotic exposure.
+3.  Emergency Department (ED) patient holdout urine culture data to perform a microsimulation study comparing utility function antibiotic recommendations against antibiotics actually prescribed.
+4.  Antibiotic ranking data from clinicians who undertook a discrete choice experiment (a UTI vignette antibiotic ranking exercise).
 
-Clinical prediction model training/testing/validation was performed using antibiotic prescribing and urine culture data from the open-source PhysioNet dataset MIMIC (Medical Information Mart for Intensive Care)-IV version 2.2, a pseudonymised inpatient and outpatient electronic healthcare record dataset for patients over the age of 18 who were admitted to intensive care or the emergency department between 2008 and 2019 at Beth Israel Deaconess Medical Center (BIDMC - Boston, MA) (<https://physionet.org/content/mimiciv/2.2/>).[@johnsonMIMICIVClinicalDatabase, @johnsonMIMICIVFreelyAccessible2023b, @goldbergerPhysioBankPhysioToolkitPhysioNet2000b] The microsimulation study was performed on a holdout dataset of the urine culture data. The full data preprocessing workflow is summarised in Appendix 3. Data preprocessing and quality checking was performed in a similar way across sociodemographic groups using R version 4.3.2 (2023-10-31), and followed an expanded version of the process used in our previous work whereby logistic regression models were used to personalise antimicrobial susceptibility testing.[@howardPersonalisedAntimicrobialSusceptibility2024, @rstudioref].
+Clinical prediction model development and the microsimulation study used data from PhysioNet MIMIC (Medical Information Mart for Intensive Care)-IV version 2.2, an open-source, pseudonymised electronic healthcare record dataset for inpatients and outpatients over the age of 18 admitted to Beth Israel Deaconess Medical Center (Boston, MA) intensive care (ICU) or ED between 2008 and 2019 (<https://physionet.org/content/mimiciv/2.2/>).[@johnsonMIMICIVClinicalDatabase, @johnsonMIMICIVFreelyAccessible2023b, @goldbergerPhysioBankPhysioToolkitPhysioNet2000b] Data preprocessing and quality checking (Appendix 1) was performed consistently across sociodemographic groups using R v4.3.2 (2023-10-31) in a similar way to our previous work personalising antimicrobial susceptibility testing.[@howardPersonalisedAntimicrobialSusceptibility2024, @rstudioref]
 
-After data preprocessing, prescribing data and urine culture susceptibility data were available for 13 antibiotics (ampicillin, ampicillin-sulbactam, piperacillin-tazobactam, cefazolin, ceftriaxone, cefepime, meropenem, ciprofloxacin, gentamicin, trimethoprim-sulfamethoxazole, nitrofurantoin, and vancomycin). Antimicrobial susceptibility interpretations are likely to be based on Clinical Laboratory Standards Institute clinical breakpoints given the U.S. setting.[@patelUpdatingBreakpointsUnited2023] Sample size was determined by the size of the available datasets, and provided a sufficient number of cases per independent variable in the model to reduce the risk of overfitting.[@bramerAvoidingOverfittingDecision2007]
+Following preprocessing, prescribing and urine culture susceptibility data (likely based on Clinical Laboratory Standards Institute breakpoints) were available for 13 antibiotics (ampicillin, ampicillin-sulbactam, piperacillin-tazobactam, cefazolin, ceftriaxone, cefepime, meropenem, ciprofloxacin, gentamicin, trimethoprim-sulfamethoxazole, nitrofurantoin, and vancomycin).[@patelUpdatingBreakpointsUnited2023] Sample size was determined by dataset size, and likely provided a sufficient case-variable ratio to reduce overfitting risk.[@bramerAvoidingOverfittingDecision2007]. Microsimulation data were urine cultures from ED patients triaged and prescribed at least one of the 13 antibiotics on the same day who grew a pathogen in their urine. The ‘acuity’ variable indicating illness severity at triage was transformed from a 4-1 scale (mild to severe) to a 0-3 scale to facilitate the utility function.
 
-Microsimulation data was a holdout subset of the urine culture data from patients who attended the Emergency Department and were prescribed one or more of the 13 antibiotics on the same day. The ‘acuity’ variable indicating illness severity at triage was transformed from a 4-1 scale (mild to severe) to a 0-3 scale to facilitate the utility function.
+Antibiotic cost was determined using the each drug's lowest U.S. Department of Veterans Affairs National Acquisition Center procurement price (November 2024) — U.S. dollar values were divided by the highest value (including two-antibiotic combinations) to produce normalised numbers between zero and one.[@supportVANationalAcquisition]
 
-Antibiotic financial cost was determined using the lowest procurement/tender award price for each agent in U.S. dollars as listed on the U.S. Department of Veterans Affairs National Acquisition Center (<https://www.vendorportal.ecms.va.gov/NAC/>) when accessed in November 2024 - these values were divided by the highest cost including combinations of antibiotics to produce normalised numbers between zero and one.[@supportVANationalAcquisition]
-
-The discrete choice experiment provided weights ($w$) for the utility function. The experiment took the form of a survey that was completed online between June 1st 2024 and October 31st 2024 by UK-based antibiotic prescribers from general practice (GP), medicine, surgery, intensive care, and infectious diseases/medical microbiology, contacted through organisational and departmental single points of contact by email. Sample size was determined by the number of respondents in the 4-month survey period. No minimum sample size was prespecified, but the aim was to obtain at least some participants from each specialty.
-
-The discrete choice experiment survey was a questionnaire (see Appendix 1) that posed 13 fictional antibiotics with six characteristics (AWaRe class, CDI risk, toxicity, UTI-specificity, oral and IV administration) - these numbers of fictional antibiotics and characteristics were chosen as a balance between the time taken for respondents to complete the task and providing sufficient differences between the antibiotic options to minimise collinearity.[@buddAdaptationWHOEssential2019] Participants were given a fictional UTI clinical scenario, then asked to rank the treatments in order of suitability.
+The discrete choice experiment was a UTI vignette antibiotic ranking exercise (Appendix 2) distributed by online survey (<https://www.surveymonkey.com>) between 1st June and October 31st 2024 to UK-based clinicians in general practice (GP), medicine, surgery, ICU, and infectious diseases/medical microbiology (ID/MM) by organisational and departmental email single points of contact. Sample size was determined by the number of respondents with the aim of representing every specialty above. Respondents ranked 13 fictional antibiotics with six characteristics (AWaRe class, CDI risk, toxicity, UTI-specificity, oral and IV administration) in order of suitability in a fictional UTI scenario — this configuration balanced time taken to complete the exercise against risk of variable collinearity.[@buddAdaptationWHOEssential2019]
 
 ## Utility function design
 
-The utility function is a mathematical calculation that outputs a numerical choice utility value $U$ for each antibiotic option for each individual patient - this number represents the value of each antibiotic to that patient as a potential treatment choice. Utility is calculated in a way that is designed to mimic intuitive human choice making by considering the relative characteristics and possible consequences of available antibiotic treatments ($v$), the importance of those consequences (weights $w$), and a safety mechanism $S$.[@zhurisk2021]
-
-The minimum possible antibiotic choice utility ($U$) of an antibiotic is zero. In this study we propose that $U$ for a specified antibiotic ($x$) and a specified patient ($n$) is defined as:\
+The utility function is an equation that outputs a utility value $U$ for each antibiotic option for each patient by incorporating the characteristics and consequences of antibiotic treatments ($v$), the importance of those consequences (weights $w$), and a safety mechanism $S$.[@zhurisk2021] The minimum possible value of $U$ is zero. We propose that $U$ for antibiotic $x$ in patient $n$ is is defined as\
 
 $$
 U^{(x,n)} = v_s^{(x,n)}\left(P^{(x,n)}+C^{(x)}+S^{(x,n)}\right)
-$$ {#eq-utility}
-\
+$$ {#eq-utility}\
 
-where $v_s$ in @eq-utility is the probability of covering the patient's urinary pathogen and $v_s \in [0,1]$. If $v_s=0$, it follows that $U=0$. If $v_s=1$, variation in $U$ will be determined by variation in $P$, $C$, and/or $S$.\
-
-The function $u$ ensures that the utility values for $P$, $C$, and $S$ are always positive\
+where $v_s$ is the probability of covering the urinary pathogen and $v_s \in [0,1]$. If $v_s=0$, then $U=0$. If $v_s=1$, variation in $U$ is determined by variation in $P$, $C$, and/or $S$. The function $u$ ensures that the utility values for $P$, $C$, and $S$ are always positive\
 
 $$
 u(w, v) = 
@@ -410,15 +401,13 @@ u(w, v) =
     wv & \text{if } w \geq 0 \\
     |w|(1-v) & \text{otherwise} \
 \end{cases}
-$$ {#eq-ufunction}
-\
-where $v$ in @eq-ufunction are either antibiotic characteristics (in $C$) or probability values (in $P$) for each antibiotic-patient combination $(x,n)$ calculated using XGBoost models trained, tested and validated on MIMIC-IV urine antibiotic susceptibility data (for $v_s$) and antibiotic prescription data (for $v_c$ and $v_t$) as described in Appendix 3. Weights $w$ represent the importance of antibiotic characteristics and outcomes $v$, defined by their relative contributions to prescriber antibiotic choices (i.e., coefficients) in a logistic regression model (Appendix 4) trained on antibiotic ranking data from the discrete choice experiment (Appendix 1).\
+$$ {#eq-ufunction}\
 
-$P$ is the utility of predicted antibiotic outcomes\
+where $v$ are either Boolean antibiotic characteristics or probability values calculated using clinical prediction models summarised in Appendix 3. Weights $w$ represent the importance of antibiotic characteristics and outcomes $v$ in a logistic regression model (Appendix 4) trained on antibiotic ranking data from the discrete choice experiment. If $w$ is negative, (i.e., an undesirable outcome or characteristic), an increase in $v$ reduces the value of $u(w,v)$, and vice versa. $P$ is the utility of predicted antibiotic outcomes\
 
 $$
 P^{(x,n)} = u(w_c, v_c^{(x,n)}) + u(w_t, v_t^{(x,n)})
-$${#eq-probability}
+$$ {#eq-probability}
 
 $$
 v_c \in [0,1] \quad \text{(Probability of } \textit{Clostridiodes difficile} \text{ infection)}
@@ -426,16 +415,13 @@ $$
 
 $$
 v_t \in [0,1] \quad \text{(Probability of antibiotic toxicity)}
-$$
-\
-
-If $w_c$ or $w_t$ is negative in @eq-probability (a result of prescribers deeming it to be an undesirable antibiotic outcome in the discrete choice experiment), an increase in the probability of the corresponding outcome $v$ will reduce the value of $P$ (thereby reducing $U$), and vice versa.\
+$$\
 
 $C$ is the utility of known antibiotic characteristics\
 
 $$
 C^{(x)}=u(w_u,v_u^{(x)})+u(w_a,v_a^{(x)})+u(w_o,v_o^{(x)})+u(w_r,v_r^{(x)})+u(w_h,v_h^{(x)})
-$${#eq-characteristics}
+$$ {#eq-characteristics}
 
 $$
 v_u \in \{0,1\} \quad \text{(UTI-specific agent)}
@@ -443,8 +429,7 @@ $$
 
 $$
 v_a \in \{0,1\} \quad \text{(WHO Access agent)}
-$$
-$$
+$$ $$
 v_o \in \{0,1\} \quad \text{(Oral administration option)}
 $$
 
@@ -454,16 +439,13 @@ $$
 
 $$
 v_h \in [0,1] \quad \text{(Normalised agent cost)}
-$$
-\
+$$\
 
-If a value of $w$ in @eq-characteristics is negative (a result of prescribers deeming it to be an undesirable antibiotic characteristic in the discrete choice experiment), the presence of the corresponding characteristic $v$ will reduce the value of $P$ (thereby reducing $U$), and vice versa.\
-
-$S$ is a safety mechanism for patients with severe infection, that exponentially increases the weight of intravenous treatment utility and probability of susceptibility as illness severity increases\
+and $S$ is a safety mechanism for patients with severe infection\
 
 $$
 S^{(x,n)}= u(w_i,v_i^{(x)})e^{a(n)}b
-$${#eq-safety}
+$$ {#eq-safety}
 
 $$
 v_i \in \{0,1\} \quad \text{(IV administration option)}
@@ -479,25 +461,17 @@ $$
 
 \
 
-where $e$ in @eq-safety is Euler's number (the mathematical constant that is the base of the natural exponential function, approximately 2.72), $a$ is an illness severity score chosen by the user (e.g., National Early warning score [NEWS] or the APACHE II score), and $b$ is an adjustment weight to calibrate the mechanism to the chosen severity score. The minimum illness severity score in a population is always zero, and as a patient’s illness severity score increases, the relative contributions of an intravenous treatment option and probability of urine pathogen coverage to antibiotic choice utility increase. The rationale for this approach as a safety mechanism $S$ is that more systemically unwell patients are more likely to have severe infection (e.g., sepsis), in which scenario the consequences of ineffective antibiotic therapy are more severe.[@buckmanEmpiricAntibioticsSepsis2018] 
+where $e$ is the base of the natural exponential function (a constant), $a$ is an illness severity score chosen by the user (e.g., National Early warning score \[NEWS\]), and $b$ calibrates to the chosen score (default $b=1$ used in this study). The minimum illness severity score in a population must be zero. As illness severity score increases, patients are more likely to have severe infection (e.g., sepsis), in which case efficacy should be prioritised — increasing $a$ therefore exponentially increases the value of intravenous treatment($u(w_i,v_i^{(x)})$) and coverage of the urinary pathogen ($v_s$). [@buckmanEmpiricAntibioticsSepsis2018]
 
 ## Microsimulation study
 
-An individual-level simulation (microsimulation) study design was used to assess the distributions of antibiotic utility values and the projected outcomes of the decision algorithm in real-world data.[@DynamicMicrosimulationModels] For patients who presented to the Emergency Department, were prescribed antibiotics, and subsequently grew a pathogen in their urine, all 13 antimicrobial agents were ranked according to utility value for each patient to identify personalised treatment recommendations. A default illness severity adjustment weight ($b$) of one was used for the main analysis. These recommendations were compared to the real-world Emergency department antibiotic prescriptions made for each patient.
+An individual-level simulation (microsimulation) study projected outcomes of utility function treatment decisions in real-world data.[@DynamicMicrosimulationModels] For each patient, all 13 antibiotics were ranked according to utility value — the antibiotic with the highest utility became that patient's UTI treatment recommendation. Outcomes of interest were:
 
-## Outcomes
+1.  The proportion of WHO Access category, oral, intravenous, and overall treatment recommendations that would have covered the urinary pathogen grown — these were compared with those of antibiotics actually prescribed on the day of the urine specimen using a chi-squared test (significance threshold 5%, reported as group proportions and 95% confidence interval).
 
-The outcomes of interest were:
+2.  The median numbers of Access and overall antibiotics in those with the top six utility values that would have covered the urinary pathogen grown in each specimen — these were compared with a standard top six (nitrofurantoin, trimethoprim-sulfamethoxazole, gentamicin, piperacillin-tazobactam, ceftriaxone, and ciprofloxacin from WHO and European Society of Urology UTI treatment guidelines, as used in our personalised antimicrobial susceptibility testing work[@howardPersonalisedAntimicrobialSusceptibility2024, @EAUGuidelinesUrologicala, @WHOAWaReAccess]) using a Wilcoxon signed rank test (two-sample paired with continuity correction, effect size calculated as the test Z statistic divided by the square root of the total number of specimens).
 
-1.  The proportion of urine pathogens covered by WHO Access category, oral, intravenous, and overall simulated utility-based personalised UTI treatment recommendations.
-
-2.  The number of Access and overall antibiotics in the top six recommendations per specimen that cover the urine pathogen.
-
-Proportions from utility function recommendations were compared with those of antibiotics actually prescribed on the day of the urine specimen using a chi-squared test with a significance threshold of 5% and results reported as proportions for the two groups and 95% confidence interval.
-
-Median numbers of susceptible results per specimen in the top six from the utility function recommendations were compared with a standard top six of nitrofurantoin, trimethoprim/sulfamethoxazole, gentamicin, piperacillin/tazobactam, ceftriaxone, and ciprofloxacin (based on a combination and WHO and European Society of Urology UTI treatment guidelines, as described in our previous work[@howardPersonalisedAntimicrobialSusceptibility2024, @EAUGuidelinesUrologicala, @WHOAWaReAccess]) using a Wilcoxon signed rank test (two-sample paired with continuity correction). The effect size was calculated as the test Z statistic divided by the square root of the total number of specimens.
-
-## Sensitivity analyses
+## Additional analyses
 
 Sensitivity analyses were performed to assess how utility values and recommendations produced by the utility function changed in response to changes in parameter inputs (including edge cases where parameters had extreme values). Different clinical scenarios were assessed using the microsimulation study design, to observe changes in recommendations and pathogen coverage with second-line treatment recommendations (antibiotics with the second-highest treatment utility), 2-agent antibiotic combinations, improved probability predictions (simulated by taking the mean of the predicted probability and the actual outcome denoted by one or zero), and changing nitrofurantoin resistance rates.
 
@@ -505,15 +479,11 @@ Sensitivity analyses were performed to assess how utility values and recommendat
 
 ## Participants
 
-The characteristics of the MIMIC-IV urine culture and prescription datasets used to train clinical prediction models and perform the microsimulation study are summarised in Appendix 5. In the urine culture data, females were more prevalent than males (`r urt(desc_tab,"F")`), and 70-79 was the most prevalent age group (`r urt(desc_tab,"70-79")`). In the microsimulation subset of the urine culture data, patients most commonly had an intermediate illness severity score (1 or 2) - 2.9% (n=10) of patients had the lowest score (0) and 10.3% (n=35) had the highest (3). In the prescriptions dataset, 60-69 year olds were the most prevalent age group (`r abt(desc_tab,"60-69")`). The numbers of different antibiotic types prescribed in the prescription dataset are summarised in Appendix 6 - the most commonly-prescribed antibiotic was `r abt2(ab_tab,1)`, followed by `r abt2(ab_tab,2)`, then `r abt2(ab_tab,3)`, reflecting that the prescriptions dataset was restricted to inpatients and covered all clinical indications. 
-
-49 prescribers completed the discrete choice experiment, 47 of whom were based in Liverpool, one in Manchester, and one in Yorkshire. A total of 15 participants were from infection specialties (medical microbiology and infectious diseases), 11 were from other medical specialties (haemato-oncology, respiratory medicine, and acute medicine), nine were from surgical specialties (urology and general surgery), nine were from intensive care, and five were from general practice. The mean time taken to complete the ranking task was 9 minutes and 12 seconds. Antibiotic rankings varied between participants, but the same agent was ranked either first or second out of 13 by all participants - a UTI-specific Access-category agent with low cost and CDI/toxicity risk, orally but not intravenously-administrable.
+Characteristics of the MIMIC-IV urine culture and prescription datasets are summarised in Appendix 5. More urine specimens were from females than males (`r urt(desc_tab,"F")`), and older patients (highest 70-79 `r urt(desc_tab,"70-79")`). Illness severity scores of 1 or 2 were commonest — 2.9% (n=10) scored 0 and 10.3% (n=35) scored 3. Most prescriptions were for older patients (highest 60-69 `r abt(desc_tab,"60-69")`). The three most commonly-prescribed antibiotics (Appendix 6) were `r abt2(ab_tab,1)`, `r abt2(ab_tab,2)`, and `r abt2(ab_tab,3)`. 49 UK-based prescribers completed the discrete choice experiment (15 medical microbiology and infectious diseases, 11 haemato-oncology/respiratory medicine/acute medicine, nine urology/general surgery, nine ICU, five GP). Mean completion time was 9 minutes, 12 seconds. All participants ranked first or second a low-cost, low CDI/toxicity risk, orally but not intravenously-administered, UTI-specific Access-category antibiotic.
 
 ## Clinical prediction models
 
-Final training hyperparameters used for each clinical prediction model are summarised in Appendix 7, and predictor variable contributions to predictive performance are summarised in Appendix 8. The presence and/or absence of previously-detected resistance to an antibiotic in the last year was one of the largest contributors to predictive accuracy for urine pathogen susceptibility to that antibiotic in most models. Gender and age group were large contributors to antibiotic susceptibility predictive performance in all models. Hospital admission in the last year, age over 65, previous CDI, and previous acute kidney injury in the last year were among the largest contributors to predictive performance for both CDI and antibiotic toxicity.
-
-Receiver operating characteristic (ROC) curves and performance metrics for models predicting single-antibiotic susceptibility, CDI, and toxicity in the single validation run on the validation dataset are summarised in Figure 2 and Table 1 respectively. ROC curves and performance metrics for models predicting susceptibility to 2-antibiotic combinations are summarised in Appendix 9 and Appendix 10 respectively. The model that predicted CDI following an antibiotic prescription had the highest predictive performance, with an area under receiver operating characteristic (AUROC) of `r aucfilter(metrics_singles_table,"CDI")`. The model that predicted Ampicillin coverage of the urinary pathogen had the lowest predictive performance, with an AUROC of `r aucfilter(metrics_singles_table,"Ampicillin")`. Of the 13 other prediction models, 10 produced AUROCs between 0.7 and 0.8, and 3 between 0.65 and 0.7 (ampicillin/sulbactam, gentamicin, and trimethoprim/sulfamethoxazole).
+Model hyperparameters and feature importances are summarised in Appendixes 7 and 8 respectively. Resistance to an antibiotic in the last year, gender and age group were large contributors to predicting antibiotic urine pathogen coverage. Hospital admission or acute kidney injury in the last year, age ≥65, and previous CDI were large contributors to predicting CDI and antibiotic toxicity. Validation receiver operating characteristic (ROC) curves and performance metrics are summarised in Figure 2 and Table 1 respectively (Appendixes 9 and 10 for combinations). 10 models produced AUROCs between 0.7 and 0.8, three between 0.65 and 0.7. The CDI model had the highest AUROC (`r aucfilter(metrics_singles_table,"CDI")`) and the Ampicillin pathogen coverage model the lowest (`r aucfilter(metrics_singles_table,"Ampicillin")`).
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -533,11 +503,9 @@ knitr::kable(metrics_singles_table)
 
 Table 1: Model performance metrics for prediction of single-antibiotic susceptibility, CDI, and antibiotic toxicity in the single validation run on the validation dataset. 95% confidence intervals are displayed in parentheses.\
 
-Performance metrics from the small training dataset stability analysis are summarised in Appendix 11. The largest difference in mean AUROC across six model train-test iterations was observed between the 2% and 12% training datasets in the CDI prediction model (0.132, 0.631 versus 0.763), and the largest AUROC standard deviation was observed in the 2% dataset in the CDI prediction model (0.025).
+In the small training dataset stability analysis (Appendix 11), the CDI model had the largest difference in mean AUROC (0.132, 0.631 with 2% versus 0.763 with 12%) and the largest AUROC standard deviation (0.025 with 2%). In the time cluster analysis (Appendix 12), the toxicity prediction model had the largest difference in mean AUROC between training and testing year groups (0.257, 0.880 with 2011-2013:2011-2013 versus 0.623 with 2011-2013:2014-2016) and the CDI model the largest AUROC standard deviation (0.091 with 2008-2010:2011-2013).
 
-Performance metrics from the year group cluster analyses are summarised in Appendix 12. For all models and all year groups, mean AUROC across six train-test iterations was highest in the same year group upon which the model had been trained. The largest difference in AUROC between year groups was observed for the toxicity prediction model between 2011-2013 training, 2011-2013 testing and 2011-2013 training, 2014-2016 testing (0.257, 0.880 versus 0.623). The largest AUROC standard deviation was observed for the CDI model with 2008-2010 training, 2011-2013 testing (0.091).
-
-Performance metrics from the model fairness analyses are summarised in Appendix 13. The largest difference in mean AUROC across six model train-test iterations in the age fairness analysis was observed between the 40-49 and 80-89 age groups for piperacillin-tazobactam susceptibility prediction (0.136, 0.831 versus 0.695), and the largest AUROC standard deviation was observed for CDI prediction in the over 90s age group (0.077). The largest difference in mean AUROC across six model training iterations in the race fairness analysis was observed between Hispanic patients and the aggregate group containing the least prevalent local races (i.e., not Asian, black, or white) for ciprofloxacin prediction (0.093, 0.738 versus 0.646), and the largest AUROC standard deviation was observed in Asian patients for CDI prediction (0.078). The largest difference in mean AUROC across six model training iterations in the remaining characteristics was observed between females and males - this difference was most marked in susceptibility prediction models for cephalosporins, meropenem, and gentamicin, with the largest difference in mean AUROC observed for meropenem (0.102, 0.727 versus 0.625), and the largest AUROC standard deviation observed in piperacillin-tazobactam susceptibility prediction for males (0.023).
+In the model fairness analysis (Appendix 13), the largest differences in mean AUROC were observed when predicting antibiotic coverage for different age groups (0.831 for piperacillin-tazobactam in 40-49s versus 0.695 in 80-89s), races (0.738 for ciprofloxacin in Hispanic patients versus 0.646 in the aggregated least prevalent races), and sexes (0.727 for meropenem in females versus 0.625 in males). The largest AUROC standard deviations were observed between ages and races when predicting CDI (0.077 in ≥90s, 0.078 in Asian patients), and sexes when predicting piperacillin-tazobactam coverage (0.023 in males).
 
 ## Discrete choice experiment
 
@@ -575,7 +543,7 @@ Compared to antibiotics actually prescribed, the utility function recommendation
 
 The proportion of utility function first-line recommendations and antibiotics actually prescribed that covered the urinary pathogen grown across a range of illness severity scores are displayed in Figure 5, and the associated distributions of antibiotic recommendations across this range is displayed in Figure 6. The utility function broadly mimicked the prescribing behaviour seen in the actual dataset, with Access and oral antibiotics becoming deprioritised in favour of intravenous Watch category agents in patients with more severe illness at presentation - this allowed the utility function to maintain a slightly higher coverage of a higher proportion of urinary pathogens (`r glue("{round(perc_util,1)}%")`) at the highest illness severity score than antibiotics actually prescribed in the dataset (`r glue("{round(perc_actual,1)}%")`).
 
-At the lowest illness severity score (0), nitrofurantoin was both the commonest first-line utility function treatment recommendation (`r lowabx(pdrx)`) and the commonest antibiotic actually prescribed (`r lowabx(pdrx_px_abx)`). As illness severity increased, utility function recommendations for nitrofurantoin were replaced by recommendations for gentamicin, ampicillin/sulbactam, and piperacillin/tazobactam. Piperacillin/tazobactam was the commonest utility function first-line recommendation at the highest illness severity (`r hiabx(pdrx)`). The commonest actual Emergency Department dataset prescriptions changed from nitrofurantoin to ceftriaxone with increasing illness severity score, then to piperacillin/tazobactam and vancomycin at maximum severity (`r hiabx(pdrx_px_abx)`). 
+At the lowest illness severity score (0), nitrofurantoin was both the commonest first-line utility function treatment recommendation (`r lowabx(pdrx)`) and the commonest antibiotic actually prescribed (`r lowabx(pdrx_px_abx)`). As illness severity increased, utility function recommendations for nitrofurantoin were replaced by recommendations for gentamicin, ampicillin/sulbactam, and piperacillin/tazobactam. Piperacillin/tazobactam was the commonest utility function first-line recommendation at the highest illness severity (`r hiabx(pdrx)`). The commonest actual Emergency Department dataset prescriptions changed from nitrofurantoin to ceftriaxone with increasing illness severity score, then to piperacillin/tazobactam and vancomycin at maximum severity (`r hiabx(pdrx_px_abx)`).
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_recommended according to illness severity\n(proportion of WHO Access agents)_susplot.pdf")
@@ -602,7 +570,7 @@ The number of susceptible results provided by the top six treatment recommendati
 
 ## Sensitivity analyses
 
-Line plots verifying the utility function's outputs in response to changing individual utility function parameters in turn are displayed in Appendix 18. Second-line utility function treatment recommendations (Appendix 19) were able to maintain a consistently higher level of urine pathogen coverage with increasing illness severity than first-line recommendations, and a higher proportion of Access antibiotic use - however, this effect was due to the use of gentamicin so there were fewer oral treatment options at intermediate illness severity. Utility function recommendations that included 2-agent combinations (Appendix 20) further improved urinary pathogen coverage, with a high proportion of Access antibiotic use and coverage consistently increasing in line with illness severity score - this effect was largely due to ampicillin and gentamicin combination therapy. Artificially improving the accuracy of probability predictions (Appendix 21) provided the highest level of coverage across all illness severity scores, with the proportion of intravenous agents and Watch agents still increasing with increasing illness severity but trimethoprim-sulfamethoxazole being using more than in the primary microsimulation analysis. 
+Line plots verifying the utility function's outputs in response to changing individual utility function parameters in turn are displayed in Appendix 18. Second-line utility function treatment recommendations (Appendix 19) were able to maintain a consistently higher level of urine pathogen coverage with increasing illness severity than first-line recommendations, and a higher proportion of Access antibiotic use - however, this effect was due to the use of gentamicin so there were fewer oral treatment options at intermediate illness severity. Utility function recommendations that included 2-agent combinations (Appendix 20) further improved urinary pathogen coverage, with a high proportion of Access antibiotic use and coverage consistently increasing in line with illness severity score - this effect was largely due to ampicillin and gentamicin combination therapy. Artificially improving the accuracy of probability predictions (Appendix 21) provided the highest level of coverage across all illness severity scores, with the proportion of intravenous agents and Watch agents still increasing with increasing illness severity but trimethoprim-sulfamethoxazole being using more than in the primary microsimulation analysis.
 
 Sequentially increasing the illness severity score of the whole population in parallel (Appendix 22) resulted in a rise in urine pathogen coverage as illness severity increased, likely reflecting that patients with the highest illness severity had higher rates of resistant pathogens than those with the lowest illness severity rates (`r t3` versus `r t0`). Increasing median nitrofurantoin predicted resistance probability (Appendix 23) slightly reduced the proportion of urine pathogens covered at the lowest illness severity, and resulted in an increased reliance on the intravenous antibiotic gentamicin.
 
