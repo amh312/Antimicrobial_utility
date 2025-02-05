@@ -20,18 +20,20 @@ Before running the code, the data and *Python* files should be saved into a secu
 
 ***Reproducing the study***
 
-1. To reproduce the study, all scripts above must be stored in the working directory. The following scripts must then be run:  
-   a. **UF_packages&setup.R**  
-   b. **UF_cleaning.R**  
-   c. **UF_S_model_tuning_1.R**
-   c. **UF_S_model_tuning_2.R**
-   c. **UF_S_model_tuning_3.R**
-   c. **UF_S_model_train_valid.R**
-   c. **UF_S_model_tuning_1.R**
-   c. **UF_S_model_tuning_2.R**
-   c. **UF_S_model_tuning_3.R**
-   c. **UF_CDI_model_train_valid.R**
-   c. **UF_tox_model_train_valid.R**  
-   d. **UF_utility_calculations.R**  
-   e. **UF_recommendations.R**  
-   f. **UF_microsimulation.R**
+To reproduce the study, all scripts above must be stored in the working directory. The following scripts must then be run:  
+
+   1. **UF_packages&setup.R**  
+   2. **UF_cleaning.R**
+   3. **UF_preprocessing.R**
+   4. **UF_S_model_tuning_1.R**
+   5. **UF_S_model_tuning_2.R**
+   6. **UF_S_model_tuning_3.R**
+   7. **UF_S_model_train_valid.R**
+   8. **UF_CDI_tox_model_tuning_1.R**
+   9. **UF_CDI_tox_model_tuning_2.R**
+   10. **UF_CDI_tox_model_tuning_3.R**
+   11. **UF_CDI_model_train_valid.R**
+   12. **UF_tox_model_train_valid.R**  
+   l3. **UF_utility_calculations.R**  
+   14. **UF_recommendations.R**  
+   15. **UF_microsimulation.R**
