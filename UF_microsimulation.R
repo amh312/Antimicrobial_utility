@@ -542,36 +542,37 @@ R_util_sens <- function(df,probs_df,uf,min_val,max_val) {
     
     ##Extracting characteristic Desirability weights
     
-    mlogit_data <- mlogit.data(scores, choice = "Rank", shape = "long", 
-                               chid.var = "id", alt.var = "Antibiotic", 
+    ###Apply ranked logit regression
+    mlogit_data <- mlogit.data(scores, 
+                               choice = "Rank", 
+                               shape = "long", 
+                               chid.var = "id", 
+                               alt.var = "Antibiotic", 
                                ranked = TRUE)
     
     formula_no_int <- Rank ~ CDI_highrisk + Toxicity_highrisk +  
-      Oral_option + UTI_specific + IV_option + High_cost + Access + Reserve
+      Oral_option + UTI_specific + IV_option + High_cost + Access + Reserve | 0
+    rol_model <- mlogit(formula_no_int, data = mlogit_data, method = "bfgs")
+    coefficients <- coef(rol_model)
+    scores <- data.frame(
+      Coefficient = names(coefficients),
+      Value = coefficients,
+      OR = exp(coefficients),
+      OR_dif = exp(coefficients) - 1
+    )
     
-    X <- model.matrix(formula_no_int, data = mlogit_data)
-    y <- mlogit_data$Rank
-    fit <- cv.glmnet(X, y, family = "multinomial", alpha = 0)
-    
-    lambda_min <- fit$lambda.min
-    lambda_1se <- fit$lambda.1se
-    cat("Lambda.min:", lambda_min, "\n")
-    cat("Lambda.1se:", lambda_1se, "\n")
-    
-    tmp_coeffs <- coef(fit, s = "lambda.min")
-    scores <- tmp_coeffs$`TRUE` %>% as.matrix() %>% data.frame()
-    colnames(scores) <- "Value"
-    scores <- scores %>% mutate(Coefficient = rownames(scores),
-                                OR = exp(Value),
-                                OR_dif = OR-1)
-    scores <- scores %>% mutate(colour = case_when(
-      Value > 0 ~ "B", Value < 0 ~ "A"
-    )) %>% dplyr::slice(-1) %>% dplyr::slice(-1)
-    
-    scores <- scores %>% mutate(stan_OR = (OR-1)/max(abs(OR-1)))
-    scores$Coefficient <- c("High CDI risk","High toxicity risk","Oral option",
-                            "UTI-specific","IV option","High cost","Access category",
-                            "Reserve category")
+    ###Add coefficients to scores dataframe
+    scores <- scores %>% 
+      mutate(stan_OR = (OR - 1) / max(abs(OR - 1))) %>% 
+      mutate(colour = case_when(
+        Value > 0 ~ "B", 
+        Value < 0 ~ "A"
+      )) %>% 
+      mutate(Coefficient = c("High CDI risk","High toxicity risk","Oral option",
+                             "UTI-specific","IV option","High cost","Access category",
+                             "Reserve category")) %>% 
+      arrange(Value)
+    score_rownames <- rownames(scores)
     
     scores$Coefficient <- factor(scores$Coefficient, levels= scores %>% arrange(Value) %>% select(Coefficient) %>% unlist())
     scores$Value <- scores$OR
@@ -810,37 +811,37 @@ util_sens <- function(df,probs_df,uf,variable_criterion,min_val,max_val) {
     
     ##Extracting characteristic Desirability weights
     
-    ##Apply ridge regression
-    mlogit_data <- mlogit.data(scores, choice = "Rank", shape = "long", 
-                               chid.var = "id", alt.var = "Antibiotic", 
+    ###Apply ranked logit regression
+    mlogit_data <- mlogit.data(scores, 
+                               choice = "Rank", 
+                               shape = "long", 
+                               chid.var = "id", 
+                               alt.var = "Antibiotic", 
                                ranked = TRUE)
     
     formula_no_int <- Rank ~ CDI_highrisk + Toxicity_highrisk +  
-      Oral_option + UTI_specific + IV_option + High_cost + Access + Reserve
+      Oral_option + UTI_specific + IV_option + High_cost + Access + Reserve | 0
+    rol_model <- mlogit(formula_no_int, data = mlogit_data, method = "bfgs")
+    coefficients <- coef(rol_model)
+    scores <- data.frame(
+      Coefficient = names(coefficients),
+      Value = coefficients,
+      OR = exp(coefficients),
+      OR_dif = exp(coefficients) - 1
+    )
     
-    X <- model.matrix(formula_no_int, data = mlogit_data)
-    y <- mlogit_data$Rank
-    fit <- cv.glmnet(X, y, family = "multinomial", alpha = 0)
-    
-    lambda_min <- fit$lambda.min
-    lambda_1se <- fit$lambda.1se
-    cat("Lambda.min:", lambda_min, "\n")
-    cat("Lambda.1se:", lambda_1se, "\n")
-    
-    tmp_coeffs <- coef(fit, s = "lambda.min")
-    scores <- tmp_coeffs$`TRUE` %>% as.matrix() %>% data.frame()
-    colnames(scores) <- "Value"
-    scores <- scores %>% mutate(Coefficient = rownames(scores),
-                                OR = exp(Value),
-                                OR_dif = OR-1)
-    scores <- scores %>% mutate(colour = case_when(
-      Value > 0 ~ "B", Value < 0 ~ "A"
-    )) %>% dplyr::slice(-1) %>% dplyr::slice(-1)
-    
-    scores <- scores %>% mutate(stan_OR = (OR-1)/max(abs(OR-1)))
-    scores$Coefficient <- c("High CDI risk","High toxicity risk","Oral option",
-                            "UTI-specific","IV option","High cost","Access category",
-                            "Reserve category")
+    ###Add coefficients to scores dataframe
+    scores <- scores %>% 
+      mutate(stan_OR = (OR - 1) / max(abs(OR - 1))) %>% 
+      mutate(colour = case_when(
+        Value > 0 ~ "B", 
+        Value < 0 ~ "A"
+      )) %>% 
+      mutate(Coefficient = c("High CDI risk","High toxicity risk","Oral option",
+                             "UTI-specific","IV option","High cost","Access category",
+                             "Reserve category")) %>% 
+      arrange(Value)
+    score_rownames <- rownames(scores)
     
     scores$Coefficient <- factor(scores$Coefficient, levels= scores %>% arrange(Value) %>% select(Coefficient) %>% unlist())
     scores$Value <- scores$OR
@@ -1079,37 +1080,37 @@ util_sens_illness <- function(df,probs_df,uf,min_val,max_val) {
     
     ##Extracting characteristic Desirability weights
     
-    ##Apply ridge regression
-    mlogit_data <- mlogit.data(scores, choice = "Rank", shape = "long", 
-                               chid.var = "id", alt.var = "Antibiotic", 
+    ###Apply ranked logit regression
+    mlogit_data <- mlogit.data(scores, 
+                               choice = "Rank", 
+                               shape = "long", 
+                               chid.var = "id", 
+                               alt.var = "Antibiotic", 
                                ranked = TRUE)
     
     formula_no_int <- Rank ~ CDI_highrisk + Toxicity_highrisk +  
-      Oral_option + UTI_specific + IV_option + High_cost + Access + Reserve
+      Oral_option + UTI_specific + IV_option + High_cost + Access + Reserve | 0
+    rol_model <- mlogit(formula_no_int, data = mlogit_data, method = "bfgs")
+    coefficients <- coef(rol_model)
+    scores <- data.frame(
+      Coefficient = names(coefficients),
+      Value = coefficients,
+      OR = exp(coefficients),
+      OR_dif = exp(coefficients) - 1
+    )
     
-    X <- model.matrix(formula_no_int, data = mlogit_data)
-    y <- mlogit_data$Rank
-    fit <- cv.glmnet(X, y, family = "multinomial", alpha = 0)
-    
-    lambda_min <- fit$lambda.min
-    lambda_1se <- fit$lambda.1se
-    cat("Lambda.min:", lambda_min, "\n")
-    cat("Lambda.1se:", lambda_1se, "\n")
-    
-    tmp_coeffs <- coef(fit, s = "lambda.min")
-    scores <- tmp_coeffs$`TRUE` %>% as.matrix() %>% data.frame()
-    colnames(scores) <- "Value"
-    scores <- scores %>% mutate(Coefficient = rownames(scores),
-                                OR = exp(Value),
-                                OR_dif = OR-1)
-    scores <- scores %>% mutate(colour = case_when(
-      Value > 0 ~ "B", Value < 0 ~ "A"
-    )) %>% dplyr::slice(-1) %>% dplyr::slice(-1)
-    
-    scores <- scores %>% mutate(stan_OR = (OR-1)/max(abs(OR-1)))
-    scores$Coefficient <- c("High CDI risk","High toxicity risk","Oral option",
-                            "UTI-specific","IV option","High cost","Access category",
-                            "Reserve category")
+    ###Add coefficients to scores dataframe
+    scores <- scores %>% 
+      mutate(stan_OR = (OR - 1) / max(abs(OR - 1))) %>% 
+      mutate(colour = case_when(
+        Value > 0 ~ "B", 
+        Value < 0 ~ "A"
+      )) %>% 
+      mutate(Coefficient = c("High CDI risk","High toxicity risk","Oral option",
+                             "UTI-specific","IV option","High cost","Access category",
+                             "Reserve category")) %>% 
+      arrange(Value)
+    score_rownames <- rownames(scores)
     
     scores$Coefficient <- factor(scores$Coefficient, levels= scores %>% arrange(Value) %>% select(Coefficient) %>% unlist())
     scores$Value <- scores$OR
