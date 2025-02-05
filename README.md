@@ -34,6 +34,8 @@ To reproduce the study, all scripts above must be stored in the working director
    10. **UF_CDI_tox_model_tuning_3.R**
    11. **UF_CDI_model_train_valid.R**
    12. **UF_tox_model_train_valid.R**  
-   l3. **UF_utility_calculations.R**  
-   14. **UF_recommendations.R**  
-   15. **UF_microsimulation.R**
+   l3. **UF_model_testing.R**  
+   14. **UF_discrete_choice_exp.R**
+   15. **UF_spec_sens_analysis.R**
+   16. **UF_microsimulation.R**
+   17. 
