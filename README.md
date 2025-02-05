@@ -23,15 +23,15 @@ Before running the code, the data and *Python* files should be saved into a secu
 1. To reproduce the study, all scripts above must be stored in the working directory. The following scripts must then be run:  
    a. **UF_packages&setup.R**  
    b. **UF_cleaning.R**  
-   c. **UF_prediction&preprocessing.R**
-   c. **UF_prediction&preprocessing.R**
-   c. **UF_prediction&preprocessing.R**
-   c. **UF_prediction&preprocessing.R**
-   c. **UF_prediction&preprocessing.R**
-   c. **UF_prediction&preprocessing.R**
-   c. **UF_prediction&preprocessing.R**
-   c. **UF_prediction&preprocessing.R**
-   c. **UF_prediction&preprocessing.R**  
+   c. **UF_S_model_tuning_1.R**
+   c. **UF_S_model_tuning_2.R**
+   c. **UF_S_model_tuning_3.R**
+   c. **UF_S_model_train_valid.R**
+   c. **UF_S_model_tuning_1.R**
+   c. **UF_S_model_tuning_2.R**
+   c. **UF_S_model_tuning_3.R**
+   c. **UF_CDI_model_train_valid.R**
+   c. **UF_tox_model_train_valid.R**  
    d. **UF_utility_calculations.R**  
    e. **UF_recommendations.R**  
    f. **UF_microsimulation.R**
