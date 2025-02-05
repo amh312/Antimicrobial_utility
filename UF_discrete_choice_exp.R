@@ -1,5 +1,7 @@
 #UTILITY CALCULATIONS
 
+set.seed(123)
+
 ##Functions
 
 ###Factorise training and testing datasets
