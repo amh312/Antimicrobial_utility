@@ -179,14 +179,14 @@ prev_rx_assign <- function(df, B_var, drug_df, abx, abx_groupvar,no_days,no_even
   
 }
 
-###Finding abnormal inflammatory markers on day of urine test
+###Finding abnormal inflammatory markers on day prior to urine test
 labevent_search <- function(df,search_term,feature_name) {
   
   feature_name <- enquo(feature_name)
   
-  filter_term <- labitems %>%
+  filter_term <- d_labitems %>%
     filter(grepl(search_term,label,ignore.case=T)) %>% 
-    count(itemid) %>% arrange(n) %>% slice(1) %>% select(itemid) %>% unlist()
+    count(itemid) %>% arrange(n) %>% dplyr::slice(1) %>% select(itemid) %>% unlist()
   filtered_df <- labevents %>% filter(itemid==filter_term) %>% 
     filter(!is.na(valuenum)) %>% rename(admittime="charttime")
   df %>% 
@@ -1325,7 +1325,7 @@ combo_mutate <- function(df) {
     }))
 }
 times_amend <- function(df) {
-  df %>% mutate(ab_name=ab_combination,abx_name=ab_combination,
+  df %>% mutate(ab_name=ab_combination,ab_name=ab_combination,
                 starttime=case_when(
                   !is.na(combo_starttime)~as_datetime(combo_starttime),
                   TRUE~as_datetime(starttime)
@@ -1412,6 +1412,7 @@ drugs <- read_csv("drugs_clean.csv")
 vitalsign <- read_csv("vitalsign.csv")
 triage <- read_csv("triage.csv")
 edstays <- read_csv("edstays.csv")
+pos_urines <- read_csv("pos_urines_pre_features.csv")
 
 ##Finding previous AST results
 
@@ -1446,7 +1447,7 @@ pos_urines <- prev_AST_applier(pos_urines,micro2,"nt","NT")
 urine_df <- micro %>% filter(test_name=="URINE CULTURE" & !is.na(org_fullname)) %>% 
   mutate(admittime=charttime)
 organisms <- urine_df %>% count(org_fullname) %>% arrange(desc(n)) %>% 
-  slice(1:10) %>% pull(org_fullname)
+  dplyr::slice(1:10) %>% pull(org_fullname)
 params <- paste0("pG", organisms,"Urine")
 pos_urines <- reduce(seq_along(organisms), function(df, i) {
   apply_prev_event(df, params[i], organisms[i])
@@ -1454,9 +1455,6 @@ pos_urines <- reduce(seq_along(organisms), function(df, i) {
   ungroup()
 
 ##Finding previous antimicrobial treatment
-
-###Modifying prescriptions dataframes to enable prev_event_type_assign
-drugs <- drugs %>% rename(ab_name = "abx_name")
 
 ###Assigning reference lists of antimicrobials and new feature suffixes
 antibiotics <- c("Ampicillin", "Amoxicillin", "Amoxicillin/clavulanic acid", "Ampicillin/sulbactam",
@@ -1495,10 +1493,10 @@ pos_urines <- reduce(seq_along(antibiotics), function(df, i) {
 
 ##Find inflammatory marker results
 
-###Elevated C-reactive protein on the same day as the urine specimen
+###Elevated C-reactive protein in the 24 hours prior to urine specimen
 pos_urines <- pos_urines %>% labevent_search("reactive",highCRP)
 
-###Abnormal total peripheral white cell count on the same day as the urine specimen
+###Abnormal total peripheral white cell count in the 24 hours prior to urine specimen
 pos_urines <- pos_urines %>% labevent_search("White",abnormalWCC)
 
 ##Find patient characteristic and history variables
@@ -1666,27 +1664,27 @@ pos_urines <- pos_urines %>% pc_dummies() %>% select(-chiefcomplaint)
 
 ###Preceding blood tests
 labevents_urine <- labevents %>% semi_join(pos_urines,by="hadm_id")
-alt <- labitems %>% filter(grepl("Alanine Aminotransferase",label))
-alb <- labitems %>% filter(grepl("Albumin",label))
-alp <- labitems %>% filter(grepl("Alkaline Phosphatase",label))
-bic <- labitems %>% filter(grepl("Bicarbonate",label))
-bil <- labitems %>% filter(grepl("Bilirubin, Total",label))
-cre <- labitems %>% filter(grepl("^Creatinine$",label))
-pot <- labitems %>% filter(grepl("Potassium",label))
-sod <- labitems %>% filter(grepl("Sodium",label))
-hct <- labitems %>% filter(grepl("Hematocrit",label))
-hb <- labitems %>% filter(grepl("Hemoglobin",label))
-lym <- labitems %>% filter(grepl("Lymphocytes",label))
-mon <- labitems %>% filter(grepl("Monocytes",label))
-neu <- labitems %>% filter(grepl("Neutrophils",label))
-plt <- labitems %>% filter(grepl("Platelet Count",label))
-pt <- labitems %>% filter(grepl("^PT$",label))
-ptt <- labitems %>% filter(grepl("PTT",label))
-rdw <- labitems %>% filter(grepl("^RDW$",label))
-rbc <- labitems %>% filter(grepl("Red Blood Cells",label))
-wbc <- labitems %>% filter(grepl("White Blood Cells",label))
-lac <- labitems %>% filter(grepl("^Lactate$",label))
-ldh <- labitems %>% filter(grepl("Lactate Dehydrogenase",label))
+alt <- d_labitems %>% filter(grepl("Alanine Aminotransferase",label))
+alb <- d_labitems %>% filter(grepl("Albumin",label))
+alp <- d_labitems %>% filter(grepl("Alkaline Phosphatase",label))
+bic <- d_labitems %>% filter(grepl("Bicarbonate",label))
+bil <- d_labitems %>% filter(grepl("Bilirubin, Total",label))
+cre <- d_labitems %>% filter(grepl("^Creatinine$",label))
+pot <- d_labitems %>% filter(grepl("Potassium",label))
+sod <- d_labitems %>% filter(grepl("Sodium",label))
+hct <- d_labitems %>% filter(grepl("Hematocrit",label))
+hb <- d_labitems %>% filter(grepl("Hemoglobin",label))
+lym <- d_labitems %>% filter(grepl("Lymphocytes",label))
+mon <- d_labitems %>% filter(grepl("Monocytes",label))
+neu <- d_labitems %>% filter(grepl("Neutrophils",label))
+plt <- d_labitems %>% filter(grepl("Platelet Count",label))
+pt <- d_labitems %>% filter(grepl("^PT$",label))
+ptt <- d_labitems %>% filter(grepl("PTT",label))
+rdw <- d_labitems %>% filter(grepl("^RDW$",label))
+rbc <- d_labitems %>% filter(grepl("Red Blood Cells",label))
+wbc <- d_labitems %>% filter(grepl("White Blood Cells",label))
+lac <- d_labitems %>% filter(grepl("^Lactate$",label))
+ldh <- d_labitems %>% filter(grepl("Lactate Dehydrogenase",label))
 labevents_alt <- labevents_urine %>% semi_join(alt,by="itemid")
 labevents_alb <- labevents_urine %>% semi_join(alb,by="itemid")
 labevents_alp <- labevents_urine %>% semi_join(alp,by="itemid")
@@ -1712,6 +1710,8 @@ blood_binder <- function(df,df2,test_name) {
   
   test_name <- enquo(test_name)
   
+  df2 <- df2 %>% mutate(charttime=as.character(charttime))
+  
   df %>% 
     bind_rows(df2) %>%
     group_by(subject_id) %>% 
@@ -1728,6 +1728,7 @@ blood_binder <- function(df,df2,test_name) {
     select(-(labevent_id:priority))
   
 }
+
 pos_urines <- pos_urines %>% 
   blood_binder(labevents_alt,`Alanine Aminotransferase`)%>% 
   blood_binder(labevents_alb,Albumin) %>% 
@@ -1892,22 +1893,13 @@ write_csv(urines5,"urines5.csv")
 write_csv(urines5_ent,"urines5_ent.csv")
 write_csv(ur_util,"ur_util.csv")
 
-abn <- ab_singles %>% ab_name() %>% str_replace("/","-")
-for (i in 1:length(abn)) {
-  
-  glue("{abn[i]} = {util_probs_df %>% filter(Antimicrobial==abn[i]) %>% select(R) %>% 
-    summarise(medR=median(R)) %>% unlist()}") %>% print()
-  
-}
-
 ###Drugs data frames for training and testing weighting models
 abx1 <- drugs %>% filter(grepl(
   "(Ampicillin|Piperacillin/tazobactam|Cefazolin|Ceftriaxone|^Ceftazidime$|Cefepime|Meropenem|Ciprofloxacin|Gentamicin|Trimethoprim/sulfamethoxazole|Nitrofurantoin)",
-  abx_name) | (grepl("Vancomycin",abx_name) & route=="IV")
-) %>% filter(!grepl("avibactam",abx_name)) %>%  
+  ab_name) | (grepl("Vancomycin",ab_name) & route=="IV")
+) %>% filter(!grepl("avibactam",ab_name)) %>%  
   filter(grepl("(PO|NG|IV)",route))
-abx1 <- abx1 %>% mutate(charttime = starttime,
-                      ab_name = abx_name)
+abx1 <- abx1 %>% mutate(charttime = starttime)
 abx1 <- abx1 %>% filter(!is.na(starttime) & !is.na(stoptime))
 abx_ref <- abx1 %>% semi_join(ur_util,by="subject_id")
 abx <- abx1 %>% anti_join(ur_util,by="subject_id")
@@ -1919,17 +1911,17 @@ cdi <- cdi_ref %>% group_by(subject_id) %>% arrange(chartdate) %>% summarise_all
 cdi_ref <- cdi_ref %>% mutate(admittime = charttime-(60*60*24*28*3))
 
 ###Attach CDI in following 28d labels to abx dfs
-abx <- abx %>% CDI_label(abx_name)
+abx <- abx %>% CDI_label(ab_name)
 ur_util <- ur_util %>% CDI_label(AMP)
 
 ###Add previous hospital admission to abx dataframe
 hadm <- read_csv("admissions.csv")
-abx <- abx %>% hadm_label(abx_name)
+abx <- abx %>% hadm_label(ab_name)
 
 ###Check for previous CDI
 cdi_ref <- micro %>% filter(org_fullname=="Clostridioides difficile")
 cdi_ref <- cdi_ref %>% mutate(admittime=charttime)
-abx <- abx %>% pCDI_label(abx_name)
+abx <- abx %>% pCDI_label(ab_name)
 ur_util <- ur_util %>% pCDI_label(AMP)
 
 ##Check for age > 65
@@ -1965,7 +1957,7 @@ creats <- creats %>% group_by(subject_id) %>% mutate(
 write_csv(creats,"creatinines.csv")
 creats <- creats %>% mutate(admittime = #adjust to search after rather than before
                               charttime - (60*60*24*7))
-abx <- abx %>% AKI_label(abx_name)
+abx <- abx %>% AKI_label(ab_name)
 ur_util <- ur_util %>% AKI_label(AMP)
 
 ###Check for other nephrotoxins
@@ -2017,7 +2009,7 @@ ur_util <- ur_util %>% AKI_adjusted_check()
 ###Check for previous AKI
 creats <- creats %>% mutate(admittime=charttime)
 creats <- creats %>% mutate(AKI = AKI3)
-abx <- abx %>% prAKI_label(abx_name)
+abx <- abx %>% prAKI_label(ab_name)
 ur_util <- ur_util %>% prAKI_label(AMP)
 
 ###Check for CKD
@@ -2028,27 +2020,27 @@ ckdkey <- drgcodes %>% filter(grepl(
   select(hadm_id,description)
 hadm <- read_csv("admissions.csv")
 hadm <- hadm %>% left_join(ckdkey,by="hadm_id")
-abx <- abx %>% diag_label(abx_name,"CHRONIC KIDNEY",1e4,pCKD)
+abx <- abx %>% diag_label(ab_name,"CHRONIC KIDNEY",1e4,pCKD)
 ur_util <- ur_util %>% diag_label(AMP,"CHRONIC KIDNEY",1e4,pCKD)
 
 ###Check for diabetes mellitus
-abx <- abx %>% diag_label(abx_name,"DIAB",1e4,pDIAB)
+abx <- abx %>% diag_label(ab_name,"DIAB",1e4,pDIAB)
 ur_util <- ur_util %>% diag_label(AMP,"DIAB",1e4,pDIAB)
 
 ###Check for chronic liver disease
-abx <- abx %>% diag_label(abx_name,"LIVER",1e4,pLIVER)
+abx <- abx %>% diag_label(ab_name,"LIVER",1e4,pLIVER)
 ur_util <- ur_util %>% diag_label(AMP,"LIVER",1e4,pLIVER)
 
 ###Check for cardiovascular disease
-abx <- abx %>% diag_label(abx_name,"(HEART|CARDI)",1e4,pCARD)
+abx <- abx %>% diag_label(ab_name,"(HEART|CARDI)",1e4,pCARD)
 ur_util <- ur_util %>% diag_label(AMP,"(HEART|CARDI))",1e4,pCARD)
 
 ###Check for malignancy in the last year
-abx <- abx %>% diag_label(abx_name,"MALIG",365,pCA)
+abx <- abx %>% diag_label(ab_name,"MALIG",365,pCA)
 ur_util <- ur_util %>% diag_label(AMP,"MALIG",365,pCA)
 
 ###Check for previous stroke
-abx <- abx %>% diag_label(abx_name,"STROKE",1e4,pCVA)
+abx <- abx %>% diag_label(ab_name,"STROKE",1e4,pCVA)
 ur_util <- ur_util %>% diag_label(AMP,"STROKE",1e4,pCVA)
 
 ###Add male label to abx dataframe
@@ -2082,7 +2074,7 @@ abx <- abx %>%
   ungroup()
 
 ###Check for recent sepsis
-abx <- abx %>% diag_label(abx_name,"SEPSIS",365,pSEPSIS)
+abx <- abx %>% diag_label(ab_name,"SEPSIS",365,pSEPSIS)
 ur_util <- ur_util %>% diag_label(AMP,"SEPSIS",365,pSEPSIS)
 
 ##Antimicrobial-related labels
@@ -2093,19 +2085,19 @@ abx <- abx %>% mutate(course_length = as.numeric(stoptime-starttime)/24/60/60,
                       course_length=case_when(course_length>=365 ~ course_length-365,
                                               TRUE~course_length),
                       course_length = course_length/max(course_length)) %>% 
-  group_by(abx_name) %>% mutate(median_course = median(course_length)) %>% ungroup()
+  group_by(ab_name) %>% mutate(median_course = median(course_length)) %>% ungroup()
 
-med_course_key <- abx %>% select(abx_name,median_course) %>% 
-  rename(Antimicrobial="abx_name") %>% distinct() %>% 
+med_course_key <- abx %>% select(ab_name,median_course) %>% 
+  rename(Antimicrobial="ab_name") %>% distinct() %>% 
   mutate(Antimicrobial = str_replace(Antimicrobial,"/","-"))
 
 ###Engineer ddummy variables for antimicrobial agents
-recipethis <- recipe(~abx_name,data=abx)
-dummies <- recipethis %>% step_dummy(abx_name) %>% prep(training = abx)
+recipethis <- recipe(~ab_name,data=abx)
+dummies <- recipethis %>% step_dummy(ab_name) %>% prep(training = abx)
 dummy_data <- bake(dummies,new_data = NULL)
 abx <- abx %>% cbind(dummy_data) %>% tibble()
-abx <- abx %>% mutate(abx_name_Ampicillin = 
-                        case_when(abx_name=="Ampicillin" ~
+abx <- abx %>% mutate(ab_name_Ampicillin = 
+                        case_when(ab_name=="Ampicillin" ~
                                     1, TRUE ~ 0))
 
 ##Marrow suppression-related labels
@@ -2116,7 +2108,7 @@ wbcs <- labevents %>% filter(itemid==51301) %>% group_by(subject_id) %>%
   distinct(charttime,.keep_all = T) %>% ungroup()
 
 wbcs <- wbcs %>% new_lowvalue(new_leukopenia)
-abx <- abx %>% abnormal_label(wbcs,leukopenia,new_leukopenia,abx_name)
+abx <- abx %>% abnormal_label(wbcs,leukopenia,new_leukopenia,ab_name)
 ur_util <- ur_util %>% abnormal_label(wbcs,leukopenia,new_leukopenia,AMP)
 
 ###Check for anaemia
@@ -2124,7 +2116,7 @@ print(d_labitems %>% filter(grepl("Hemoglobin",label,ignore.case=T)),n=25)
 hbs <- labevents %>% filter(itemid==51222) %>% group_by(subject_id) %>% 
   distinct(charttime,.keep_all = T) %>% ungroup()
 hbs <- hbs %>% new_lowvalue(new_anaemia)
-abx <- abx %>% abnormal_label(hbs,anaemia,new_anaemia,abx_name)
+abx <- abx %>% abnormal_label(hbs,anaemia,new_anaemia,ab_name)
 ur_util <- ur_util %>% abnormal_label(hbs,anaemia,new_anaemia,AMP)
 
 ###Check for thrombocytopenia
@@ -2132,7 +2124,7 @@ print(d_labitems %>% filter(grepl("Platelet",label,ignore.case=T)),n=25)
 plts <- labevents %>% filter(itemid==51265) %>% group_by(subject_id) %>% 
   distinct(charttime,.keep_all = T) %>% ungroup()
 plts <- plts %>% new_lowvalue(new_thrombocytopenia)
-abx <- abx %>% abnormal_label(plts,thrombocytopenia,new_thrombocytopenia,abx_name)
+abx <- abx %>% abnormal_label(plts,thrombocytopenia,new_thrombocytopenia,ab_name)
 ur_util <- ur_util %>% abnormal_label(plts,thrombocytopenia,new_thrombocytopenia,AMP)
 
 ###Check for previous bleeding
@@ -2203,7 +2195,7 @@ print(d_labitems %>% filter(grepl("Alkaline",label,ignore.case=T)),n=25)
 alps <- labevents %>% filter(itemid==50863) %>% group_by(subject_id) %>% 
   distinct(charttime,.keep_all = T) %>% ungroup()
 alps <- alps %>% new_highvalue(new_high_alp)
-abx <- abx %>% abnormal_label(alps,high_alp,new_high_alp,abx_name)
+abx <- abx %>% abnormal_label(alps,high_alp,new_high_alp,ab_name)
 ur_util <- ur_util %>% abnormal_label(alps,high_alp,new_high_alp,AMP)
 
 ###Check for elevated alanine aminotransferase
@@ -2211,7 +2203,7 @@ print(d_labitems %>% filter(grepl("transferase",label,ignore.case=T)),n=25)
 alts <- labevents %>% filter(itemid==50861) %>% group_by(subject_id) %>% 
   distinct(charttime,.keep_all = T) %>% ungroup()
 alts <- alts %>% new_highvalue(new_high_alt)
-abx <- abx %>% abnormal_label(alts,high_alt,new_high_alt,abx_name)
+abx <- abx %>% abnormal_label(alts,high_alt,new_high_alt,ab_name)
 ur_util <- ur_util %>% abnormal_label(alts,high_alt,new_high_alt,AMP)
 
 ###Check for elevated aspartate aminotransferase
@@ -2219,7 +2211,7 @@ print(d_labitems %>% filter(grepl("transferase",label,ignore.case=T)),n=25)
 asts <- labevents %>% filter(itemid==50878) %>% group_by(subject_id) %>% 
   distinct(charttime,.keep_all = T) %>% ungroup()
 asts <- asts %>% new_highvalue(new_high_ast)
-abx <- abx %>% abnormal_label(asts,high_ast,new_high_ast,abx_name)
+abx <- abx %>% abnormal_label(asts,high_ast,new_high_ast,ab_name)
 ur_util <- ur_util %>% abnormal_label(asts,high_ast,new_high_ast,AMP)
 
 ###Check for recent biliary procedures
@@ -2319,11 +2311,11 @@ ur_util <- ur_util %>% update_sepsis()
 
 ###Check for death in the next 28 days
 ur_util$ob_freq %>% sort(T)
-abx <- abx %>% death_check(hadm,death_28d,abx_name)
+abx <- abx %>% death_check(hadm,death_28d,ab_name)
 ur_util <- ur_util %>% death_check(hadm,death_28d,AMP)
 
 ###Check for ICU admission in the next 28 days
-abx <- abx %>% icu_check(icu,icu_28d,abx_name)
+abx <- abx %>% icu_check(icu,icu_28d,ab_name)
 ur_util <- ur_util %>% icu_check(icu,icu_28d,AMP)
 
 ###Check if still an inpatient 7 days later
@@ -2401,79 +2393,117 @@ abx_ref <- abx_ref %>% rowids()
 ###Save interim with all antimicrobial combinations, then filter to 2 or fewer
 write_csv(abx,"abx_all_combos.csv")
 write_csv(abx_ref,"abx_ref_all_combos.csv")
-abx <- abx %>% filter(str_count(abx_name,"_") <2)
+abx <- abx %>% filter(str_count(ab_name,"_") <2)
 
 ###Filter out rare combinations (<500 entries)
-common_combos <- abx %>% count(abx_name) %>% filter(n>=500) %>% pull(abx_name)
-abx <- abx %>% filter(abx_name%in%common_combos)
+common_combos <- abx %>% count(ab_name) %>% filter(n>=500) %>% pull(ab_name)
+abx <- abx %>% filter(ab_name%in%common_combos)
 
 ###Filter out combinations that last less than 24 hours
 abx <- abx %>% mutate(combo_24h = case_when(as.numeric(stoptime-starttime) > 1~TRUE,
                       TRUE~FALSE)) %>% filter(combo_24h)
 
 ###Re-engineer antimicrobial dummy variables#
-abx <- abx %>% select(-(abx_name_Ampicillin.sulbactam:abx_name_Ampicillin))
-recipethis <- recipe(~abx_name,data=abx)
-dummies <- recipethis %>% step_dummy(abx_name) %>% prep(training = abx)
+abx <- abx %>% select(-(ab_name_Ampicillin.sulbactam:ab_name_Ampicillin))
+recipethis <- recipe(~ab_name,data=abx)
+dummies <- recipethis %>% step_dummy(ab_name) %>% prep(training = abx)
 dummy_data <- bake(dummies,new_data = NULL)
 abx <- abx %>% cbind(dummy_data) %>% tibble()
-abx <- abx %>% mutate(abx_name_Ampicillin = 
-                        case_when(abx_name=="Ampicillin" ~
+abx <- abx %>% mutate(ab_name_Ampicillin = 
+                        case_when(ab_name=="Ampicillin" ~
                                     1, TRUE ~ 0))
 
 ##Antimicrobial-related variables in ur_util
 
 ###Check for currently prescribed antimicrobial agent
-ab_key <- abx_ref %>% select(subject_id,abx_name,starttime,stoptime)
+write_csv(ur_util,"extra_ur_util.csv")
+ab_key <- abx_ref %>% select(subject_id,ab_name,starttime,stoptime)
+ur_util <- ur_util %>% select(-ab_name)
 urine_abx <- ur_util %>% left_join(ab_key,by=c("subject_id")) %>% 
   mutate(on_ab = case_when(
     storetime > starttime & storetime < stoptime ~ TRUE,
     TRUE ~ FALSE )) %>% filter(on_ab)
 urine_abx <- urine_abx %>%
   group_by(micro_specimen_id) %>%
-  summarise(abx_name = paste(abx_name, collapse = ", "), .groups = 'drop') %>% 
+  summarise(ab_name = paste(ab_name, collapse = ", "), .groups = 'drop') %>% 
   ungroup() %>% mutate(on_ab=TRUE)
 ur_util <- ur_util %>% left_join(urine_abx)
 
 ###Apply AST R result value based on currently-prescribed antimicrobial agent
 ur_util <- ur_util %>% mutate(
-  AMP_R_value = case_when(on_ab & grepl("(Amoxicillin|Benzylpenicillin|Ampicillin)",abx_name) 
-                          & !grepl("(clavulanic|sulbactam)",abx_name) ~ TRUE, TRUE~FALSE),
-  SAM_R_value = case_when(on_ab & grepl("(Amoxicillin|Benzylpenicillin|Ampicillin)",abx_name)
-                          & !grepl("clavulanic",abx_name) ~ TRUE, TRUE~FALSE),
-  TZP_R_value = case_when(on_ab & grepl("(Amoxicillin|Benzylpenicillin|Ampicillin|Piperacillin)",abx_name)
+  AMP_R_value = case_when(on_ab & grepl("(Amoxicillin|Benzylpenicillin|Ampicillin)",ab_name) 
+                          & !grepl("(clavulanic|sulbactam)",ab_name) ~ TRUE, TRUE~FALSE),
+  SAM_R_value = case_when(on_ab & grepl("(Amoxicillin|Benzylpenicillin|Ampicillin)",ab_name)
+                          & !grepl("clavulanic",ab_name) ~ TRUE, TRUE~FALSE),
+  TZP_R_value = case_when(on_ab & grepl("(Amoxicillin|Benzylpenicillin|Ampicillin|Piperacillin)",ab_name)
                           ~ TRUE, TRUE~FALSE),
-  CZO_R_value = case_when(on_ab & grepl("Cefazolin",abx_name)
+  CZO_R_value = case_when(on_ab & grepl("Cefazolin",ab_name)
                           ~ TRUE, TRUE~FALSE),
   CRO_R_value = case_when(on_ab &((org_order=="Enterobacterales" &
-                                     grepl("(Cefazolin|Cefalexin)",abx_name))|
-                                    grepl("Ceftriaxone",abx_name) |
+                                     grepl("(Cefazolin|Cefalexin)",ab_name))|
+                                    grepl("Ceftriaxone",ab_name) |
                                     (org_order=="Staphylococcus" &
-                                       grepl("(Amoxicillin|Benzylpenicillin|Ampicillin|Piperacillin)",abx_name)))
+                                       grepl("(Amoxicillin|Benzylpenicillin|Ampicillin|Piperacillin)",ab_name)))
                           ~ TRUE, TRUE~FALSE),
   CAZ_R_value = case_when(on_ab &((org_order=="Enterobacterales" &
-                                     grepl("(Cefazolin|Cefalexin)",abx_name))|
-                                    grepl("Ceftazidime",abx_name))
+                                     grepl("(Cefazolin|Cefalexin)",ab_name))|
+                                    grepl("Ceftazidime",ab_name))
                           ~ TRUE, TRUE~FALSE),
   FEP_R_value = case_when(on_ab &((org_order=="Enterobacterales" &
-                                     grepl("(Cefazolin|Cefalexin)",abx_name))|
-                                    grepl("Cefepime",abx_name))
+                                     grepl("(Cefazolin|Cefalexin)",ab_name))|
+                                    grepl("Cefepime",ab_name))
                           ~ TRUE, TRUE~FALSE),
-  MEM_R_value = case_when(on_ab & grepl("(Meropenem|Ertapenem|Amoxicillin|Benzylpenicillin|Ampicillin|Piperacillin)",abx_name)
+  MEM_R_value = case_when(on_ab & grepl("(Meropenem|Ertapenem|Amoxicillin|Benzylpenicillin|Ampicillin|Piperacillin)",ab_name)
                           ~ TRUE, TRUE~FALSE),
   CIP_R_value = case_when(on_ab &((org_order=="Enterobacterales" &
-                                     grepl("(Levofloxacin|Moxifloxacin)",abx_name))|
-                                    grepl("Ciprofloxacin",abx_name))
+                                     grepl("(Levofloxacin|Moxifloxacin)",ab_name))|
+                                    grepl("Ciprofloxacin",ab_name))
                           ~ TRUE, TRUE~FALSE),
-  GEN_R_value = case_when(on_ab & grepl("Gentamicin",abx_name)
+  GEN_R_value = case_when(on_ab & grepl("Gentamicin",ab_name)
                           ~ TRUE, TRUE~FALSE),
-  SXT_R_value = case_when(on_ab & grepl("Trimethoprim",abx_name)
+  SXT_R_value = case_when(on_ab & grepl("Trimethoprim",ab_name)
                           ~ TRUE, TRUE~FALSE),
-  NIT_R_value = case_when(on_ab & grepl("Nitrofurantoin",abx_name)
+  NIT_R_value = case_when(on_ab & grepl("Nitrofurantoin",ab_name)
                           ~ TRUE, TRUE~FALSE),
-  VAN_R_value = case_when(on_ab & grepl("Vancomycin",abx_name)
+  VAN_R_value = case_when(on_ab & grepl("Vancomycin",ab_name)
                           ~ TRUE, TRUE~FALSE),
 )
+
+###Fixing continuous and numeric variables in abx dataframe
+abx <- abx %>% mutate(resprate=case_when(resprate>30|resprate<12~
+                        NA,TRUE~resprate))
+abx <- abx %>% mutate(sbp=case_when(sbp>250|sbp<50~
+                                           NA,TRUE~sbp))
+abx <- abx %>% mutate(dbp=case_when(dbp>120|dbp<30~
+                                           NA,TRUE~dbp))
+abx <- abx %>% mutate(heartrate=case_when(heartrate>250|heartrate<30~
+                                      NA,TRUE~heartrate))
+abx <- abx %>% mutate(temperature=case_when(temperature>41|temperature<34~
+                                            NA,TRUE~temperature))
+abx <- abx %>% mutate(o2sat=case_when(o2sat>100|o2sat<70~
+                                              NA,TRUE~o2sat))
+abx <- abx %>% mutate(heartrate=case_when(is.na(heartrate)~mean(abx$heartrate,na.rm=T),
+                                                        TRUE~heartrate),
+                                    resprate=case_when(is.na(resprate)~mean(abx$resprate,na.rm=T),
+                                                       TRUE~resprate),
+                                    sbp=case_when(is.na(sbp)~mean(abx$sbp,na.rm=T),
+                                                  TRUE~sbp),
+                                    dbp=case_when(is.na(dbp)~mean(abx$dbp,na.rm=T),
+                                                  TRUE~dbp),
+                                    o2sat=case_when(is.na(o2sat)~mean(abx$o2sat,na.rm=T),
+                                                    TRUE~o2sat),
+                                    temperature=case_when(is.na(temperature)~mean(abx$temperature,na.rm=T),
+                                                          TRUE~temperature),
+)
+abx <- abx %>% mutate(heartrate=standardize(heartrate),
+                                    resprate=standardize(heartrate),
+                                    sbp=standardize(heartrate),
+                                    dbp=standardize(heartrate),
+                                    acuity=standardize(heartrate),
+                                    o2sat=standardize(heartrate),
+                                    temperature=standardize(temperature))
+abx <- abx %>% mutate(ob_freq = case_when(is.na(ob_freq) ~ mean(abx$ob_freq,na.rm=T),
+                                          TRUE ~ ob_freq))
 
 ###Write interim CSVs
 write_csv(abx,"interim_abx.csv")
@@ -2490,11 +2520,10 @@ test_ids <- subjects[-train_ind,]
 abx <- abx %>% mutate(CDI = factor(CDI),
                       overall_tox = factor(overall_tox),
                       sepsis_ae=factor(sepsis_ae))
-
 train_abx <- abx %>% semi_join(train_ids,by="subject_id")
 test_abx <- abx %>% semi_join(test_ids,by="subject_id")
+
 write_csv(train_abx,"train_abx.csv")
 write_csv(test_abx,"test_abx.csv")
-
 
 
