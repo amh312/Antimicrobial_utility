@@ -1,5 +1,7 @@
 #MODEL ADDITIONAL TESTING
 
+set.seed(123)
+
 ##Functions
 
 ###Factorise training and testing datasets
@@ -139,7 +141,7 @@ combined_antimicrobial_map <- c(
     sapply(map_combinations, function(x) paste(x, collapse = "_"))
   )
 )
-abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
   str_replace_all("/","-")
 combined_antimicrobial_map <- combined_antimicrobial_map[names(combined_antimicrobial_map) %in% abx_in_train]
 metrics_ablist <- c(combined_antimicrobial_map,"CDI","toxicity")
@@ -306,7 +308,7 @@ combined_antimicrobial_map <- c(
     sapply(map_combinations, function(x) paste(x, collapse = "_"))
   )
 )
-abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
   str_replace_all("/","-")
 fullmap <- combined_antimicrobial_map %>% unlist()
 names(fullmap) <- NULL
@@ -973,7 +975,7 @@ test_abx <- test_abx %>% factorise()
 abx <- data.frame(rbind(train_abx,test_abx))
 hadm_key <- hadm %>% select(subject_id,race,language,marital_status) %>% 
   distinct(subject_id,.keep_all=T)
-age_key <- pats %>% select(subject_id,anchor_age) %>% mutate(anchor_age=case_when(
+age_key <- pats %>% select(subject_id,anchor_age) %>% mutate(age_grp=case_when(
   anchor_age<30~18,anchor_age>=30&anchor_age<40~30,
   anchor_age>=40&anchor_age<50~40,
   anchor_age>=50&anchor_age<60~50,
@@ -981,7 +983,7 @@ age_key <- pats %>% select(subject_id,anchor_age) %>% mutate(anchor_age=case_whe
   anchor_age>=70&anchor_age<80~70,
   anchor_age>=80&anchor_age<90~80,
   anchor_age>=90~90
-)) %>% distinct(subject_id,.keep_all = T)
+)) %>% select(-anchor_age) %>% distinct(subject_id,.keep_all = T)
 dems_key <- left_join(hadm_key,age_key,by="subject_id")
 abx <- abx %>% left_join(dems_key,by="subject_id")
 abx <- abx %>% mutate(marital_status=case_when(is.na(marital_status)~"UNKNOWN",
@@ -989,9 +991,9 @@ abx <- abx %>% mutate(marital_status=case_when(is.na(marital_status)~"UNKNOWN",
 abx_outcomes <- abx %>%
   select(CDI,overall_tox) %>% mutate(CDI=case_when(CDI==TRUE~1,TRUE~0),
                                      overall_tox=case_when(overall_tox==TRUE~1,TRUE~0))
-abx_predictors <- abx %>% select(pHADM:age65,prAKI:pDIAB,pCARD:pSEPSIS,temperature:dbp,pc_dyspnea:pc_fever,
-                                 abx_name_Ampicillin_Ceftriaxone:ob_freq,highCRP,
-                                 race:anchor_age)
+abx_predictors <- abx %>% select(pHADM:age65,prAKI:pDIAB,pCARD:curr_service,pICU:pSEPSIS,ob_freq,highCRP,
+                                 temperature:dbp,inpatient_7d,
+                                 ab_name_Ampicillin_Ceftriaxone:ab_name_Ampicillin,race:age_grp)
 set.seed(123)
 dummies <- dummyVars(" ~ .", data = abx_predictors)
 abx_predictors <- predict(dummies, newdata = abx_predictors)
@@ -1307,7 +1309,7 @@ rownames(metrics_df2) <- NULL
 write_csv(metrics_df2,"cdi_tox_fairness_metrics1.csv")
 
 ###Age (CDI tox)
-ages <- abx_combined %>% distinct(anchor_age) %>% unlist() %>% sort()
+ages <- abx_combined %>% distinct(age_grp) %>% unlist() %>% sort()
 metrics_biglist3 <- list()
 for (outcome in colnames(abx_outcomes)) {
   
@@ -1359,7 +1361,7 @@ for (outcome in colnames(abx_outcomes)) {
         
         if (sum(!is.na(abx_combined[[outcome]])) > 0) {
           
-          abxTest2 <- abxTest %>% filter(anchor_age==ages[age])
+          abxTest2 <- abxTest %>% filter(age_grp==ages[age])
           test_matrix2 <- xgb.DMatrix(data = as.matrix(abxTest2 %>% select(all_of(selected_columns))), 
                                       label = abxTest2[[outcome]])
           
@@ -1787,7 +1789,7 @@ timemets %>% group_by(Model,Train_year,Test_year) %>%
   arrange(desc(sd_AUC)) %>% ungroup() %>% dplyr::slice(1) %>% select(sd_AUC) %>% unlist()
 
 ###Fairness analysis
-fairmets <- read_csv("overall_fairness_metrics.csv")=
+fairmets <- read_csv("overall_fairness_metrics.csv")
 fairnessprinter1 <- function(cat) {
 max_fairmets <- fairmets %>% filter(Category==cat) %>% group_by(Model,Characteristic) %>%
   summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% 
