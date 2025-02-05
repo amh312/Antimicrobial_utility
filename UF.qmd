@@ -334,13 +334,13 @@ po_effectsize <- round(z_po / sqrt(nrow(ur_util)), 3)
 z_iv <- statistic(wilcoxsign_test(as.formula(paste0(quo_text(ur_util$n_ivS_PDRx6), " ~ ", quo_text(ur_util$n_ivS_standard6))), data = ur_util), "standardized")[1]
 iv_effectsize <- round(z_iv / sqrt(nrow(ur_util)), 3)
 
-wil_all <- glue("(median {m_aut_all}, IQR {iq1aut_all} to {iq3aut_all} versus median {m_stan_all}, IQR {iq1stan_all} to {iq3stan_all}, p{ifelse(p_all<0.001,'<0.001',paste('=',p_all))}, effect size {all_effectsize})")
+wil_all <- glue("(median {m_aut_all}, IQR {iq1aut_all} to {iq3aut_all} versus median {m_stan_all}, IQR {iq1stan_all} to {iq3stan_all}, p{ifelse(p_all<0.001,'<0.001',paste(' =',p_all))}, effect size {all_effectsize})")
 
-wil_acs <- glue("(median {m_aut_acs}, IQR {iq1aut_acs} to {iq3aut_acs} versus median {m_stan_acs}, IQR {iq1stan_acs} to {iq3stan_acs}, p{ifelse(p_acs<0.001,'<0.001',paste('=',p_acs))}, effect size {acs_effectsize})")
+wil_acs <- glue("(median {m_aut_acs}, IQR {iq1aut_acs} to {iq3aut_acs} versus median {m_stan_acs}, IQR {iq1stan_acs} to {iq3stan_acs}, p{ifelse(p_acs<0.001,'<0.001',paste(' =',p_acs))}, effect size {acs_effectsize})")
 
-wil_po <- glue("(median {m_aut_pos}, IQR {iq1aut_pos} to {iq3aut_pos} versus median {m_stan_pos}, IQR {iq1stan_pos} to {iq3stan_pos}, p{ifelse(p_po<0.001,'<0.001',paste('=',p_po))}, effect size {po_effectsize})")
+wil_po <- glue("(median {m_aut_pos}, IQR {iq1aut_pos} to {iq3aut_pos} versus median {m_stan_pos}, IQR {iq1stan_pos} to {iq3stan_pos}, p{ifelse(p_po<0.001,'<0.001',paste(' =',p_po))}, effect size {po_effectsize})")
 
-wil_iv <- glue("(median {m_aut_ivs}, IQR {iq1aut_ivs} to {iq3aut_ivs} versus median {m_stan_ivs}, IQR {iq1stan_ivs} to {iq3stan_ivs}, p{ifelse(p_iv<0.001,'<0.001',paste('=',p_iv))}, effect size {iv_effectsize})")
+wil_iv <- glue("(median {m_aut_ivs}, IQR {iq1aut_ivs} to {iq3aut_ivs} versus median {m_stan_ivs}, IQR {iq1stan_ivs} to {iq3stan_ivs}, p{ifelse(p_iv<0.001,'<0.001',paste(' =',p_iv))}, effect size {iv_effectsize})")
 
 ```
 
@@ -370,7 +370,7 @@ A utility function combining probability predictions, importance weighting, and 
 
 ## Findings
 
-Algorithms based on the utility function recommended more antibiotics overall `r chi_all`, Access antibiotics `r chi_acs`, and oral antibiotics `r chi_orals` that were active against the urinary pathogen than human antibiotic choices, but fewer intravenous antibiotics `r chi_ivs`. The top six algorithmic recommendations contained more overall antibiotics `r wil_acs`, Access antibiotics `r wil_all` per specimen that were active against the urinary pathogen than the standard panel, no difference in oral antibiotics `r wil_po`, and fewer intravenous antibiotics `r wil_iv`.
+Algorithms based on the utility function recommended more antibiotics overall `r chi_all`, Access antibiotics `r chi_acs`, and oral antibiotics `r chi_orals` that were active against the urinary pathogen than human antibiotic choices, but fewer intravenous antibiotics `r chi_ivs`. The top six algorithmic recommendations contained more overall antibiotics `r wil_acs`, Access antibiotics `r wil_all`, and intravenous antibiotics `r wil_iv` per specimen that were active against the urinary pathogen than the standard panel, with no difference in oral antibiotics `r wil_po`.
 
 ## Interpretation
 
@@ -449,7 +449,7 @@ $S^{(x,n)}$ is a safety mechanism for patients with severe infection\
 
 $$
 S^{(x,n)}= u(w_i,v_i^{(x)})b\text{ exp}(a^{(n)})
-$$ {#eq-safety}
+$$ {#eq-safety}\
 
 where $v_i^{(x)}$ is a Boolean for intravenous administration, $a^{(n)}$ is an illness severity score chosen by the user (e.g., National Early warning score \[NEWS\]), and $b$ calibrates to the chosen score (default $b=1$ used in this study). The minimum illness severity score observed in a population must be zero. As illness severity score increases, patients are more likely to have severe infection (e.g., sepsis), in which case efficacy should be prioritised — increasing $a$ therefore exponentially increases the value of intravenous treatment $u(w_i,v_i^{(x)})$ and the antibiotic being active against the urinary pathogen $p_s^{(x,n)}$. [@buckmanEmpiricAntibioticsSepsis2018]
 
@@ -473,7 +473,7 @@ Characteristics of the MIMIC-IV urine culture and prescription datasets are summ
 
 ## Utility function
 
-Clinical prediction model hyperparameters and predictor variable contributions are summarised in Appendixes 7 and 8 respectively. Resistance to an antibiotic in the last year, gender and age group were large contributors to predicting antibiotic activity against the urine pathogen. Hospital admission or acute kidney injury in the last year, age ≥65, and previous CDI were large contributors to predicting CDI and antibiotic toxicity. Validation receiver operating characteristic (ROC) curves and performance metrics for the clinical predictio models are summarised in Figure 1 and Table 1 respectively (Appendixes 9 and 10 for combinations). 10 models produced AUROCs between 0.7 and 0.8, three between 0.65 and 0.7. The CDI model had the highest AUROC (`r aucfilter(metrics_singles_table,"CDI")`) and the model predicting Ampicillin activity against the urine pathogen had the lowest (`r aucfilter(metrics_singles_table,"Ampicillin")`).
+Clinical prediction model hyperparameters and predictor variable contributions are summarised in Appendixes 7 and 8 respectively. Resistance to an antibiotic in the last year, gender and age group were large contributors to predicting antibiotic activity against the urine pathogen. Hospital admission or acute kidney injury in the last year, age ≥65, and previous CDI were large contributors to predicting CDI and antibiotic toxicity. Validation receiver operating characteristic (ROC) curves and performance metrics for the clinical prediction models are summarised in Figure 1 and Table 1 respectively (Appendixes 9 and 10 for combinations). Eight models produced AUROCs between 0.7 and 0.8, five between 0.65 and 0.7. The CDI model had the highest AUROC (`r aucfilter(metrics_singles_table,"CDI")`) and the model predicting Ampicillin activity against the urine pathogen had the lowest (`r aucfilter(metrics_singles_table,"Ampicillin")`).
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -515,7 +515,7 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility
 
 Figure 3: Distributions of antibiotic utility values for patients across the microsimulation dataset.\
 
-The proportions of urinary pathogens that were susceptible to utility function treatment recommendations and actual ED prescriptions for patients with different illness severity scores are displayed in Figure 4. The recommendations themselves are displayed in Figure 5. Compared to antibiotics actually prescribed, the utility function recommendation was active against the urinary pathogen in more cases overall `r chi_all`, with an Access antibiotic in more cases `r chi_acs`, an oral antibiotic in more cases `r chi_orals`, and an intravenous antibiotic in fewer cases `r chi_ivs`. Access and oral antibiotics (nitrofurantoin, gentamicin, and ampicillin-sulbactam) were deprioritised in favour of intravenous Watch category agents (piperacillin-tazobactam) in patients with higher illness severity scores, resulting in higher rates of antibiotic activity (`r glue("{round(perc_util,1)}%")`) than actual ED prescriptions (`r glue("{round(perc_actual,1)}%")`) at the highest illness severity. Actual ED prescriptions changed from nitrofurantoin, through ceftriaxone, to piperacillin-tazobactam plus vancomycin with increasing illness severity. The six highest-utility antibiotics (Appendix 18) contained more overall antibiotics `r wil_all`, Access antibiotics `r wil_acs` per specimen on average that were active against the urinary pathogen than the standard panel, no difference in oral antibiotics `r wil_po`, and fewer intravenous antibiotics `r wil_iv`.
+The proportions of urinary pathogens that were susceptible to utility function treatment recommendations and actual ED prescriptions for patients with different illness severity scores are displayed in Figure 4. The recommendations themselves are displayed in Figure 5. Compared to antibiotics actually prescribed, the utility function recommendation was active against the urinary pathogen in more cases overall `r chi_all`, with an Access antibiotic in more cases `r chi_acs`, an oral antibiotic in more cases `r chi_orals`, and an intravenous antibiotic in fewer cases `r chi_ivs`. Access and oral antibiotics (nitrofurantoin, gentamicin, and ampicillin-sulbactam) were deprioritised in favour of intravenous Watch category agents (piperacillin-tazobactam) in patients with higher illness severity scores, resulting in higher rates of antibiotic activity (`r glue("{round(perc_util,1)}%")`) than actual ED prescriptions (`r glue("{round(perc_actual,1)}%")`) at the highest illness severity. Actual ED prescriptions changed from nitrofurantoin, through ceftriaxone, to piperacillin-tazobactam plus vancomycin with increasing illness severity. The six highest-utility antibiotics (Appendix 18) contained more overall antibiotics `r wil_all`, Access antibiotics `r wil_acs`, and intravenous antibiotics `r wil_iv` per specimen on average that were active against the urinary pathogen than the standard panel, with no difference in oral antibiotics `r wil_po`.
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Utility function Access agent activity against pathogen by severity score.pdf")
