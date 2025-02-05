@@ -242,12 +242,24 @@ urines5_desc %>% tab_mutater("Urine model") %>% print(n=100)
 desc_tab <-  abx %>% tab_mutater("Prescription model","N") %>% 
   full_join(urines5_desc %>% tab_mutater("Urine model")) %>% 
   left_join(ur_util %>% tab_mutater("Urine microsimulation"))
+
+severity <- ur_util %>% count(acuity) %>% mutate(Characteristic="Illness severity score",
+                                                 `Prescription model n (%)`=NA,
+                                                 `Urine model n (%)`=NA,
+                                                 `Urine microsimulation n (%)`=
+                                                   glue("{n} ({round((n/nrow(ur_util))*100,1)})")) %>% 
+  rename(Subtype="acuity") %>% relocate(Characteristic,.before="Subtype") %>% 
+  select(-n)
+
+desc_tab <- desc_tab %>% rbind(severity) %>% tibble()
+
 totals <- list("Total","Patients",
                glue("{as.character(nrow(abx %>% distinct(subject_id)))} (100)"),
                glue("{as.character(nrow(urines5_desc))} (100)"),
                glue("{as.character(nrow(ur_util))} (100)")
             )
 desc_tab[nrow(desc_tab)+1,] <- totals
+
 desc_tab <- desc_tab %>% mutate(Characteristic=case_when(
   Characteristic==lag(Characteristic)~"",
   TRUE~Characteristic
@@ -257,13 +269,13 @@ write_csv(desc_tab,"uf_desctab.csv")
 
 ###Table 2: Prescription characteristics
 
-ab_tab <- abx %>% mutate(abx_name=str_replace_all(abx_name,"_"," & ")) %>% count(abx_name) %>% 
-  arrange(desc(n)) %>% mutate(abx_name=case_when(
-    n/nrow(abx)<0.0025~"Other",TRUE~abx_name
-  )) %>% group_by(abx_name) %>%
+ab_tab <- abx %>% mutate(ab_name=str_replace_all(ab_name,"_"," & ")) %>% count(ab_name) %>% 
+  arrange(desc(n)) %>% mutate(ab_name=case_when(
+    n/nrow(abx)<0.0025~"Other",TRUE~ab_name
+  )) %>% group_by(ab_name) %>%
   summarise(n=sum(n)) %>% ungroup() %>% print(n=100) %>% 
   arrange(desc(n)) %>% 
   mutate(n=glue("{n} ({round((n/nrow(abx))*100,1)})")) %>%
-  rename(`n (%)`="n",`Antibiotic(s)`="abx_name")
+  rename(`n (%)`="n",`Antibiotic(s)`="ab_name")
 
 write_csv(ab_tab,"ab_tab.csv")
