@@ -36,6 +36,7 @@ To reproduce the study, all scripts above must be stored in the working director
    12. **UF_tox_model_train_valid.R**  
    l3. **UF_model_testing.R**  
    14. **UF_discrete_choice_exp.R**
-   15. **UF_spec_sens_analysis.R**
+   15. **UF_spec_analysis.R**
    16. **UF_microsimulation.R**
-   17. 
+   17. **UF_descriptive.R**
+   18. **UF_edgecases.R**
