@@ -572,7 +572,7 @@ R_util_sens <- function(df,probs_df,uf,min_val,max_val) {
       probs_df_2 <- probs_df_2 %>% calculate_utilities(MEWS=R_wt_value,R_weight = 1)
       
       ###Filter out combination predictions not present in training dataset
-      abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+      abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
         str_replace_all("/","-")
       probs_df_2 <- probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
       
@@ -845,7 +845,7 @@ util_sens <- function(df,probs_df,uf,variable_criterion,min_val,max_val) {
       print(probs_df_2 %>% filter(Antimicrobial==iterabs[j]) %>% summarise(medac=median(Rx_utility)))
       
       ###Filter out combination predictions not present in training dataset
-      abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+      abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
         str_replace_all("/","-")
       probs_df_2 <- probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
       
@@ -1170,7 +1170,7 @@ cdi_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
       probs_df_3 <- probs_df_3 %>% calculate_utilities()
       
       ###Filter out combination predictions not present in training dataset
-      abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+      abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
         str_replace_all("/","-")
       probs_df_3 <- probs_df_3 %>% filter(Antimicrobial %in% abx_in_train)
       
@@ -1354,7 +1354,7 @@ tox_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
       probs_df_3 <- probs_df_3 %>% calculate_utilities()
       
       ###Filter out combination predictions not present in training dataset
-      abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+      abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
         str_replace_all("/","-")
       probs_df_3 <- probs_df_3 %>% filter(Antimicrobial %in% abx_in_train)
       
@@ -1535,7 +1535,7 @@ sepsisae_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,
         print()
       
       ###Filter out combination predictions not present in training dataset
-      abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+      abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
         str_replace_all("/","-")
       probs_df_3 <- probs_df_3 %>% filter(Antimicrobial %in% abx_in_train)
       
@@ -1811,7 +1811,7 @@ util_sens_auc <- function(df,probs_df,uf,min_val,max_val) {
       print(probs_df_2 %>% filter(Antimicrobial==iterabs[j]) %>% summarise(medac=median(Rx_utility)))
       
       ###Filter out combination predictions not present in training dataset
-      abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+      abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
         str_replace_all("/","-")
       probs_df_2 <- probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
       
@@ -2082,7 +2082,7 @@ util_sens_auc_cdi <- function(df,probs_df,uf,min_val,max_val) {
       print(probs_df_2 %>% filter(Antimicrobial==iterabs[j]) %>% summarise(medac=median(Rx_utility)))
       
       ###Filter out combination predictions not present in training dataset
-      abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+      abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
         str_replace_all("/","-")
       probs_df_2 <- probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
       
@@ -2353,7 +2353,7 @@ util_sens_auc_tox <- function(df,probs_df,uf,min_val,max_val) {
       print(probs_df_2 %>% filter(Antimicrobial==iterabs[j]) %>% summarise(medac=median(Rx_utility)))
       
       ###Filter out combination predictions not present in training dataset
-      abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+      abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
         str_replace_all("/","-")
       probs_df_2 <- probs_df_2 %>% filter(Antimicrobial %in% abx_in_train)
       
@@ -2710,13 +2710,13 @@ spec_sens_analysis <- function(df,results_df,specialty) {
   
   
   ###Antimicrobial dummy variables in probability prediction dataframe
-  df$abx_name_ <- as.factor(df$Antimicrobial)
+  df$ab_name_ <- as.factor(df$Antimicrobial)
   df <- df %>% mutate(
-    abx_name_ = str_replace_all(abx_name_,"-",".")
+    ab_name_ = str_replace_all(ab_name_,"-",".")
   )
-  dummy_vars <- model.matrix(~ abx_name_ - 1, data = df)
+  dummy_vars <- model.matrix(~ ab_name_ - 1, data = df)
   df <- cbind(df, dummy_vars) %>% tibble() %>% 
-    select(-abx_name_)
+    select(-ab_name_)
   
   ##Utility score calculation
   
@@ -2999,7 +2999,7 @@ res_sens_analysis <- function(df,probs_df,MEWS_variable=0,R_value=1,utility_of_i
   utility_of_interest <- enquo(utility_of_interest)
   
   probs_df <- probs_df %>% calculate_utilities(MEWS = MEWS_variable,R_weight = R_value)
-  abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+  abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
     str_replace_all("/","-")
   probs_df <- probs_df %>% filter(Antimicrobial %in% abx_in_train)
   senskey <- df %>% select(micro_specimen_id,AMP:VAN,AMP_SAM:NIT_VAN)
@@ -3027,7 +3027,7 @@ res_sens_analysis <- function(df,probs_df,MEWS_variable=0,R_value=1,utility_of_i
       sapply(map_combinations, function(x) paste(x, collapse = "_"))
     )
   )
-  abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+  abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
     str_replace_all("/","-")
   combined_antimicrobial_map <- combined_antimicrobial_map[names(combined_antimicrobial_map) %in% abx_in_train]
   iv_abs <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
@@ -3204,7 +3204,7 @@ res_sens_analysis_2 <- function(df,probs_df,MEWS_variable=1) {
   
   probs_df <- probs_df %>% mutate(S=better_S)
   probs_df <- probs_df %>% calculate_utilities(MEWS = MEWS_variable)
-  abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+  abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
     str_replace_all("/","-")
   probs_df <- probs_df %>% filter(Antimicrobial %in% abx_in_train)
   senskey <- df %>% select(micro_specimen_id,AMP:VAN,AMP_SAM:NIT_VAN)
@@ -3232,7 +3232,7 @@ res_sens_analysis_2 <- function(df,probs_df,MEWS_variable=1) {
       sapply(map_combinations, function(x) paste(x, collapse = "_"))
     )
   )
-  abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+  abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
     str_replace_all("/","-")
   combined_antimicrobial_map <- combined_antimicrobial_map[names(combined_antimicrobial_map) %in% abx_in_train]
   iv_abs <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
@@ -3382,7 +3382,7 @@ res_sens_analysis_3 <- function(df,probs_df,abx,abcol,a_val,b_val) {
   probs_df <- probs_df %>% dist_replace(df,abx,"R","S",a_val,b_val) %>%
     calculate_utilities()
   
-  abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+  abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
     str_replace_all("/","-")
   probs_df <- probs_df %>% filter(Antimicrobial %in% abx_in_train)
   senskey <- df %>% select(micro_specimen_id,AMP:VAN,AMP_SAM:NIT_VAN)
@@ -3410,7 +3410,7 @@ res_sens_analysis_3 <- function(df,probs_df,abx,abcol,a_val,b_val) {
       sapply(map_combinations, function(x) paste(x, collapse = "_"))
     )
   )
-  abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+  abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
     str_replace_all("/","-")
   combined_antimicrobial_map <- combined_antimicrobial_map[names(combined_antimicrobial_map) %in% abx_in_train]
   iv_abs <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
@@ -3565,7 +3565,7 @@ res_sens_analysis_4 <- function(df,probs_df,MEWS_variable=0,R_value=1,utility_of
   utility_of_interest <- enquo(utility_of_interest)
   
   probs_df <- probs_df %>% calculate_utilities(MEWS = MEWS_variable,R_weight = R_value)
-  abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+  abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
     str_replace_all("/","-")
   probs_df <- probs_df %>% filter(Antimicrobial %in% abx_in_train)
   senskey <- df %>% select(micro_specimen_id,AMP:VAN,AMP_SAM:NIT_VAN)
@@ -3593,7 +3593,7 @@ res_sens_analysis_4 <- function(df,probs_df,MEWS_variable=0,R_value=1,utility_of
       sapply(map_combinations, function(x) paste(x, collapse = "_"))
     )
   )
-  abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+  abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
     str_replace_all("/","-")
   combined_antimicrobial_map <- combined_antimicrobial_map[names(combined_antimicrobial_map) %in% abx_in_train]
   iv_abs <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
@@ -3912,7 +3912,7 @@ dens_check <- function(df,abx_agent,result,alpha,beta) {
 combo_res_sens_analysis <- function(df,probs_df,MEWS_variable=0,R_value=1) { 
   
   probs_df <- probs_df %>% calculate_utilities(MEWS = MEWS_variable,R_weight = R_value)
-  abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+  abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
     str_replace_all("/","-")
   probs_df <- probs_df %>% filter(Antimicrobial %in% abx_in_train)
   senskey <- df %>% select(micro_specimen_id,AMP:VAN,AMP_SAM:NIT_VAN)
@@ -3940,7 +3940,7 @@ combo_res_sens_analysis <- function(df,probs_df,MEWS_variable=0,R_value=1) {
       sapply(map_combinations, function(x) paste(x, collapse = "_"))
     )
   )
-  abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+  abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
     str_replace_all("/","-")
   combined_antimicrobial_map <- combined_antimicrobial_map[names(combined_antimicrobial_map) %in% abx_in_train]
   iv_abs <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
@@ -4454,7 +4454,7 @@ res_sens_analysis_recall <- function(df,probs_df,MEWS_variable=0,R_value=1,utili
   utility_of_interest <- enquo(utility_of_interest)
   
   probs_df <- probs_df %>% calculate_utilities_recall(MEWS = MEWS_variable,R_weight = R_value)
-  abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+  abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
     str_replace_all("/","-")
   probs_df <- probs_df %>% filter(Antimicrobial %in% abx_in_train)
   senskey <- df %>% select(micro_specimen_id,AMP:VAN,AMP_SAM:NIT_VAN)
@@ -4482,7 +4482,7 @@ res_sens_analysis_recall <- function(df,probs_df,MEWS_variable=0,R_value=1,utili
       sapply(map_combinations, function(x) paste(x, collapse = "_"))
     )
   )
-  abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+  abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
     str_replace_all("/","-")
   combined_antimicrobial_map <- combined_antimicrobial_map[names(combined_antimicrobial_map) %in% abx_in_train]
   iv_abs <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
@@ -4755,7 +4755,7 @@ res_sens_analysis_precision <- function(df,probs_df,MEWS_variable=0,R_value=1,ut
   utility_of_interest <- enquo(utility_of_interest)
   
   probs_df <- probs_df %>% calculate_utilities_precision(MEWS = MEWS_variable,R_weight = R_value)
-  abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+  abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
     str_replace_all("/","-")
   probs_df <- probs_df %>% filter(Antimicrobial %in% abx_in_train)
   senskey <- df %>% select(micro_specimen_id,AMP:VAN,AMP_SAM:NIT_VAN)
@@ -4783,7 +4783,7 @@ res_sens_analysis_precision <- function(df,probs_df,MEWS_variable=0,R_value=1,ut
       sapply(map_combinations, function(x) paste(x, collapse = "_"))
     )
   )
-  abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+  abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
     str_replace_all("/","-")
   combined_antimicrobial_map <- combined_antimicrobial_map[names(combined_antimicrobial_map) %in% abx_in_train]
   iv_abs <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
@@ -5056,7 +5056,7 @@ res_sens_analysis_accuracy <- function(df,probs_df,MEWS_variable=0,R_value=1,uti
   utility_of_interest <- enquo(utility_of_interest)
   
   probs_df <- probs_df %>% calculate_utilities_accuracy(MEWS = MEWS_variable,R_weight = R_value)
-  abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+  abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
     str_replace_all("/","-")
   probs_df <- probs_df %>% filter(Antimicrobial %in% abx_in_train)
   senskey <- df %>% select(micro_specimen_id,AMP:VAN,AMP_SAM:NIT_VAN)
@@ -5084,7 +5084,7 @@ res_sens_analysis_accuracy <- function(df,probs_df,MEWS_variable=0,R_value=1,uti
       sapply(map_combinations, function(x) paste(x, collapse = "_"))
     )
   )
-  abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+  abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
     str_replace_all("/","-")
   combined_antimicrobial_map <- combined_antimicrobial_map[names(combined_antimicrobial_map) %in% abx_in_train]
   iv_abs <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
@@ -5767,27 +5767,27 @@ ab_rec_df <- function(df,pd_rec,quote_pdrec,pd_res,st_res,st_rec) {
     mutate(!!pd_rec:=ab_name(!!pd_rec),
            Panel="PDAST",
            Result=!!pd_res) %>% 
-    rename(abx_name=quote_pdrec)
+    rename(ab_name=quote_pdrec)
   standard_graph <- pdast_graph %>% mutate(Panel="Standard",
                                            Result=!!st_res)
   ab_gr_df <- data.frame(rbind(pdast_graph,standard_graph))
-  ab_gr_df <- ab_gr_df %>% mutate(abx_name = case_when(Panel=="Standard" ~ st_rec,
-                                                       TRUE ~ abx_name))
+  ab_gr_df <- ab_gr_df %>% mutate(ab_name = case_when(Panel=="Standard" ~ st_rec,
+                                                       TRUE ~ ab_name))
   
-  axiscols <- ifelse(ab_gr_df %>% group_by(abx_name) %>% 
+  axiscols <- ifelse(ab_gr_df %>% group_by(ab_name) %>% 
                        mutate(n=sum(n)) %>% 
                        arrange(n) %>% ungroup() %>% 
-                       distinct(abx_name) %>% unlist() %in% ab_name(access_abs),"seagreen",
+                       distinct(ab_name) %>% unlist() %in% ab_name(access_abs),"seagreen",
                      "darkorange")
   
   axiscols <<- axiscols
   
-  ab_gr_df$abx_name <- factor(ab_gr_df$abx_name,
-                              levels=ab_gr_df %>% group_by(abx_name) %>% 
+  ab_gr_df$ab_name <- factor(ab_gr_df$ab_name,
+                              levels=ab_gr_df %>% group_by(ab_name) %>% 
                                 mutate(n=sum(n)) %>% 
                                 arrange(n) %>% ungroup() %>% 
-                                distinct(abx_name) %>% unlist())
-  max_count <- ceiling((ab_gr_df %>% group_by(abx_name,Panel) %>% summarise(sumn=sum(n)) %>% 
+                                distinct(ab_name) %>% unlist())
+  max_count <- ceiling((ab_gr_df %>% group_by(ab_name,Panel) %>% summarise(sumn=sum(n)) %>% 
                           ungroup() %>% summarise(max=max(sumn)) %>% unlist() %>% 
                           as.numeric() /25) * 25)
   
@@ -5800,7 +5800,7 @@ ab_rec_df <- function(df,pd_rec,quote_pdrec,pd_res,st_res,st_rec) {
 ###Bar plot of treatment recommendations - results
 ab_result_graph <- function(df,line,route,title_height,title_width) {
   
-  ab_plot <- ggplot(df, aes(x = abx_name, y = if_else(Panel == "Standard", -n, n),
+  ab_plot <- ggplot(df, aes(x = ab_name, y = if_else(Panel == "Standard", -n, n),
                             fill = Result,color=Result)) +
     geom_bar(stat = "identity", width=0.85,position = "stack") +
     scale_y_continuous(
@@ -6053,13 +6053,13 @@ ggsave(glue("ORplot_edgecase.pdf"), plot = ORplot, device = "pdf", width = 10, h
 print(ORplot)
 
 ###Antimicrobial dummy variables in probability prediction dataframe
-util_probs_df$abx_name_ <- as.factor(util_probs_df$Antimicrobial)
+util_probs_df$ab_name_ <- as.factor(util_probs_df$Antimicrobial)
 util_probs_df <- util_probs_df %>% mutate(
-  abx_name_ = str_replace_all(abx_name_,"-",".")
+  ab_name_ = str_replace_all(ab_name_,"-",".")
 )
-dummy_vars <- model.matrix(~ abx_name_ - 1, data = util_probs_df)
+dummy_vars <- model.matrix(~ ab_name_ - 1, data = util_probs_df)
 util_probs_df <- cbind(util_probs_df, dummy_vars) %>% tibble() %>% 
-  select(-abx_name_)
+  select(-ab_name_)
 
 ##Utility score calculation
 
@@ -6171,7 +6171,7 @@ util_probs_df$tox_AUC <- auc_df %>% filter(Antimicrobial=="toxicity") %>%
 uprobdf <- util_probs_df %>% calculate_utilities(R_weight = R_wt_value)
 
 ###Filter out combination predictions not present in training dataset
-abx_in_train <- train_abx %>% distinct(abx_name) %>% unlist() %>% 
+abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
   str_replace_all("/","-")
 uprobdf <- uprobdf %>% filter(Antimicrobial %in% abx_in_train)
 
