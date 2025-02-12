@@ -1,5 +1,5 @@
 ---
-title: "Automating antibiotic treatment choice using clinical prediction modelling: a microsimulation study"
+title: "Appendix"
 format:
   docx:
     reference-doc: doc_template.docx
@@ -16,24 +16,18 @@ library(glue)
 
 ```
 
-# Appendix
-
 ## Appendix 1: Data processing workflow
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Data flow chart.pdf")
 ```
 
-Appendix 2: Data processing workflow. Created in BioRender. Howard, A. (2025) https://BioRender.com/r77h648\
+### Appendix 1: Data processing workflow. Created in BioRender. Howard, A. (2025) https://BioRender.com/r77h648
+\
 
-## Appendix 2: Discrete choice experiment questionnaire
-
-This survey is designed to ascertain the relative importance of different features of an antimicrobial to clinicians when prescribing. It should take 2-5 minutes to complete. Contextual information about the patient has intentionally been omitted - your decision should be made based on your experience of managing urinary tract infection in your usual clinical setting. The factors listed are AWaRe classification\*, risk of Clostridioides difficile diarrhoea, toxicity risk (e.g., nephrotoxicity), UTI-specificity (whether the drug should only be used for UTI), oral option, intravenous option, and financial cost.
-
-\*The WHO AWaRe classification assigns antibiotics ratings of Access, Watch and Reserve based on their risk of generating antimicrobial resistance. Those in the Access category are the lowest risk, those in Reserve are the highest.
+## Appendix 2: Discrete choice experiment
 
 A patient has urinary tract infection. You have no other details about the patient at this stage (including disease severity). Please rank the following fictional antibiotic treatments from 1 to 13 in order of most to least preferred in this scenario by dragging and dropping options or using the arrows on the right. When finished, just click the 'Done' button at the bottom of the page.
-
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
 knitr::include_graphics(c(
@@ -55,25 +49,25 @@ knitr::include_graphics(c(
 
 ```
 
-Appendix 1: A replica of the discrete choice experiment provided to prescribers\
+\
 
 ## Appendix 3: Model specification and training/testing/validation details for clinical prediction models
 
 A total of 15 individual models were required for the primary analysis (i.e., excluding antibiotic combinations). 13 individual antibiotic susceptibility prediction models to predict probability of antibiotic activity against the urinary pathogen (i.e., pathogen susceptibility to the antibiotic) were trained for each antibiotic on the MIMIC-IV urine culture dataset. A *Clostridioides difficile* infection (CDI) prediction model and an antibiotic toxicity prediction model were trained on the MIMIC-IV prescriptions dataset.
 
-The outcome for all antibiotic susceptibility prediction models was an 'S' result indicating susceptibility of the organism grown in that urine specimen to that antibiotic or antibiotic combination. The outcome for the CDI prediction model was a positive *C. difficile* stool result within three months of the start date/time of an antibiotic or antibiotic combination. The outcome for an antibiotic toxicity prediction model was a composite outcome of either stage three acute kidney injury (a new increase in serum creatinine to at least three times baseline or at least 3.54µmol/dL in the absence of co-administration of nephrotoxic drugs as defined by the British National Formulary or intravenous contrast during the associated hospital admission), deranged liver function tests (a result newly above the upper end of the normal range for alanine aminotransferase, aspartate aminotransferase, or alkaline phosphatase in the absence of previous coded chronic liver disease or biliary instrumentation in the associated hospital admission), marrow suppression (new anaemia, leukopenia, or thrombocytopenia in the absence of co-administration of cytotoxic drugs as defined by the British National Formulary) or coded bleeding diagnosis in the associated hospital admission) in the seven days following the start date of an antibiotic, or a coded antibiotic adverse event for the associated hospital admission.[@Appendix1Interactions,@kongIncidenceCharacteristicsRisk2021, @tammaAssociationAdverseEvents2017]
+The outcome for all antibiotic susceptibility prediction models was the probability of an 'S' result indicating susceptibility of the organism grown in that urine specimen to that antibiotic or antibiotic combination. The outcome for the CDI prediction model was the probability of a positive *C. difficile* stool result within three months of the start date/time of an antibiotic or antibiotic combination. The outcome for an antibiotic toxicity prediction model was the probability of a composite outcome of either stage three acute kidney injury (a new increase in serum creatinine to at least three times baseline or at least 3.54µmol/dL in the absence of co-administration of nephrotoxic drugs as defined by the British National Formulary or intravenous contrast during the associated hospital admission), deranged liver function tests (a result newly above the upper end of the normal range for alanine aminotransferase, aspartate aminotransferase, or alkaline phosphatase in the absence of previous coded chronic liver disease or biliary instrumentation in the associated hospital admission), marrow suppression (new anaemia, leukopenia, or thrombocytopenia in the absence of co-administration of cytotoxic drugs as defined by the British National Formulary) or coded bleeding diagnosis in the associated hospital admission) in the seven days following the start date of an antibiotic, or a coded antibiotic adverse event for the associated hospital admission.[@Appendix1Interactions,@kongIncidenceCharacteristicsRisk2021, @tammaAssociationAdverseEvents2017]
 
 Choices of predictor variables and their time horizons were based on indirect or direct causal plausibility and/or association with outcome variables -this process was undertaken by the lead author (Consultant in Medical Microbiology, male, 30s, white British) and reviewed by co-authors (all male in the age range 20-60 with a racial mix of white British, White Australian, Maltese, Indian, and Chinese).[@howardPersonalisedAntimicrobialSusceptibility2024] Outcome and predictor variables were selected consistently across sociodemographic groups. No blinding to allocation or predictor/outcome assessment was implemented at any stage. Allocation to training and validation datasets was performed individually for each model by random 80:20 split without replacement, stratified to maintain similar proportions of the outcome in the training and validation datasets.
 
-We have described clinical prediction models of resistance for 12 of the 13 antimicrobial agents using logistic regression in our previous work.[@howardPersonalisedAntimicrobialSusceptibility2024] In an attempt to capture more non-linear relationships in the data, XGBoost (an ensemble method that improves predictive accuracy by sequentially combining multiple decision trees, implemented via the ‘xgboost’ package <https://cran.r-project.org/web/packages/xgboost/index.html>), was used for this study.[@chenXgboostExtremeGradient2014, @chenXGBoostScalableTree2016] XGBoost models underwent hyperparameter tuning and training on the training datasets using L2 regularisation (ridge penalty) to control overfitting. Area under the receiver operating characteristic curve (AUROC) was used as the model evaluation metric. Class imbalance methods (e.g., class weighting) were not used.
+We have described clinical prediction models of resistance for 12 of the 13 antimicrobial agents using logistic regression in our previous work.[@howardPersonalisedAntimicrobialSusceptibility2024] In an attempt to capture more non-linear relationships in the data, XGBoost (an ensemble method that improves predictive accuracy by sequentially fitting decision trees in so-called boosting rounds and combining their predictions, implemented via the ‘xgboost’ package <https://cran.r-project.org/web/packages/xgboost/index.html>), was used for this study.[@chenXgboostExtremeGradient2014, @chenXGBoostScalableTree2016] XGBoost models underwent hyperparameter tuning and training on the training datasets using L2 regularisation (ridge penalty) to control overfitting. Area under the receiver operating characteristic curve (AUROC) was used as the model evaluation metric. Class imbalance methods (e.g., class weighting) were not used.
 
-Hyperparameter tuning was performed sequentially using AUROC for each of the 39 models across hyperparameters in three stages to reduce the number of hyperparameter combinations, and therefore computational time:
+Hyperparameter tuning was performed sequentially using AUROC for each of the 15 models across hyperparameters in three stages to reduce the number of hyperparameter combinations, and therefore computational time:
 
-1.  Ten maximum tree depth and minimum child weight values in the range two to nine and one to ten respectively were selected using Latin hypercube sampling (LHS) with 'randomLHS' from the 'lhs' package (<https://cran.r-project.org/web/packages/lhs/index.html>) and tested using 5-fold cross validation across 50 training rounds (learning rate 0.05, subsample row ratio 0.8, subsample columns ratio 0.8).
+1.  Ten maximum tree depth and minimum child weight values in the range two to nine and one to ten respectively were selected using Latin hypercube sampling (LHS) with 'randomLHS' from the 'lhs' package (<https://cran.r-project.org/web/packages/lhs/index.html>) and tested using 5-fold cross validation across 50 boosting rounds (learning rate 0.05, subsample row ratio 0.8, subsample columns ratio 0.8).
 2.  Ten subsample row and column ratio values in the range 0.5-1 were selected and tested using the same method as above.
-3.  Three learning rates (0.01, 0.05, and 0.1) and were tested using the same method again, but with a maximum of 1,000 training rounds and early stopping if AUROC did not improve for 50 rounds. The round number at which the best AUROC value occurred was recorded.
+3.  Three learning rates (0.01, 0.05, and 0.1) and were tested using the same method again, but with a maximum of 1,000 boosting rounds and early stopping if AUROC did not improve for 50 rounds. The boosting round number at which the best AUROC value occurred was recorded.
 
-Predictor variable contributions to predictive value (feature importances) in model training were measured using Shapley values with 'predict' from the 'stats' package.[@Chapter53Shapley] Predictor variables with Shapley values of zero were then excluded from models for the final training round.
+Predictor variable contributions to predictive value (feature importances) in model training were measured using Shapley values with 'predict' from the 'stats' package.[@Chapter53Shapley] Predictor variables with Shapley values of zero were then excluded from models for the final boosting round.
 
 A single validation run was performed with the final trained model on the validation dataset, measuring AUROC, accuracy, precision, recall, and F1 score (decision threshold 0.5) using coded formulae for each model, with 95% confidence intervals approximated using bootstrapping. An additional analysis was performed where 24 additional susceptibility prediction models were trained and validated for 2-antibiotic combinations that were used at least 500 times in the prescriptions dataset.
 
@@ -82,14 +76,14 @@ A model stability analysis was performed to assess model performance when traine
 A model fairness analysis was performed where each of the same 15 trained models was validated separately across a range of protected characteristics (race, age, marital status, first language, and gender), with six random-train-test splits per characteristic - AUROC, accuracy, precision, recall, and F1 score (decision threshold 0.5) were again measured for each of these validation experiments, and metric distributions plotted using dot plots. Threshold recalibration for fairness was not performed because the output of the models were class probabilities rather than classifications.
 
 A time cluster analysis was performed to assess out-of-sample performance, where the 15 models were trained on one of four time periods (2008-2010, 2011-2013, 2014-16, and 2017-2019), then validated on that period and the other three time periods, measuring AUROC, accuracy, precision, recall, and F1 score (decision threshold 0.5) - this was repeated with six random train-test splits for each pair of time periods, and metric distributions were plotted using dot plots.
-
-## Appendix 4: Model specification for the ranked logit model
-
-For the discrete choice experiment to produce component weights $w$, the ranking of each antibiotic (1-13) by participants was recorded and converted to a long format where each participant’s chosen rank order of antibiotics was treated as a series of choices using the ‘mlogit.data’ method from the ‘mlogit’ package.[@croissantEstimationRandomUtility2020] A multinomial ranked logit model was trained on the data to predict antibiotic rankings based on the six characteristics of each antibiotic (again using ‘mlogit’). The model was trained to estimate maximum log likelihood using the Broyden–Fletcher–Goldfarb–Shanno (BFGS) method.[@daiPerfectExampleBFGS2013] 95% confidence intervals for coefficients were approximated using a bootstrap method with 1000 iterations. Coefficients indicate the log-odds influence of antibiotic characteristics on the likelihood of an antibiotic being ranked higher or lower than alternatives. A subset analysis was performed where the approach was repeated on subsets of the data to build separate models for infection specialties, medicine, surgery, intensive care, and general practice to compare the weights of the six antimicrobial characteristics to different specialties.\
-
 \
 
-## Appendix 5
+## Appendix 4: Model specification for the discrete choice experiment ranked logit model
+
+For the discrete choice experiment to produce component weights $w$, the ranking of each antibiotic (1-13) by participants was recorded and converted to a long format where each participant’s chosen rank order of antibiotics was treated as a series of choices using the ‘mlogit.data’ method from the ‘mlogit’ package.[@croissantEstimationRandomUtility2020] A multinomial ranked logit model was trained on the data to determine the relative importance of each of the six characteristics in influencing prescriber antibiotic rankings (again using ‘mlogit’). The model was trained to estimate maximum log likelihood using the Broyden–Fletcher–Goldfarb–Shanno (BFGS) method.[@daiPerfectExampleBFGS2013] 95% confidence intervals for characteristic importances were approximated using a bootstrap method with 1000 iterations. A subset analysis was performed where the approach was repeated on subsets of the data to build separate models for infection specialties, medicine, surgery, intensive care, and general practice to compare the weights of the six antimicrobial characteristics to different specialties.
+\
+
+## Appendix 5: Patient compositions of model development and microsimulation datasets
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -101,7 +95,7 @@ knitr::kable(desc_tab)
 
 ```
 
-Appendix 5: Patient compositions of the model development and microsimulation datasets.\
+### Appendix 5: Patient compositions of the model development and microsimulation datasets.
 \
 
 ## Appendix 6: Antibiotic courses in the prescription dataset
@@ -114,7 +108,7 @@ knitr::kable(ab_tab,)
 
 ```
 
-Appendix 6: Antibiotic courses in the prescription dataset, including two-combination administrations of more than 24 hours duration.\
+### Appendix 6: Antibiotic courses in the prescription dataset, including two-combination administrations of more than 24 hours duration.
 \
 
 ## Appendix 7: Final training hyperparameters
@@ -127,7 +121,7 @@ knitr::kable(hyp_tab)
 
 ```
 
-Appendix 7: Final training hyperparameters used for the 39 clinical prediction models.\
+### Appendix 7: Final training hyperparameters used for the 39 clinical prediction models.
 \
 
 ## Appendix 8: Feature importances
@@ -140,34 +134,10 @@ knitr::kable(feat_table)
 
 ```
 
-Appendix 8: Feature importances in the clinical prediction models.\
+### Appendix 8: Feature importances in the clinical prediction models.
 \
 
-## Appendix 9: ROC curves for 2-antibiotic combination models
-
-```{r, echo=FALSE,message=FALSE,warning=FALSE}
-
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/roc_plots_other.pdf")
-  
-```
-
-Appendix 9: ROC curves for probability predictions made for 2-antibiotic combination susceptibility on the validation dataset.\
-\
-
-## Appendix 10: Model performance metrics for 2-antibiotic combinations
-
-```{r, echo=FALSE,message=FALSE,warning=FALSE}
-
-metrics_combos_table <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/metrics_combos_table.csv")
-
-knitr::kable(metrics_combos_table)
-
-```
-
-Appendix 10: Model performance metrics for 2-antibiotic combinations in the single validation run on the validation dataset.\
-\
-
-## Appendix 11: Small dataset stability metrics
+## Appendix 9: Small dataset stability metrics
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -179,10 +149,10 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/stabili
   
 ```
 
-Appendix 11: Small dataset stability metrics for single antibiotic, CDI, and toxicity models in six random train-test splits stratified by outcome at a sequence of small dataset sizes across 50 training runs of XGBoost.\
+### Appendix 9: Small dataset stability metrics for single antibiotic, CDI, and toxicity models in six random train-test splits stratified by outcome at a sequence of small dataset sizes across 50 training runs of XGBoost.
 \
 
-## Appendix 12: Year group cluster analysis
+## Appendix 10: Year group cluster analysis
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -212,10 +182,10 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesen
 
 ```
 
-Appendix 12: Year group cluster analysis of clinical prediction model performance in six random train-test splits stratified by outcome.\
+### Appendix 10: Year group cluster analysis of clinical prediction model performance in six random train-test splits stratified by outcome.
 \
 
-## Appendix 13: Fairness analyses
+## Appendix 11: Fairness analyses
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -240,10 +210,10 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protcha
   
 ```
 
-Appendix 13: Fairness analyses of clinical prediction model performance across age, race, gender, spoken language, and marital status in six random train-test splits stratified by outcome.\
+### Appendix 11: Fairness analyses of clinical prediction model performance across age, race, gender, spoken language, and marital status in six random train-test splits stratified by outcome.
 \
 
-## Appendix 14: Coefficients from the ranked logit analysis
+## Appendix 12: Coefficients from the ranked logit analysis
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -255,10 +225,10 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/General
 
 ```
 
-Appendix 14: Coefficients from the ranked logit analysis of the discrete choice experiment across all prescriber specialties.\
+### Appendix 12: Coefficients from the ranked logit analysis of the discrete choice experiment across all prescriber specialties.
 \
 
-## Appendix 15: The distribution of utility values by specialty
+## Appendix 13: The distribution of utility values by specialty
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -270,44 +240,10 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility
 
 ```
 
-Appendix 15: The distribution of utility values across the microsimulation dataset for all single agents, stratified by the individual specialities.\
+### Appendix 13: The distribution of utility values across the microsimulation dataset for all single agents, stratified by the individual specialities.
 \
 
-## Appendix 16: The distribution of utility values including antibiotic combinations
-
-```{r, echo=FALSE,message=FALSE,warning=FALSE}
-
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_.pdf")
-
-```
-
-Appendix 16: The overall distribution of utility values across the microsimulation dataset for all antibiotics including 2-agent combinations.\
-\
-
-## Appendix 17: Sensitivity analysis of utility calculation
-
-```{r, echo=FALSE,message=FALSE,warning=FALSE}
-
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/UTI-specificity_sens_plots_grid.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Access category_sens_plots_grid.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Oral option_sens_plots_grid.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/IV option_sens_plots_grid.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Cost_sens_plots_grid.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Reserve category_sens_plots_grid.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/CDI_sens_plots_grid.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Toxicity_sens_plots_grid.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Illness severity score_sens_plots_grid.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/resistance_sens_plots_grid.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/CDI probability_sens_plots_grid.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/toxicity probability_sens_plots_grid.pdf")
-
-
-```
-
-Appendix 18: Sensitivity analyses demonstrating the effect of varying all utility function parameters on overall treatment utility of individual antibiotics.\
-\
-
-## Appendix 18: Number of susceptible results in the top six recommendations
+## Appendix 14: Number of susceptible results in the top six recommendations
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
@@ -316,104 +252,7 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/UF_IV a
 
 ```
 
-Appendix 17: The number of susceptible results in the top six automated recommendations (PDRx), overall / for WHO Access agents (top) and for oral / IV agents (bottom), compared to a standard panel of nitrofurantoin, trimethoprim-sulfamethoxazole, gentamicin, piperacillin-tazobactam, ceftriaxone, and ciprofloxacin. Median values are displayed as red/green dots, interquartile ranges as red/green lines, and all results as grey dot cloud darkness.\
-\
-
-## Appendix 19: Illness severity additional analysis (second-line agents)
-
-```{r, echo=FALSE,message=FALSE,warning=FALSE}
-
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Utility function second-line Access activity against pathogen by severity score.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Utility function second-line oral activity against pathogen by severity score.pdf")
-knitr::include_graphics(normalizePath("/Users/alexhoward/Documents/Projects/UDAST_code/Utility function second-line IV activity against pathogen by severity score.pdf"))
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/illness_abplot_2.pdf")
-
-```
-
-Appendix 19: Changes in the proportion of urine organism coverage with second-line treatment recommendations overall, Access treatment recommendations, treatment recommendations with oral preparations, and treatment recommendations with intravenous preparations as the illness severity of the population was increased.\
-\
-
-## Appendix 20: Illness severity additional analysis (combinations included)
-
-```{r, echo=FALSE,message=FALSE,warning=FALSE}
-
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Utility function Access combination activity against pathogen by severity score.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Utility function oral combination activity against pathogen by severity score.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Utility function IV combination activity against pathogen by severity score.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/ilness_comboplot.pdf")
-
-```
-
-Appendix 20: Changes in the proportion of urine organism coverage with first-line treatment recommendations overall, Access treatment recommendations, treatment recommendations with oral preparations, and treatment recommendations with intravenous preparations as the illness severity of the population was increased (2-agent combinations included).\
-\
-
-## Appendix 21: Illness severity additional analysis (improved probability predictions)
-
-```{r, echo=FALSE,message=FALSE,warning=FALSE}
-
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Utility function Access activity against pathogen by severity score (improved predictions).pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Utility function oral activity against pathogen by severity score (improved predictions).pdf")
-knitr::include_graphics(normalizePath("/Users/alexhoward/Documents/Projects/UDAST_code/Utility function IV activity against pathogen by severity score (improved predictions).pdf"))
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/illness_abplot_imp.pdf")
-
-```
-
-Appendix 21: Changes in the proportion of urine organism coverage with first-line treatment recommendations overall, Access treatment recommendations, treatment recommendations with oral preparations, and treatment recommendations with intravenous preparations as the illness severity of the population was increased (improved probability predictions).\
-\
-
-## Appendix 22: Illness severity additional analysis (continued ascending illness severity)
-
-```{r, echo=FALSE,message=FALSE,warning=FALSE}
-
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Utility function Access activity against pathogen by ascending illness severity.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Utility function oral activity against pathogen by ascending illness severity.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Utility function IV activity against pathogen by ascending illness severity.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/illness_abplot_ill.pdf")
-
-```
-
-Appendix 22: Changes in the proportion of urine organism coverage with first-line treatment recommendations overall, Access treatment recommendations, treatment recommendations with oral preparations, and treatment recommendations with intravenous preparations as the illness severity of the population was increased for the whole population in tandem until treatment recommendations stopped changing.\
-\
-
-## Appendix 23: Nitrofurantoin resistance additional analysis
-
-```{r, echo=FALSE,message=FALSE,warning=FALSE}
-
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Utility function Access activity against pathogen by nitrofurantoin resistance rate.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Utility function oral activity against pathogen by nitrofurantoin resistance rate.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Utility function IV activity against pathogen by nitrofurantoin resistance rate.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/nitres_abplot.pdf")
-
-```
-
-Appendix 22: Changes in the proportion of urine organism coverage with first-line treatment recommendations overall, Access treatment recommendations, treatment recommendations with oral preparations, and treatment recommendations with intravenous preparations as the median predicted probability of nitrofurantoin resistance was varied between zero and one.\
-\
-
-## Appendix 24: Discrete choice experiment edge case sensitivity analysis
-
-```{r, echo=FALSE,message=FALSE,warning=FALSE}
-
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/ORplot_edgecase.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_ (single agent in edge case).pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of WHO Access agents, edge case)_susplot.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of orally-administrable agents, edge case)_susplot.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/overall _MEWS_according to illness severity (proportion of IV-administrable agents, edge case)_susplot.pdf")
-
-
-```
-
-Appendix 23: Discrete choice experiment edge case sensitivity analysis where many identical responses were simlated in which oral administration options were prioritised.\
-\
-
-## Appendix 25: Discrete choice experiment edge case sensitivity analysis (collinearity reduced)
-
-```{r, echo=FALSE,message=FALSE,warning=FALSE}
-
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/ORplot_edgecase2.pdf")
-
-```
-
-Appendix 24: The effect of reducing collinearity between oral routes of administration and UTI-specificity on coefficients in the ranked logit model in the discrete choice experiment edge case sensitivity analysis.\
+### Appendix 14: The number of susceptible results in the top six automated recommendations (PDRx), overall / for WHO Access agents (top) and for oral / IV agents (bottom), compared to a standard panel of nitrofurantoin, trimethoprim-sulfamethoxazole, gentamicin, piperacillin-tazobactam, ceftriaxone, and ciprofloxacin. Median values are displayed as red/green dots, interquartile ranges as red/green lines, and all results as grey dot cloud darkness.
 \
 
 ## References
