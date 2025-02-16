@@ -252,7 +252,7 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/UF_IV a
 
 ```
 
-### Appendix 14: The number of susceptible results in the top six automated recommendations (PDRx), overall / for WHO Access agents (top) and for oral / IV agents (bottom), compared to a standard panel of nitrofurantoin, trimethoprim-sulfamethoxazole, gentamicin, piperacillin-tazobactam, ceftriaxone, and ciprofloxacin. Median values are displayed as red/green dots, interquartile ranges as red/green lines, and all results as grey dot cloud darkness.
+### Appendix 14: The number of susceptible results in the top six antimicrobial utility function (AUF) recommendations, overall / for WHO Access agents (top) and for oral / IV agents (bottom), compared to a standard panel of nitrofurantoin, trimethoprim-sulfamethoxazole, gentamicin, piperacillin-tazobactam, ceftriaxone, and ciprofloxacin. Median values are displayed as red/green dots, interquartile ranges as red/green lines, and all results as grey dot cloud darkness.
 \
 
 ## References
