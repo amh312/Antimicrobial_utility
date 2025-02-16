@@ -1121,7 +1121,7 @@ util_sens_illness <- function(df,probs_df,uf,min_val,max_val) {
       probs_df_2 <- probs_df %>% mutate(acuity=weight_sq[i])
       
       scores2 <- scores  
-      R_wt_value <- 1
+      R_wt_value <- weight_sq[i]
       
       cdi_value <- scores2[rownames(scores2)=="CDI_highrisk",] %>% 
         select(Value) %>% unlist()
@@ -1429,17 +1429,16 @@ cdi_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
       ##Utility score calculation
       
       ###CDI risk utility
-      cdi_value <- scores[rownames(scores)=="CDI_highrisk",] %>% 
+      cdi_value <- scores %>% filter(Coefficient=="High CDI risk") %>% 
         select(Value) %>% unlist()
       
       ###Toxicity risk utility
-      tox_value <- scores[rownames(scores)=="Toxicity_highrisk",] %>% 
+      tox_value <- scores %>% filter(Coefficient=="High toxicity risk") %>% 
         select(Value) %>% unlist()
-      
       
       ###UTI-specific utility
       uti_specifics <- c("Nitrofurantoin")
-      uti_value <- scores[rownames(scores)=="UTI_specific",] %>% 
+      uti_value <- scores %>% filter(Coefficient=="UTI-specific") %>% 
         select(Value) %>% unlist()
       
       ###Access category utility
@@ -1449,7 +1448,7 @@ cdi_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
       access_combos <- combn(access_abs, 2, FUN = function(x) paste(x, collapse = "_"))
       access_abs <- c(access_abs, access_combos)
       
-      access_value <- scores[rownames(scores)=="Access",] %>% 
+      access_value <- scores %>% filter(Coefficient=="Access category") %>% 
         select(Value) %>% unlist()
       
       ###Oral option utilituy
@@ -1459,7 +1458,7 @@ cdi_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
       oral_combos <- combn(oral_abs, 2, FUN = function(x) paste(x, collapse = "_"))
       oral_abs <- c(oral_abs, oral_combos)
       
-      oral_value <- scores[rownames(scores)=="Oral_option",] %>% 
+      oral_value <- scores %>% filter(Coefficient=="Oral option") %>% 
         select(Value) %>% unlist()
       
       ###IV option utility
@@ -1469,17 +1468,17 @@ cdi_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
       iv_combos <- combn(iv_abs, 2, FUN = function(x) paste(x, collapse = "_"))
       iv_abs <- c(iv_abs, iv_combos)
       
-      iv_value <- scores[rownames(scores)=="IV_option",] %>% 
+      iv_value <- scores %>% filter(Coefficient=="IV option") %>% 
         select(Value) %>% unlist()
       
       ###Reserve category utility
       reserve_abs <- c()
-      reserve_value <- scores[rownames(scores)=="Reserve",] %>% 
+      reserve_value <- scores %>% filter(Coefficient=="Reserve category") %>% 
         select(Value) %>% unlist()
       
       ###High-cost agent utility
       highcost_abs <- c()
-      cost_value <- scores[rownames(scores)=="High_cost",] %>% 
+      cost_value <- scores %>% filter(Coefficient=="High cost") %>% 
         select(Value) %>% unlist()
       cost_list <- read_csv("us_drug_cost_list.csv")
       drug_order <- cost_list %>% distinct(`Generic Name`) %>% unlist()
@@ -1613,17 +1612,16 @@ tox_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
       ##Utility score calculation
       
       ###CDI risk utility
-      cdi_value <- scores[rownames(scores)=="CDI_highrisk",] %>% 
+      cdi_value <- scores %>% filter(Coefficient=="High CDI risk") %>% 
         select(Value) %>% unlist()
       
       ###Toxicity risk utility
-      tox_value <- scores[rownames(scores)=="Toxicity_highrisk",] %>% 
+      tox_value <- scores %>% filter(Coefficient=="High toxicity risk") %>% 
         select(Value) %>% unlist()
-      
       
       ###UTI-specific utility
       uti_specifics <- c("Nitrofurantoin")
-      uti_value <- scores[rownames(scores)=="UTI_specific",] %>% 
+      uti_value <- scores %>% filter(Coefficient=="UTI-specific") %>% 
         select(Value) %>% unlist()
       
       ###Access category utility
@@ -1633,7 +1631,7 @@ tox_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
       access_combos <- combn(access_abs, 2, FUN = function(x) paste(x, collapse = "_"))
       access_abs <- c(access_abs, access_combos)
       
-      access_value <- scores[rownames(scores)=="Access",] %>% 
+      access_value <- scores %>% filter(Coefficient=="Access category") %>% 
         select(Value) %>% unlist()
       
       ###Oral option utilituy
@@ -1643,7 +1641,7 @@ tox_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
       oral_combos <- combn(oral_abs, 2, FUN = function(x) paste(x, collapse = "_"))
       oral_abs <- c(oral_abs, oral_combos)
       
-      oral_value <- scores[rownames(scores)=="Oral_option",] %>% 
+      oral_value <- scores %>% filter(Coefficient=="Oral option") %>% 
         select(Value) %>% unlist()
       
       ###IV option utility
@@ -1653,17 +1651,17 @@ tox_prob_sens <- function(df,probs_df,uf,characteristic,characteristic_col,char_
       iv_combos <- combn(iv_abs, 2, FUN = function(x) paste(x, collapse = "_"))
       iv_abs <- c(iv_abs, iv_combos)
       
-      iv_value <- scores[rownames(scores)=="IV_option",] %>% 
+      iv_value <- scores %>% filter(Coefficient=="IV option") %>% 
         select(Value) %>% unlist()
       
       ###Reserve category utility
       reserve_abs <- c()
-      reserve_value <- scores[rownames(scores)=="Reserve",] %>% 
+      reserve_value <- scores %>% filter(Coefficient=="Reserve category") %>% 
         select(Value) %>% unlist()
       
       ###High-cost agent utility
       highcost_abs <- c()
-      cost_value <- scores[rownames(scores)=="High_cost",] %>% 
+      cost_value <- scores %>% filter(Coefficient=="High cost") %>%
         select(Value) %>% unlist()
       cost_list <- read_csv("us_drug_cost_list.csv")
       drug_order <- cost_list %>% distinct(`Generic Name`) %>% unlist()
@@ -2323,19 +2321,73 @@ spec_sens_analysis <- function(df,results_df,specialty) {
   
 }
 
+###Barplot of pathogen coverage
+overall_bar_plot <- function(dfs1,dfs2,filter_nonterms,pos_term,invert_term,n_cats,chart_cat) {
+
+dfs1a <- dfs1 %>% filter(!grepl(filter_nonterms,Metric,ignore.case=T))
+dfs2a <- dfs2 %>% filter(!grepl(filter_nonterms,Metric,ignore.case=T))
+
+inverter <- function(df,n_cat,inverse,type) {
+df2 <- df %>% mutate(Perc2=Percentage-lead(Percentage,n=4)) %>% 
+  select(Perc2) %>% dplyr::slice(1:n_cat) %>% 
+  rename(Percentage="Perc2") %>% mutate(Metric=inverse,
+                                        Weight =seq(0,n_cat-1),
+                                        Type=type)
+rbind(df,df2) %>% tibble() %>% filter(Metric!="All agents")
+}
+
+combined_df <- rbind(dfs1a %>% inverter(n_cats,invert_term,"AUF"),
+dfs2a %>% inverter(n_cats,invert_term,"Human")) %>% tibble()
+combined_df$Metric=factor(combined_df$Metric,levels=c(invert_term,pos_term))
+
+barplot <- ggplot(combined_df, aes(x = Weight, y = Percentage, group=Metric,fill = Metric)) +
+  geom_bar(stat = "identity", position = position_stack(), data = subset(combined_df, Type == "AUF"),aes(x = Weight - 0.125),width=0.25) +
+  geom_bar(stat = "identity", position = position_stack(), data = subset(combined_df, Type == "Human"), aes(x = Weight + 0.125),width=0.25)+
+  theme_minimal()+
+  ggtitle(glue("{chart_cat} of empirical treatment choices and coverage of urine culture isolates, by illness severity"))+
+  xlab("Illness severity score")+
+  ylab("Isolates susceptible to treatment (%)")+
+  ylim(-5,100)+
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.minor.y = element_blank()
+  )+
+  annotate("text", x = - 0.125, y = -5, label = "AUF", size = 4, fontface = "bold",colour="grey40") +
+  annotate("text", x = 0.125, y = -5, label = "Human", size = 4, fontface = "bold",colour="grey40") +
+  annotate("text", x =  0.875, y = -5, label = "AUF", size = 4, fontface = "bold",colour="grey40") +
+  annotate("text", x = 1.125, y = -5, label = "Human", size = 4, fontface = "bold",colour="grey40") +
+  annotate("text", x = 1.875, y = -5, label = "AUF", size = 4, fontface = "bold",colour="grey40") +
+  annotate("text", x = 2.125, y = -5, label = "Human", size = 4, fontface = "bold",colour="grey40") +
+  annotate("text", x =  2.875, y = -5, label = "AUF", size = 4, fontface = "bold",colour="grey40") +
+  annotate("text", x = 3.125, y = -5, label = "Human", size = 4, fontface = "bold",colour="grey40") 
+  
+ggsave(glue("bar_{chart_cat}.pdf"), plot = barplot, device = "pdf", width = 10, height = 3,
+       path="/Users/alexhoward/Documents/Projects/UDAST_code")
+
+}
+
 ###Susceptibility plot
-susc_plotter_overall <- function(df,df2,subset="",measure,suffix="",agent_col1,agent_name1,agent_col2,agent_name2,variable) {
+susc_plotter_overall <- function(df,df2,df3,subset="",measure,suffix="",agent_col1,agent_name1,agent_col2,agent_name2,variable) {
   
   agent_col1 <- enquo(agent_col1)
   agent_col2 <- enquo(agent_col2)
   
   df$Metric <- factor(df$Metric, levels=c("All agents","Access agents","IV agents","Oral agents"))
   
+  df3$Metric <- factor(df$Metric, levels=c("All agents","Access agents","IV agents","Oral agents"))
+  
   if (grepl("severity", variable)) {
     
-    if (grepl("Access", suffix)&!grepl("inpatient", suffix)) {
+    if (grepl("Access", suffix)) {
       
-      susplot <- ggplot(df, aes(x = Weight, y = Percentage, group = Metric, color = Metric, fill = Metric)) +
+      df <- df %>% mutate(Metric=case_when(Metric=="All agents" ~ "Watch agents",
+                          TRUE~Metric))
+      
+      df$Metric <- factor(df$Metric, levels=c("Watch agents","Access agents","IV agents","Oral agents"))
+      
+      susplot <- ggplot(df, aes(x = Weight, y = Percentage, group = Metric, fill = Metric)) +
         geom_area(position = "identity", alpha = 0.6) +
         geom_hline(linetype = "dashed", yintercept = 70, color = "darkgreen") +
         ylim(0, 100) +
@@ -2350,9 +2402,18 @@ susc_plotter_overall <- function(df,df2,subset="",measure,suffix="",agent_col1,a
         xlab(glue("{variable}")) +
         ylab("Urine pathogens covered (%)") +
         annotate("text", x = Inf, y = 72, label = "UN Access target", hjust = 1.1, color = "darkgreen") +
-        scale_x_continuous(breaks = weightseq)
+        scale_x_continuous(breaks = weightseq) +
+        geom_point(data = df3, aes(x = Weight, y = Percentage, group=Metric, color=Metric,fill=Metric), size = 2)+
+        scale_color_manual(values = c("Watch agents" = "red", "Access agents" = "darkgreen", "All agents" = "darkblue")) +
+        scale_fill_manual(values = c("Watch agents" = "red", "Access agents" = "green"))
       
-    } else if (!grepl("Access", suffix)&!grepl("inpatient", suffix)) {
+    } else if (grepl("oral", suffix)) {
+      
+      df <- df %>% mutate(Metric=case_when(Metric=="All agents" ~ "Non-oral agents",
+                          TRUE~Metric))
+      
+      df$Metric <- factor(df$Metric, levels=c("Non-oral agents","Access agents","IV agents","Oral agents"))
+      
       susplot <- ggplot(df, aes(x = Weight, y = Percentage, group = Metric, color = Metric, fill = Metric)) +
         geom_area(position = "identity", alpha = 0.6) +
         ylim(0, 100) +
@@ -2369,6 +2430,11 @@ susc_plotter_overall <- function(df,df2,subset="",measure,suffix="",agent_col1,a
         scale_x_continuous(breaks = weightseq)
       
     } else {
+      
+      df <- df %>% mutate(Metric=case_when(Metric=="All agents" ~ "Non-IV agents",
+                          TRUE~Metric))
+      
+      df$Metric <- factor(df$Metric, levels=c("Non-IV agents","Access agents","IV agents","Oral agents"))
       
       susplot <- ggplot(df, aes(x = Weight, y = Percentage, group = Metric, color = Metric, fill = Metric)) +
         geom_area(position = "identity", alpha = 0.6) +
@@ -3743,6 +3809,10 @@ main_dotplotter <- function(df,PDRx_1,standard_1,PDRx_2,standard_2,
                                                                    PDRx_2,
                                                                    standard_2))
   
+  plot_df <- plot_df %>% mutate(Approach=case_when(
+    Approach=="PDRx"~"AUF",TRUE~Approach
+  ))
+  
   df_plot <- ggplot(plot_df,aes(x=AWaRe_results,y=n,color=Approach)) +
     geom_jitter(colour="black", alpha=0.01, width=0.1,height=0.15) +
     stat_summary(geom="point",fun="median",size=4)+
@@ -3827,6 +3897,7 @@ vitalsign <- read_csv("vitalsign.csv")
 triage <- read_csv("triage.csv")
 edstays <- read_csv("edstays.csv")
 pyxis <- read_csv("pyxis.csv") %>% rename(drug="name")
+scores <- read_csv("scores_df.csv")
 
 ###Reference lists
 all_singles <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
@@ -4619,8 +4690,6 @@ overall_xg_plot_df_px_abx <- data.frame(rbind(
   overall_perclist_px_abx,ovac_list_px_abx,ovor_list_px_abx,oviv_list_px_abx
 ))
 
-
-
 ###Recommendations (1st line)
 pdrx1_list[is.na(pdrx1_list)] <- 0
 percs_list[is.na(percs_list)] <- 0
@@ -4635,11 +4704,11 @@ abplot <- ggplot(pdrx1_df,aes(x=`Illness severity`,y=`Percentage of first-line r
   geom_line()+
   theme_minimal()+
   theme(panel.grid = element_blank())+
-  ggtitle("First-line utility function recommendations according to illness severity")+
+  ggtitle("AUF antibiotic choices according to illness severity")+
   scale_x_discrete(breaks = seq(0,3))+
   ylim(0,100)
 abplot
-ggsave(glue("illness_abplot.pdf"), plot = abplot, device = "pdf", width = 10, height = 5,
+ggsave(glue("illness_abplot.pdf"), plot = abplot, device = "pdf", width = 10, height = 3,
        path="/Users/alexhoward/Documents/Projects/UDAST_code")
 
 ###Recommendations (2nd line)
@@ -4660,7 +4729,7 @@ abplot_2 <- ggplot(pdrx1_df_2,aes(x=`Illness severity`,y=`Percentage of first-li
   scale_x_discrete(breaks = seq(0,3))+
   ylim(0,100)
 abplot_2
-ggsave(glue("illness_abplot_2.pdf"), plot = abplot_2, device = "pdf", width = 10, height = 5,
+ggsave(glue("illness_abplot_2.pdf"), plot = abplot_2, device = "pdf", width = 10, height = 3,
        path="/Users/alexhoward/Documents/Projects/UDAST_code")
 
 ###Recommendations (improved predictions)
@@ -4681,7 +4750,7 @@ abplot_imp <- ggplot(pdrx1_df_imp,aes(x=`Illness severity`,y=`Percentage of firs
   scale_x_discrete(breaks = seq(0,3))+
   ylim(0,100)
 abplot_imp
-ggsave(glue("illness_abplot_imp.pdf"), plot = abplot_imp, device = "pdf", width = 10, height = 5,
+ggsave(glue("illness_abplot_imp.pdf"), plot = abplot_imp, device = "pdf", width = 10, height = 3,
        path="/Users/alexhoward/Documents/Projects/UDAST_code")
 
 ###Recommendations (combinations)
@@ -4702,7 +4771,7 @@ abplot_comb <- ggplot(pdrx1_df_comb,aes(x=`Illness severity`,y=`Percentage of fi
   scale_x_discrete(breaks = seq(0,3))+
   ylim(0,100)
 abplot_comb
-ggsave(glue("illness_abplot_comb.pdf"), plot = abplot_comb, device = "pdf", width = 10, height = 5,
+ggsave(glue("illness_abplot_comb.pdf"), plot = abplot_comb, device = "pdf", width = 10, height = 3,
        path="/Users/alexhoward/Documents/Projects/UDAST_code")
 
 ###Actually prescribed
@@ -4728,17 +4797,16 @@ abplot_px_abx <- ggplot(pdrx1_df_px_abx,aes(x=`Illness severity`,y=`Percentage o
   geom_line()+
   theme_minimal()+
   theme(panel.grid = element_blank())+
-  ggtitle("Antibiotics prescribed in ED according to illness severity")+
+  ggtitle("Human antibiotic choices in ED according to illness severity")+
   scale_x_discrete(breaks = seq(0,3))+
   ylim(0,100)
 abplot_px_abx
-ggsave(glue("illness_abplot_px_abx.pdf"), plot = abplot_px_abx, device = "pdf", width = 10, height = 5,
+ggsave(glue("illness_abplot_px_abx.pdf"), plot = abplot_px_abx, device = "pdf", width = 10, height = 3,
        path="/Users/alexhoward/Documents/Projects/UDAST_code")
-abplot_px_abx
+
 
 
 ###Proportion plot dataframes
-
 write_csv(iv_xg_plot_df,"iv_xg_plot_df.csv")
 write_csv(po_xg_plot_df,"po_xg_plot_df.csv")
 write_csv(overall_xg_plot_df,"overall_xg_plot_df.csv")
@@ -4754,7 +4822,8 @@ overall_xg_plot_oral %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS"
                                               suffix="Utility function oral agent activity against pathogen by severity score")
 illplot_2 <- susplot
 overall_xg_plot_access <- overall_xg_plot_df %>% filter(!grepl("(oral|iv)",Metric,ignore.case=T))
-overall_xg_plot_access %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Illness severity score",agent_col1=NIT,agent_name1="Nitrofurantoin",
+overall_xg_plot_px_abx_access <- overall_xg_plot_df_px_abx %>% filter(!grepl("(oral|iv)",Metric,ignore.case=T))
+overall_xg_plot_access %>% susc_plotter_overall(ur_util,overall_xg_plot_px_abx_access,"overall ", measure="MEWS",variable="Illness severity score",agent_col1=NIT,agent_name1="Nitrofurantoin",
                                                 agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
                                                 suffix="Utility function Access agent activity against pathogen by severity score")
 illplot_3 <- susplot
@@ -4824,6 +4893,22 @@ overall_xg_plot_access_px_abx <- overall_xg_plot_df_px_abx %>% filter(!grepl("(o
 overall_xg_plot_access_px_abx %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Illness severity score",agent_col1=NIT,agent_name1="Nitrofurantoin",
                                                 agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
                                                 suffix="ED prescription Access agent activity against pathogen by severity score")
+
+###Barplots of urinary pathogen coverage
+overall_xg_plot_df$Type <- "AUF"
+overall_xg_plot_df_px_abx$Type <- "Human"
+
+overall_bar_plot(overall_xg_plot_df,overall_xg_plot_df_px_abx,"(oral|iv)",
+                 "Access agents","Watch agents",4,
+                 "AWaRe category")
+
+overall_bar_plot(overall_xg_plot_df,overall_xg_plot_df_px_abx,"(Access|iv)",
+                 "Oral agents","Non-oral agents",4,
+                 "Oral administrability")
+
+overall_bar_plot(overall_xg_plot_df,overall_xg_plot_df_px_abx,"(Access|oral)",
+                 "IV agents","Non-IV agents",4,
+                 "IV administrability")
 
 ##CDI, toxicity, and cost
 
