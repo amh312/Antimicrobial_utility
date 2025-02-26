@@ -3,6 +3,19 @@
 set.seed(123)
 
 ###Second round of hyperparameter tuning (subsample and colsample_bytree)
+
+###Read_in previous parameters
+file_names <- glue("max_child_{combined_antimicrobial_map}.csv")
+max_child_bestparams <- lapply(file_names, function(file) {
+  read_csv(file)
+})
+namelist <- c("eta","max_depth","min_child_weight","subsample","colsample_bytree",
+              "best_nrounds")
+for (i in 1:length(max_child_bestparams)) {
+  names(max_child_bestparams[[i]])[3:8] <- namelist
+}
+names(max_child_bestparams) <- combined_antimicrobial_map
+
 num_samples <- 10
 subsample_range <- c(0.5,1)
 colsample_bytree_range <- c(0.5, 1)
@@ -12,8 +25,10 @@ colsample_bytree <- round(lhs_sample[, 2] * (colsample_bytree_range[2] - colsamp
 parameter_grid <- data.frame(subsample = subsample, colsample_bytree = colsample_bytree)
 print(parameter_grid)
 col_sub_bestparams <- c()
-best_auc <- 0
+
 for (outcome in colnames(urines5_outcomes)) {
+  
+  best_auc <- 0
   
   if (sum(!is.na(urines5_combined[[outcome]])) > 0) {
     
