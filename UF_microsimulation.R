@@ -2369,14 +2369,14 @@ ggsave(glue("bar_{chart_cat}.pdf"), plot = barplot, device = "pdf", width = 10, 
 }
 
 ###Susceptibility plot
-susc_plotter_overall <- function(df,df2,df3,subset="",measure,suffix="",agent_col1,agent_name1,agent_col2,agent_name2,variable) {
+susc_plotter_overall <- function(df,df2,subset="",measure,suffix="",agent_col1,agent_name1,agent_col2,agent_name2,variable) {
   
   agent_col1 <- enquo(agent_col1)
   agent_col2 <- enquo(agent_col2)
   
   df$Metric <- factor(df$Metric, levels=c("All agents","Access agents","IV agents","Oral agents"))
   
-  df3$Metric <- factor(df$Metric, levels=c("All agents","Access agents","IV agents","Oral agents"))
+  print(df)
   
   if (grepl("severity", variable)) {
     
@@ -2402,10 +2402,7 @@ susc_plotter_overall <- function(df,df2,df3,subset="",measure,suffix="",agent_co
         xlab(glue("{variable}")) +
         ylab("Urine pathogens covered (%)") +
         annotate("text", x = Inf, y = 72, label = "UN Access target", hjust = 1.1, color = "darkgreen") +
-        scale_x_continuous(breaks = weightseq) +
-        geom_point(data = df3, aes(x = Weight, y = Percentage, group=Metric, color=Metric,fill=Metric), size = 2)+
-        scale_color_manual(values = c("Watch agents" = "red", "Access agents" = "darkgreen", "All agents" = "darkblue")) +
-        scale_fill_manual(values = c("Watch agents" = "red", "Access agents" = "green"))
+        scale_x_continuous(breaks = weightseq)
       
     } else if (grepl("oral", suffix)) {
       
@@ -4822,8 +4819,7 @@ overall_xg_plot_oral %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS"
                                               suffix="Utility function oral agent activity against pathogen by severity score")
 illplot_2 <- susplot
 overall_xg_plot_access <- overall_xg_plot_df %>% filter(!grepl("(oral|iv)",Metric,ignore.case=T))
-overall_xg_plot_px_abx_access <- overall_xg_plot_df_px_abx %>% filter(!grepl("(oral|iv)",Metric,ignore.case=T))
-overall_xg_plot_access %>% susc_plotter_overall(ur_util,overall_xg_plot_px_abx_access,"overall ", measure="MEWS",variable="Illness severity score",agent_col1=NIT,agent_name1="Nitrofurantoin",
+overall_xg_plot_access %>% susc_plotter_overall(ur_util,"overall ", measure="MEWS",variable="Illness severity score",agent_col1=NIT,agent_name1="Nitrofurantoin",
                                                 agent_col2=TZP,agent_name2="Piperacillin-tazobactam",
                                                 suffix="Utility function Access agent activity against pathogen by severity score")
 illplot_3 <- susplot
