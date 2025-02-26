@@ -300,7 +300,7 @@ hadm_label <- function(df,filter_term) {
   filter_term <- enquo(filter_term)
   
   df %>% 
-    prev_event_assign(pHADM,hadm,hadm_id,28,1) %>% ungroup() %>% 
+    prev_event_assign(pHADM,hadm,hadm_id,365,1) %>% ungroup() %>% 
     filter(!is.na(!!filter_term))
   
 }
