@@ -347,7 +347,7 @@ names(final_bestparams) <- combined_antimicrobial_map
 ###Model stability analysis (resistance prediction)
 
 ###Iterate training and testing over training dataset sizes
-tr_size_seq <- c(0.02,0.06,0.08,0.12)
+tr_size_seq <- c(0.02,0.06,0.10,0.14)
 metrics_biglist <- list()
 for (outcome in colnames(urines5_outcomes)[1:13]) {
   
@@ -1014,7 +1014,7 @@ names(cdi_tox_final_bestparams) <- colnames(abx_outcomes)
 ###Model stability analysis (CDI and toxicity prediction)
 
 ###Iterate training and testing over training dataset sizes (CDI tox)
-tr_size_seq <- c(0.02,0.06,0.08,0.12)
+tr_size_seq <- c(0.02,0.06,0.10,0.14)
 metrics_biglist <- list()
 for (outcome in colnames(abx_outcomes)) {
   
@@ -1759,6 +1759,10 @@ hyp_tab <- hyp_tab %>% rename(Model="Hyperparameter") %>%
   dplyr::slice(-1)
 hyp_tab <- hyp_tab %>% tibble()
 write_csv(hyp_tab,"hyp_tab.csv")
+hyp_abs <- c(c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
+             "MEM","CIP","GEN","SXT","NIT","VAN") %>% ab_name(),"CDI","Toxicity")
+hyp_tab_singles <- hyp_tab %>% filter(Model %in% hyp_abs)
+write_csv(hyp_tab_singles,"hyp_tab_singles.csv")
 
 ##Values for results
 
@@ -1772,6 +1776,8 @@ max_stabdifs %>% arrange(desc(maxAUC_meandif))
 max_stabdifs %>% arrange(desc(max_sd))
 stabmets %>% group_by(Model,Training_size) %>% 
   summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% filter(Model=="CDI")
+stabmets %>% group_by(Model,Training_size) %>% 
+  summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% filter(Model=="VAN")
 
 ###Year group cluster analysis
 timemets <- read_csv("overall_time_sens_metrics.csv")
@@ -1786,7 +1792,7 @@ timemets %>% group_by(Model,Train_year,Test_year) %>%
   arrange(desc(mean_AUC))
 timemets %>% group_by(Model,Train_year,Test_year) %>% 
   summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% filter(Model=="CDI") %>% 
-  arrange(desc(sd_AUC)) %>% ungroup() %>% dplyr::slice(1) %>% select(sd_AUC) %>% unlist()
+  arrange(desc(sd_AUC))
 
 ###Fairness analysis
 fairmets <- read_csv("overall_fairness_metrics.csv")
@@ -1807,8 +1813,8 @@ fairmets %>% filter(Category==cat) %>% group_by(Model,Characteristic) %>%
   arrange(desc(sd_AUC)) %>% print()
 }
 fairnessprinter1("Age group")
-fairnessprinter2("Age group","TZP","CDI")
+fairnessprinter2("Age group","TZP","TZP")
 fairnessprinter1("Race")
-fairnessprinter2("Race","CIP","CDI")
+fairnessprinter2("Race","TZP","TZP")
 fairnessprinter1("Gender")
-fairnessprinter2("Gender","MEM","TZP")
+fairnessprinter2("Gender","TZP","TZP")
