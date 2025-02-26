@@ -20,8 +20,8 @@ abx_outcomes <- abx %>%
   select(CDI,overall_tox) %>% mutate(CDI=case_when(CDI==TRUE~1,TRUE~0),
                                      overall_tox=case_when(overall_tox==TRUE~1,TRUE~0))
 abx_predictors <- abx %>% select(pHADM:age65,prAKI:pDIAB,pCARD:curr_service,pICU:pSEPSIS,ob_freq,highCRP,
-                                 temperature:dbp,inpatient_7d,
-                                 ab_name_Ampicillin_Ceftriaxone:ab_name_Ampicillin,race:anchor_age)
+                                 pc_dyspnea:SIRS,
+                                 ab_name_Ampicillin_Ceftriaxone:ab_name_Ampicillin,race:language,anchor_age)
 ur_abx_outcomes <- ur_xg %>%
   select(micro_specimen_id,CDI,overall_tox) %>% mutate(CDI=case_when(CDI==TRUE~1,TRUE~0),
                                                        overall_tox=case_when(overall_tox==TRUE~1,TRUE~0))
@@ -55,8 +55,10 @@ min_child_weight <- round(lhs_sample[, 2] * (min_child_weight_range[2] - min_chi
 parameter_grid <- data.frame(max_depth = max_depth, min_child_weight = min_child_weight)
 print(parameter_grid)
 cdi_tox_max_child_bestparams <- c()
-best_auc <- 0
+
 for (outcome in colnames(abx_outcomes)) {
+  
+  best_auc <- 0
   
   if (sum(!is.na(abx_combined[[outcome]])) > 0) {
     
