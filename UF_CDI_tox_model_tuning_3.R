@@ -3,11 +3,36 @@
 set.seed(123)
 
 ###Third round of hyperparameter tuning (learning rate and best iteration)
-parameter_list <- c(0.1,0.05,0.01)
-best_auc <- 0
+
+###Read_in previous parameters
+file_names <- glue("cdi_tox_col_sub_{names(abx_outcomes)}.csv")
+cdi_tox_col_sub_bestparams <- lapply(file_names, function(file) {
+  read_csv(file)
+})
+namelist <- c("eta","max_depth","min_child_weight","subsample","colsample_bytree",
+              "best_nrounds")
+for (i in 1:length(cdi_tox_col_sub_bestparams)) {
+  names(cdi_tox_col_sub_bestparams[[i]])[3:8] <- namelist
+}
+names(cdi_tox_col_sub_bestparams) <- names(abx_outcomes)
+
+file_names <- glue("max_child_{names(abx_outcomes)}.csv")
+cdi_tox_max_child_bestparams <- lapply(file_names, function(file) {
+  read_csv(file)
+})
+namelist <- c("eta","max_depth","min_child_weight","subsample","colsample_bytree",
+              "best_nrounds")
+for (i in 1:length(cdi_tox_max_child_bestparams)) {
+  names(cdi_tox_max_child_bestparams[[i]])[3:8] <- namelist
+}
+names(cdi_tox_max_child_bestparams) <- names(abx_outcomes)
+
 cdi_tox_final_bestparams <- c()
+
 for (outcome in colnames(abx_outcomes)) {
-  
+
+  best_auc <- 0
+    
   if (sum(!is.na(abx_combined[[outcome]])) > 0) {
     
     set.seed(123)
@@ -26,15 +51,19 @@ for (outcome in colnames(abx_outcomes)) {
     micro_matrix <- xgb.DMatrix(data = as.matrix(ur_abx_combined %>% select(all_of(selected_columns))), 
                                 label = ur_abx_combined[[outcome]])
     
-    for (i in 1:length(parameter_list)) {
+    n_rounds_run <- 0
+    parameter_val <- 0.1
+    i <- 1
+    
+    while(n_rounds_run<200|n_rounds_run==1000) {
       
       print(glue("Running CV {i} for {outcome}..."))
       
       params <- list(
         objective = "binary:logistic",
         eval_metric = "auc",
-        eta = parameter_list[i],
-        max_depth = cdi_tox_max_child_bestparams[[outcome]]$max_depth,
+        eta = parameter_val,
+        max_depth = 6,
         min_child_weight = cdi_tox_max_child_bestparams[[outcome]]$min_child_weight,
         subsample = cdi_tox_col_sub_bestparams[[outcome]]$subsample,
         colsample_bytree = cdi_tox_col_sub_bestparams[[outcome]]$colsample_bytree
@@ -45,17 +74,39 @@ for (outcome in colnames(abx_outcomes)) {
         data = train_matrix,
         nrounds = 1000,
         nfold = 5,
-        early_stopping_rounds = 50,
-        verbose = 1,
+        early_stopping_rounds = 10,
+        verbose = 1
       )
       
       best_iteration_index <- which.max(cv_model$evaluation_log$test_auc_mean)
       best_iteration_auc <- cv_model$evaluation_log$test_auc_mean[best_iteration_index]
       cv_model$evaluation_log$test_logloss_mean
-      if (best_iteration_auc > best_auc) {
+      
         best_auc <- best_iteration_auc
         best_params <- params
         best_nrounds <- best_iteration_index
+      
+      
+      n_rounds_run <- cv_model$evaluation_log %>% nrow()
+      
+      if(n_rounds_run<200) {
+        
+        parameter_val <- parameter_val/2
+        
+      } else if (n_rounds_run==1000) {
+        
+        parameter_val <- parameter_val+0.1
+        
+      }
+      
+      i <- i+1
+      
+      if (parameter_val >0.3){
+        
+        print("Learning rate too high - adjust hyperparameters")
+        
+        break
+        
       }
       
     }
@@ -65,6 +116,7 @@ for (outcome in colnames(abx_outcomes)) {
     
   }
 }
+
 for (outcome in 1:ncol(abx_outcomes)) {
   
   param <- data.frame(cdi_tox_final_bestparams[outcome])
