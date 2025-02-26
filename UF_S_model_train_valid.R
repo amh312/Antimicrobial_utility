@@ -85,7 +85,7 @@ for (outcome in colnames(urines5_outcomes)) {
     xgb_model <- xgb.train(
       params = params,
       data = train_matrix,
-      nrounds = final_bestparams[[outcome]]$best_nrounds,
+      nrounds = final_bestparams[[outcome]]$best_nrounds
     )
     
     pred_prob_test <- predict(xgb_model, newdata = test_matrix)
@@ -170,6 +170,7 @@ for (outcome in colnames(urines5_outcomes)) {
     confidence_biglist[[outcome]] <- confidence_intervals
     
   }
+  print(paste("AUC-ROC:", auc_value))
 }
 
 
