@@ -426,9 +426,20 @@ feat_table <- feat_table %>% mutate(Feature = case_when(
     Feature = str_replace(Feature,"CLIs ","Clindamycin susceptibility in the last year"),
     Feature = str_replace(Feature,"Levofloxacins","Levofloxacin susceptibility in the last year"),
     Feature = str_replace(Feature,"Tetracyclines","Tetracycline susceptibility in the last year"),
-    Feature = str_replace(Feature,"Benzylpenicillins","Penicillin susceptibility in the last year")
+    Feature = str_replace(Feature,"Benzylpenicillins","Penicillin susceptibility in the last year"),
+    Feature = str_replace(Feature,"AMKs","Amikacin susceptibility in the last year"),
+    Feature = str_replace(Feature,"AMK","Amikacin")
   ) %>% 
   mutate(Model=str_replace_all(Model,"_"," & "))
 
 write_csv(feat_table,"feat_table.csv")
-view(feat_table)
+
+feat_abs <- c(c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
+             "MEM","CIP","GEN","SXT","NIT","VAN") %>% ab_name() %>% str_replace_all("/","-"),
+"CDI","Toxicity")
+feat_table_singles <- feat_table %>% filter(Model %in% feat_abs) %>% 
+  mutate(Model = factor(Model, levels = unique(Model))) %>%
+  group_by(Model) %>% arrange(desc(`Shapley value`),.by_group = T) %>% ungroup() %>% 
+  mutate(`Shapley value`=case_when(`Shapley value`<0.001 ~ as.character("<0.001"),
+                                   TRUE~as.character(`Shapley value`)))
+write_csv(feat_table_singles,"feat_table_singles.csv")
