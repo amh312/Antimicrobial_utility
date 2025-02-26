@@ -124,8 +124,10 @@ min_child_weight <- round(lhs_sample[, 2] * (min_child_weight_range[2] - min_chi
 parameter_grid <- data.frame(max_depth = max_depth, min_child_weight = min_child_weight)
 print(parameter_grid)
 max_child_bestparams <- c()
-best_auc <- 0
+
 for (outcome in colnames(urines5_outcomes)) {
+  
+  best_auc <- 0
   
   if (sum(!is.na(urines5_combined[[outcome]])) > 0) {
     
