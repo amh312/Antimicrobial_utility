@@ -83,7 +83,9 @@ ggsave(filename = glue("toxicity_xg_roc.pdf"), plot = roc_plot, width = 10, heig
 overall_tox_util_probs <- predict(xgb_model, newdata = micro_matrix)
 
 pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
+pred_test_class <- relevel(factor(pred_test_class), ref = "1")
 actual_test_class <- abxTest[['overall_tox']]
+actual_test_class <- relevel(factor(actual_test_class), ref = "1")
 
 overall_tox_confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
 overall_tox_accuracy <- overall_tox_confusion$overall['Accuracy']
