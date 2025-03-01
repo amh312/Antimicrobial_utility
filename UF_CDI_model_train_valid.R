@@ -98,7 +98,9 @@ ggsave(filename = glue("CDI_xg_roc.pdf"), plot = roc_plot, width = 10, height = 
 cdi_util_probs <- predict(xgb_model, newdata = micro_matrix)
 
 pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
+pred_test_class <- relevel(factor(pred_test_class), ref = "1")
 actual_test_class <- abxTest[['CDI']]
+actual_test_class <- relevel(factor(actual_test_class), ref = "1")
 
 cdi_confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
 cdi_accuracy <- cdi_confusion$overall['Accuracy']
