@@ -120,7 +120,9 @@ for (outcome in colnames(urines5_outcomes)) {
     shap_summary_tables[[outcome]] <- shap_summary
     
     pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
+    pred_test_class <- relevel(factor(pred_test_class), ref = "1")
     actual_test_class <- urines5Test[[outcome]]
+    actual_test_class <- relevel(factor(actual_test_class), ref = "1")
     
     confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
     accuracy <- confusion$overall['Accuracy']
@@ -172,7 +174,7 @@ for (outcome in colnames(urines5_outcomes)) {
   }
   print(paste("AUC-ROC:", auc_value))
 }
-
+ci_df
 
 for (i in 1:length(shap_summary_tables)) {
   
@@ -195,12 +197,26 @@ colnames(ci_df) <- c("AUROC_CI","Precision_CI","Recall_CI","F1_CI","Accuracy_CI"
 
 for (i in 1: length(confidence_biglist)) {
   
-  ci_df$AUROC_CI[i] <- glue(" ({round(confidence_biglist[[i]]$AUC$percent[4],3)}-{round(confidence_biglist[[i]]$AUC$percent[5],3)})")
-  ci_df$Precision_CI[i] <- glue(" ({round(confidence_biglist[[i]]$Precision$percent[4],3)}-{round(confidence_biglist[[i]]$Precision$percent[5],3)})")
-  ci_df$Recall_CI[i] <- glue(" ({round(confidence_biglist[[i]]$Recall$percent[4],3)}-{round(confidence_biglist[[i]]$Recall$percent[5],3)})")
-  ci_df$Accuracy_CI[i] <- glue(" ({round(confidence_biglist[[i]]$Accuracy$percent[4],3)}-{round(confidence_biglist[[i]]$Accuracy$percent[5],3)})")
-  ci_df$F1_CI[i] <- glue(" ({round(confidence_biglist[[i]]$F1_Score$percent[4],3)}-{round(confidence_biglist[[i]]$F1_Score$percent[5],3)})")
-  
+  ci_df$AUROC_CI[i] <- ifelse(
+    !is.null(confidence_biglist[[i]]$AUC$percent[4])&!is.null(confidence_biglist[[i]]$AUC$percent[5]),
+    glue(" ({round(confidence_biglist[[i]]$AUC$percent[4],3)}-{round(confidence_biglist[[i]]$AUC$percent[5],3)})"),
+    NA)
+  ci_df$Precision_CI[i] <- ifelse(
+    !is.null(confidence_biglist[[i]]$Precision$percent[4])&!is_null(confidence_biglist[[i]]$Precision$percent[5]),
+    glue(" ({round(confidence_biglist[[i]]$Precision$percent[4],3)}-{round(confidence_biglist[[i]]$Precision$percent[5],3)})"),
+  NA)
+  ci_df$Recall_CI[i] <- ifelse(
+    !is.null(confidence_biglist[[i]]$Recall$percent[4])&!is_null(confidence_biglist[[i]]$Recall$percent[5]),
+    glue(" ({round(confidence_biglist[[i]]$Recall$percent[4],3)}-{round(confidence_biglist[[i]]$Recall$percent[5],3)})"),
+  NA)
+  ci_df$Accuracy_CI[i] <- ifelse(
+    !is.null(confidence_biglist[[i]]$Accuracy$percent[4])&!is_null(confidence_biglist[[i]]$Accuracy$percent[5]),
+    glue(" ({round(confidence_biglist[[i]]$Accuracy$percent[4],3)}-{round(confidence_biglist[[i]]$Accuracy$percent[5],3)})"),
+  NA)
+  ci_df$F1_CI[i] <- ifelse(
+    !is.null(confidence_biglist[[i]]$F1_Score$percent[4])&!is_null(confidence_biglist[[i]]$F1_Score$percent[5]),
+    glue(" ({round(confidence_biglist[[i]]$F1_Score$percent[4],3)}-{round(confidence_biglist[[i]]$F1_Score$percent[5],3)})"),
+  )
 }
 
 write_csv(ci_df,"interim_ci_df.csv")
