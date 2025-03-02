@@ -89,7 +89,11 @@ for (outcome in colnames(urines5_outcomes)) {
     )
     
     pred_prob_test <- predict(xgb_model, newdata = test_matrix)
-    roc_result <- roc(urines5Test[[outcome]], pred_prob_test)
+    pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
+    pred_test_class <- relevel(factor(pred_test_class), ref = "1")
+    actual_test_class <- urines5Test[[outcome]]
+    actual_test_class <- relevel(factor(actual_test_class), ref = "1")
+    roc_result <- roc(actual_test_class, pred_prob_test)
     auc_value <- auc(roc_result)
     print(paste("AUC-ROC:", auc_value))
     aucs[[outcome]] <- auc_value
@@ -174,7 +178,7 @@ for (outcome in colnames(urines5_outcomes)) {
   }
   print(paste("AUC-ROC:", auc_value))
 }
-ci_df
+
 
 for (i in 1:length(shap_summary_tables)) {
   
