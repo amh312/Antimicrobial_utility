@@ -125,7 +125,7 @@ util_probs_df <- read_csv("probs_df_overall.csv")
 ur_util <- read_csv("interim_ur_util.csv")
 micro <- read_csv("micro_clean2.csv")
 mic_ref <- micro %>% anti_join(ur_util,by="subject_id")
-results <- read_csv("ADAPT-AST Factors influencing Antimicrobial Prescribing for Urinary Tract Infection.csv")
+rankings <- read_csv("ADAPT-AST Factors influencing Antimicrobial Prescribing for Urinary Tract Infection.csv")
 
 ###Re-factorising outcome variables on abx dataframes after read-in
 train_abx <- train_abx %>% factorise()
@@ -134,11 +134,6 @@ test_abx <- test_abx %>% factorise()
 ##Survey results
 
 ###Engineer scores dataframe
-rankings <- results %>% select(10:ncol(results)) %>% dplyr::slice(2:nrow(results))
-colnames(rankings) <- c("Abelfenide","Acetemran","Adenomadin","Adrevenac",
-                        "Amrodine","Choriotroban","Cormide","Decloxone",
-                        "Dexaset","Endoxolol","Olanzasys","Pansolid",
-                        "Protestryl")
 Characteristic <- c("AWaRe","CDI","Toxicity","UTI","Oral","IV","Cost")
 Abelfenide <- c("Reserve","Low","Low","No","Yes","Yes","High")
 Acetemran <- c("Watch","Low","Low","Yes","Yes","No","Low")
@@ -300,6 +295,8 @@ dummy_vars <- model.matrix(~ abx_name_ - 1, data = util_probs_df)
 util_probs_df <- cbind(util_probs_df, dummy_vars) %>% tibble() %>% 
   select(-abx_name_)
 
+write_csv(scores,"scores_df.csv")
+
 ##Utility score preprocessing
 
 ###CDI risk utility
@@ -404,32 +401,6 @@ util_probs_df <- util_probs_df %>%
          util_highcost = abs_calc(value_highcost,Highcost_agent),
          single_agent = case_when(!grepl("_",Antimicrobial) ~ TRUE, TRUE~FALSE)
   ) %>% left_join(Rval_key,by="micro_specimen_id")
-
-util_probs_df <- util_probs_df %>% left_join(auc_df,by="Antimicrobial")
-util_probs_df$CDI_AUC <- auc_df %>% filter(Antimicrobial=="CDI") %>%
-  select(AUC) %>% unlist
-util_probs_df$tox_AUC <- auc_df %>% filter(Antimicrobial=="toxicity") %>%
-  select(AUC) %>% unlist
-util_probs_df <- util_probs_df %>% left_join(recall_df,by="Antimicrobial")
-util_probs_df$CDI_recall <- recall_df %>% filter(Antimicrobial=="CDI") %>%
-  select(recall) %>% unlist
-util_probs_df$tox_recall <- recall_df %>% filter(Antimicrobial=="toxicity") %>%
-  select(recall) %>% unlist
-util_probs_df <- util_probs_df %>% left_join(precision_df,by="Antimicrobial")
-util_probs_df$CDI_precision <- precision_df %>% filter(Antimicrobial=="CDI") %>%
-  select(precision) %>% unlist
-util_probs_df$tox_precision <- precision_df %>% filter(Antimicrobial=="toxicity") %>%
-  select(precision) %>% unlist
-util_probs_df <- util_probs_df %>% left_join(accuracy_df,by="Antimicrobial")
-util_probs_df$CDI_accuracy <- accuracy_df %>% filter(Antimicrobial=="CDI") %>%
-  select(accuracy) %>% unlist
-util_probs_df$tox_accuracy <- accuracy_df %>% filter(Antimicrobial=="toxicity") %>%
-  select(accuracy) %>% unlist
-util_probs_df <- util_probs_df %>% left_join(f1_score_df,by="Antimicrobial")
-util_probs_df$CDI_f1_score <- f1_score_df %>% filter(Antimicrobial=="CDI") %>%
-  select(f1_score) %>% unlist
-util_probs_df$tox_f1_score <- f1_score_df %>% filter(Antimicrobial=="toxicity") %>%
-  select(f1_score) %>% unlist
 
 write_csv(util_probs_df,"dce_util_probs_df.csv")
 
