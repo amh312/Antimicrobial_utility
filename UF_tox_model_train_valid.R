@@ -62,7 +62,11 @@ xgb_model <- xgb.train(
 )
 
 pred_prob_test <- predict(xgb_model, newdata = test_matrix)
-roc_result <- roc(abxTest[['overall_tox']], pred_prob_test)
+pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
+pred_test_class <- relevel(factor(pred_test_class), ref = "1")
+actual_test_class <- abxTest[['overall_tox']]
+actual_test_class <- relevel(factor(actual_test_class), ref = "1")
+roc_result <- roc(actual_test_class, pred_prob_test)
 overall_tox_auc_value <- auc(roc_result)
 roc_plot <- ggroc(roc_result) + 
   ggtitle(glue("Toxicity\nROC Curve"))+
@@ -80,6 +84,36 @@ roc_plot <- ggroc(roc_result) +
 roc_plots[['overall_tox']] <- roc_plot
 
 ggsave(filename = glue("toxicity_xg_roc.pdf"), plot = roc_plot, width = 10, height = 10)
+
+calibration_data <- data.frame(
+  predicted_prob = pred_prob_test,
+  actual = as.numeric(as.character(actual_test_class))
+)
+
+calibration_data$bin <- cut(calibration_data$predicted_prob, 
+                            breaks = quantile(calibration_data$predicted_prob, probs = seq(0, 1, by = 0.1), na.rm = TRUE),
+                            include.lowest = TRUE, labels = FALSE)
+
+calibration_summary <- calibration_data %>%
+  group_by(bin) %>%
+  summarise(mean_pred = mean(predicted_prob),
+            observed_freq = mean(actual))
+
+calibration_plot <- ggplot(calibration_summary, aes(x = mean_pred, y = observed_freq)) +
+  geom_point(color = "blue", size = 3) +
+  geom_line(color = "blue", linetype = "solid") +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "grey") +
+  theme_minimal() +
+  xlim(0,1)+
+  ylim(0,1)+
+  labs(x = "Mean Predicted Probability", y = "Observed Frequency",
+       title = glue("Toxicity\nCalibration Curve")) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+calibration_plots[["overall_tox"]] <- calibration_plot
+
+ggsave(filename = glue("overall_tox_calib_plot.pdf"), plot = calibration_plot, width = 10, height = 10)
+
 overall_tox_util_probs <- predict(xgb_model, newdata = micro_matrix)
 
 pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
@@ -182,6 +216,16 @@ other_grid_plot <- plot_grid(plotlist = roc_plots_other, ncol = 3)
 
 ggsave(glue("roc_plots_main.pdf"), plot = main_grid_plot, width = 15, height = 30)
 ggsave(glue("roc_plots_other.pdf"), plot = other_grid_plot, width = 15, height = 30)
+
+##Save all calibration plots to grid PDFs
+calibration_plots_main <- c(calibration_plots[1:13],calibration_plots[38:39])
+calibration_plots_other <- calibration_plots[14:37]
+
+main_grid_plot <- plot_grid(plotlist = calibration_plots_main, ncol = 3)
+other_grid_plot <- plot_grid(plotlist = calibration_plots_other, ncol = 3)
+
+ggsave(glue("calibration_plots_main.pdf"), plot = main_grid_plot, width = 15, height = 30)
+ggsave(glue("calibration_plots_other.pdf"), plot = other_grid_plot, width = 15, height = 30)
 
 ##Feature contributions dataframe
 other_outcome_map <- list("CDI","toxicity")
