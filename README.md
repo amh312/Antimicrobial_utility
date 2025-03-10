@@ -44,4 +44,5 @@ To reproduce the study, all csv files above must be stored in the working direct
    15. **UF_spec_analysis.R**
    16. **UF_microsimulation.R**
    17. **UF_descriptive.R**
-   18. **UF_edgecases.R**
+
+Please note that the code also includes additional analyses that are not included in the paper for the purpose of brevity, that pertain to combination treatment and additional sensitivity analyses.
