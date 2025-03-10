@@ -21,6 +21,7 @@ aucs <- data.frame(matrix(nrow=1,ncol=0))
 shap_summary_tables <- list()
 metrics_list <- list()
 roc_plots <- list()
+calibration_plots <- list()
 confidence_biglist <- list()
 for (outcome in colnames(urines5_outcomes)) {
   
@@ -113,6 +114,36 @@ for (outcome in colnames(urines5_outcomes)) {
     roc_plots[[outcome]] <- roc_plot
     
     ggsave(filename = glue("{outcome}_xg_roc.pdf"), plot = roc_plot, width = 10, height = 10)
+    
+    calibration_data <- data.frame(
+      predicted_prob = pred_prob_test,
+      actual = as.numeric(as.character(actual_test_class))
+    )
+    
+    calibration_data$bin <- cut(calibration_data$predicted_prob, 
+                                breaks = quantile(calibration_data$predicted_prob, probs = seq(0, 1, by = 0.1), na.rm = TRUE),
+                                include.lowest = TRUE, labels = FALSE)
+    
+    calibration_summary <- calibration_data %>%
+      group_by(bin) %>%
+      summarise(mean_pred = mean(predicted_prob),
+                observed_freq = mean(actual))
+    
+    calibration_plot <- ggplot(calibration_summary, aes(x = mean_pred, y = observed_freq)) +
+      geom_point(color = "blue", size = 3) +
+      geom_line(color = "blue", linetype = "solid") +
+      geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "grey") +
+      theme_minimal() +
+      xlim(0,1)+
+      ylim(0,1)+
+      labs(x = "Mean Predicted Probability", y = "Observed Frequency",
+           title = glue("{replace_values(outcome,combined_antimicrobial_map)}\nCalibration Curve")) +
+      theme(plot.title = element_text(hjust = 0.5))
+    
+    calibration_plots[[outcome]] <- calibration_plot
+    print(calibration_plot)
+    
+    ggsave(filename = glue("{outcome}_calib_plot.pdf"), plot = calibration_plot, width = 10, height = 10)
     
     pred_prob_micro <- predict(xgb_model, newdata = micro_matrix)
     
