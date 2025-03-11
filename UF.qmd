@@ -19,27 +19,27 @@ library(coin)
 library(rlang)
 
 ##Read-in
-ur_util <- read_csv("#FILEPATH#/ur_util_manuscript.csv")
-util_probs_df <- read_csv("#FILEPATH#/util_probs_df_manuscript.csv")
-desc_tab <- read_csv("#FILEPATH#/uf_desctab.csv")
-urines5 <- read_csv("#FILEPATH#/urines5.csv")
-abx <- read_csv("#FILEPATH#/interim_abx.csv")
-ab_tab <- read_csv("#FILEPATH#/ab_tab.csv")
-metrics_singles_table <- read_csv("#FILEPATH#/metrics_singles_table.csv")
-prim <- read_csv("#FILEPATH#/overall_xg_plot_df.csv")
-pdrx <- read_csv("#FILEPATH#/abplot_df.csv")
-pdrx_px_abx <- read_csv("#FILEPATH#/abplot_df_px_abx.csv")
-cdi_df<- read_csv("#FILEPATH#/cdi_df.csv")
-tox_df<- read_csv("#FILEPATH#/tox_df.csv")
-cost_df<- read_csv("#FILEPATH#/cost_df.csv")
-cdi_df_px_abx<- read_csv("#FILEPATH#/cdi_df_px_abx.csv")
-tox_df_px_abx<- read_csv("#FILEPATH#/tox_df_px_abx.csv")
-cost_df_px_abx<- read_csv("#FILEPATH#/cost_df_px_abx.csv")
-stabmets <- read_csv("#FILEPATH#/overall_stability_metrics.csv")
-timemets <- read_csv("#FILEPATH#/overall_time_sens_metrics.csv")
-fairmets <- read_csv("#FILEPATH#/overall_fairness_metrics.csv")
-overall_xg_plot_df <- read_csv("#FILEPATH#/overall_xg_plot_df.csv")
-overall_xg_plot_df_px_abx <- read_csv("#FILEPATH#/overall_xg_plot_df_px_abx.csv")
+ur_util <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/ur_util_manuscript.csv")
+util_probs_df <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/util_probs_df_manuscript.csv")
+desc_tab <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/uf_desctab.csv")
+urines5 <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/urines5.csv")
+abx <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/interim_abx.csv")
+ab_tab <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/ab_tab.csv")
+metrics_singles_table <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/metrics_singles_table.csv")
+prim <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/overall_xg_plot_df.csv")
+pdrx <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/abplot_df.csv")
+pdrx_px_abx <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/abplot_df_px_abx.csv")
+cdi_df<- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/cdi_df.csv")
+tox_df<- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/tox_df.csv")
+cost_df<- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/cost_df.csv")
+cdi_df_px_abx<- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/cdi_df_px_abx.csv")
+tox_df_px_abx<- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/tox_df_px_abx.csv")
+cost_df_px_abx<- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/cost_df_px_abx.csv")
+stabmets <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/overall_stability_metrics.csv")
+timemets <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/overall_time_sens_metrics.csv")
+fairmets <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/overall_fairness_metrics.csv")
+overall_xg_plot_df <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/overall_xg_plot_df.csv")
+overall_xg_plot_df_px_abx <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/overall_xg_plot_df_px_abx.csv")
 
 urt <- function(df,subtype) {
   
@@ -249,7 +249,7 @@ p2_all <- round(prop.test(x_all, n_all)$p.value, 3)
 ci1_all <- round(prop.test(x_all, n_all)$conf.int[1], 3)*100
 ci2_all <- round(prop.test(x_all, n_all)$conf.int[2], 3)*100
 
-chi_all <- glue("({perc_all1}% of cases versus {perc_all2}%, 95% confidence interval of difference [CI] {ci1_all}% to {ci2_all}%, p{ifelse(p2_all<0.001,'<0.001',paste(' =',p2_all))})")
+chi_all <- glue("({perc_all1}% of cases versus {perc_all2}%, 95% confidence interval of difference [CI] {ci1_all}% to {ci2_all}%, p{ifelse(p2_all<0.001,'<0.001',paste0('=',p2_all))})")
 
 ##Access antibiotics
 x_acs <- c(nrow(ur_util %>% filter((PDRx_1_result=="S"|PDRx_1_result=="I")&PDRx_1%in%access_singles)), nrow(ur_util %>% filter((Px_Abx_result=="S"|Px_Abx_result=="I")&Px_Abx%in%access_modified_abx_map)))
@@ -259,7 +259,7 @@ p2_acs <- round(prop.test(x_acs, n_all)$p.value, 3)
 ci1_acs <- round(prop.test(x_acs, n_all)$conf.int[1], 3)*100
 ci2_acs <- round(prop.test(x_acs, n_all)$conf.int[2], 3)*100
 
-chi_acs <- glue("({perc_acs1}% versus {perc_acs2}%, CI {ci1_acs}% to {ci2_acs}%, p{ifelse(p2_acs<0.001,'<0.001',paste(' =',p2_acs))})")
+chi_acs <- glue("({perc_acs1}% versus {perc_acs2}%, CI {ci1_acs}% to {ci2_acs}%, p{ifelse(p2_acs<0.001,'<0.001',paste0('=',p2_acs))})")
 
 ###Oral antibiotics
 x_orals <- c(nrow(ur_util %>% filter((PDRx_1_result=="S"|PDRx_1_result=="I")&PDRx_1%in%oral_singles)), nrow(ur_util %>% filter((Px_Abx_result=="S"|Px_Abx_result=="I")&Px_Abx%in%oral_modified_abx_map)))
@@ -269,7 +269,7 @@ p2_orals <- round(prop.test(x_orals, n_all)$p.value, 3)
 ci1_orals <- round(prop.test(x_orals, n_all)$conf.int[1], 3)*100
 ci2_orals <- round(prop.test(x_orals, n_all)$conf.int[2], 3)*100
 
-chi_orals <- glue("({perc_orals1}% versus {perc_orals2}%, CI {ci1_orals}% to {ci2_orals}%, p{ifelse(p2_orals<0.001,'<0.001',paste(' =',p2_orals))})")
+chi_orals <- glue("({perc_orals1}% versus {perc_orals2}%, CI {ci1_orals}% to {ci2_orals}%, p{ifelse(p2_orals<0.001,'<0.001',paste0('=',p2_orals))})")
 
 ###IV antibiotics
 x_ivs <- c(nrow(ur_util %>% filter((PDRx_1_result=="S"|PDRx_1_result=="I")&PDRx_1%in%iv_singles)), nrow(ur_util %>% filter((Px_Abx_result=="S"|Px_Abx_result=="I")&Px_Abx%in%iv_modified_abx_map)))
@@ -279,7 +279,7 @@ p2_ivs <- round(prop.test(x_ivs, n_all)$p.value, 3)
 ci1_ivs <- round(prop.test(x_ivs, n_all)$conf.int[1], 3)*100
 ci2_ivs <- round(prop.test(x_ivs, n_all)$conf.int[2], 3)*100
 
-chi_ivs <- glue("({perc_ivs1}% versus {perc_ivs2}%, CI {ci1_ivs}% to {ci2_ivs}%, p{ifelse(p2_ivs<0.001,'<0.001',paste(' =',p2_ivs))})")
+chi_ivs <- glue("({perc_ivs1}% versus {perc_ivs2}%, CI {ci1_ivs}% to {ci2_ivs}%, p{ifelse(p2_ivs<0.001,'<0.001',paste0('=',p2_ivs))})")
 
 ##Percentage comparison at high illness severity
 perc_util <- overall_xg_plot_df %>% filter(Metric=="All agents"&Weight==3) %>% select(Percentage) %>% unlist()
@@ -330,13 +330,13 @@ po_effectsize <- round(z_po / sqrt(nrow(ur_util)), 3)
 z_iv <- statistic(wilcoxsign_test(as.formula(paste0(quo_text(ur_util$n_ivS_PDRx6), " ~ ", quo_text(ur_util$n_ivS_standard6))), data = ur_util), "standardized")[1]
 iv_effectsize <- round(z_iv / sqrt(nrow(ur_util)), 3)
 
-wil_all <- glue("(median {m_aut_all}, interquartile range [IQR] {iq1aut_all}-{iq3aut_all} versus median {m_stan_all}, IQR {iq1stan_all}-{iq3stan_all}, p{ifelse(p_all<0.001,'<0.001',paste(' =',p_all))}, effect size [ES] {all_effectsize})")
+wil_all <- glue("(median {m_aut_all}, interquartile range [IQR] {iq1aut_all}-{iq3aut_all} versus median {m_stan_all}, IQR {iq1stan_all}-{iq3stan_all}, p{ifelse(p_all<0.001,'<0.001',paste0('=',p_all))}, effect size [ES] {all_effectsize})")
 
-wil_acs <- glue("(median {m_aut_acs}, IQR {iq1aut_acs}-{iq3aut_acs} versus median {m_stan_acs}, IQR {iq1stan_acs}-{iq3stan_acs}, p{ifelse(p_acs<0.001,'<0.001',paste(' =',p_acs))}, ES {acs_effectsize})")
+wil_acs <- glue("(median {m_aut_acs}, IQR {iq1aut_acs}-{iq3aut_acs} versus median {m_stan_acs}, IQR {iq1stan_acs}-{iq3stan_acs}, p{ifelse(p_acs<0.001,'<0.001',paste0('=',p_acs))}, ES {acs_effectsize})")
 
-wil_po <- glue("(median {m_aut_pos}, IQR {iq1aut_pos}-{iq3aut_pos} versus median {m_stan_pos}, IQR {iq1stan_pos}-{iq3stan_pos}, p{ifelse(p_po<0.001,'<0.001',paste(' =',p_po))}, ES {po_effectsize})")
+wil_po <- glue("(median {m_aut_pos}, IQR {iq1aut_pos}-{iq3aut_pos} versus median {m_stan_pos}, IQR {iq1stan_pos}-{iq3stan_pos}, p{ifelse(p_po<0.001,'<0.001',paste0('=',p_po))}, ES {po_effectsize})")
 
-wil_iv <- glue("(median {m_aut_ivs}, IQR {iq1aut_ivs}-{iq3aut_ivs} versus median {m_stan_ivs}, IQR {iq1stan_ivs}-{iq3stan_ivs}, p{ifelse(p_iv<0.001,'<0.001',paste(' =',p_iv))}, ES {iv_effectsize})")
+wil_iv <- glue("(median {m_aut_ivs}, IQR {iq1aut_ivs}-{iq3aut_ivs} versus median {m_stan_ivs}, IQR {iq1stan_ivs}-{iq3stan_ivs}, p{ifelse(p_iv<0.001,'<0.001',paste0('=',p_iv))}, ES {iv_effectsize})")
 
 ```
 
@@ -365,23 +365,23 @@ The utility function we report here could underpin decision support tools – le
 
 ## Background
 
-To improve the precision of antibiotic treatment using data-driven decision support tools, developers need to quantify the utility of different antibiotic treatment options. Here, we report a utility function that recommends antibiotic treatments and susceptibility tests for urinary tract infection by combining machine learning predictions and prescriber knowledge. 
+To optimise antibiotic treatment using decision support tools, developers need to quantify the utility of different treatment options. Here, we report an antibiotic utility function (AUF) that recommends antibiotic treatments and susceptibility tests for urinary tract infection by combining machine learning predictions and prescriber knowledge.  
 
 ## Methods
 
-The utility function retrospectively recommended personalised treatment choices and six-antibiotic susceptibility testing panels for `r nrow(ur_util) %>% comma()` patients using healthcare data available when urine cultures were sent. The appropriateness of each testing and treatment recommendation was compared to the human prescriber treatment choice and a standard testing panel respectively using the subsequent urine antibiotic susceptibility result. The proportions of appropriate recommendations that were World Health Organisation Access category, oral, and/or intravenous antibiotics were measured.
+The AUF retrospectively recommended personalised treatment choices and six-antibiotic susceptibility testing panels for `r nrow(ur_util) %>% comma()` patients using healthcare data available when urine cultures were sent. The appropriateness of testing and treatment recommendations were compared to human prescriber treatment choices and a standard testing panel respectively using subsequent urine antibiotic susceptibility results, measuring proportions of appropriate recommendations that were World Health Organisation Access category, oral, and/or intravenous antibiotics.
 
 ## Findings
 
-Urine culture isolates were susceptible to the antibiotic chosen by the utility function more often than they were susceptible to antibiotics chosen by human prescribers `r chi_all` — more of these appropriate treatment choices were WHO Access category `r chi_acs` and orally-administrable `r chi_orals` than human prescriber choices, but fewer were intravenously administrable `r chi_ivs`. The utility function antimicrobial susceptibility testing panel provided more susceptible results per specimen than the standard panel `r wil_all`, including more Access `r wil_acs`, oral `r wil_po`, and intravenous antibiotics `r wil_iv`.
+Urine culture isolates were more frequently susceptible to AUF antibiotic choices than human antibiotic choices `r chi_all`. The AUF recommended more appropriate Access  `r chi_acs` and oral antibiotics `r chi_orals` but fewer appropriate intravenous antibiotics `r chi_ivs`. The AUF testing panel provided more susceptible results per specimen than the standard panel `r wil_all`, including more Access `r wil_acs`, oral `r wil_po`, and intravenous antibiotics `r wil_iv`.
 
 ## Interpretation
 
-The utility function described here could improve antibiotic treatment appropriateness by balancing risks of antibiotic failure against harm. Utility function-based decision support tools need evaluating in a diversity of populations and clinical contexts.
+The AUF described here could improve antibiotic treatment appropriateness by balancing risks of antibiotic failure against harm. AUF-based decision support tools need evaluating in different settings/populations.
 
 ## Funding
 
-Funded in part by the Wellcome Trust (226691/Z/22/Z). Supported by the Office for Life Sciences Data-Action Accelerator award.
+Funded in part by the Wellcome Trust (226691/Z/22/Z). Supported by the Office for Life Sciences Data-Action Accelerator.
 
 # Introduction
 
@@ -436,7 +436,7 @@ where $k$ are either known antibiotic characteristics or outcome probabilities (
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
-knitr::include_graphics("#FILEPATH#/wk_plot.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/wk_plot.pdf")
   
 ```
 ### Figure 1: The effect of variation in *w* on the value of *u(w,k)* for three different values of *k* represented by the solid, dotted, and dashed lines.
@@ -486,7 +486,7 @@ Clinical prediction model training hyperparameters and predictor variable contri
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
-knitr::include_graphics("#FILEPATH#/roc_plots_main.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/roc_plots_main.pdf")
   
 ```
 
@@ -494,7 +494,7 @@ knitr::include_graphics("#FILEPATH#/roc_plots_main.pdf")
 \
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
-metrics_singles_table <- read_csv("#FILEPATH#/metrics_singles_table.csv")
+metrics_singles_table <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/metrics_singles_table.csv")
 
 knitr::kable(metrics_singles_table)
 
@@ -508,7 +508,7 @@ The relative influences of different antibiotic characteristics on prescriber an
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
-knitr::include_graphics("#FILEPATH#/ORplot.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/ORplot.pdf")
 
 ```
 
@@ -520,7 +520,7 @@ knitr::include_graphics("#FILEPATH#/ORplot.pdf")
 The distributions of antibiotic utility values for patients across the microsimulation dataset overall and by speciality subtype are displayed in Figure 4 and Appendix 13 respectively. Nitrofurantoin had the highest median utility across the population (`r utilsum(util_probs_df,1,"median")`), and vancomycin the lowest (`r utilsum(util_probs_df,13,"median")`). Cefazolin had the widest utility spread (IQR width `r utilsum(util_probs_df,1,"IQR")`), reflecting variation in probability of urine isolate susceptibility to cefazolin in the dataset (IQR width `r round(wideiqr,3)`).\
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
-knitr::include_graphics("#FILEPATH#/utility_Treatment_ (single agent).pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_ (single agent).pdf")
 ```
 ### Figure 4: Distributions of antibiotic utility values for patients across the microsimulation dataset.
 \
@@ -530,15 +530,15 @@ Urine culture isolates were susceptible to the antibiotics chosen by the AUF alg
 Figures 5 and 6 display how illness severity influenced the appropriateness and types of antibotics chosen by the AUF and human prescribers in the ED. The AUF behaved in a similar way to human prescribers, in that it predominantly chose orally-administrable WHO Access antibiotics for the most systemically well patients (mainly nitrofurantoin) and intravenously-administrable WHO Watch antibiotics for the most systemically unwell patients (mainly piperacillin-tazobactam for the AUF and piperacillin-tazobactam plus vancomycin for human prescribers). The AUF, however, detected more opportunities to use appropriate oral and Access antibiotics in patients with intermediate illness severity and appropriate intravenous Access antibiotics in patients with high illness severity, while achieving higher rates of urinary pathogen coverage than human prescribers — it did this by making more use of nitrofurantoin, gentamicin, and piperacillin-tazobactam, and avoiding the use of ceftriaxone.\
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
-knitr::include_graphics("#FILEPATH#/bar_AWaRe category.pdf")
-knitr::include_graphics("#FILEPATH#/bar_Oral administrability.pdf")
-knitr::include_graphics("#FILEPATH#/bar_IV administrability.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/bar_AWaRe category.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/bar_Oral administrability.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/bar_IV administrability.pdf")
 ```
 ### Figure 5: Plots comparing how increasing illness severity affected the concordance of empirical treatment choices made by the antimicrobial utility function (AUF) and human prescribers with urine susceptibility results, by WHO Access/Watch/Reserve (AWaRe) category (top), availability of an oral option (middle), and availability of an IV option (bottom).
 \
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
-knitr::include_graphics("#FILEPATH#/illness_abplot.pdf")
-knitr::include_graphics("#FILEPATH#/illness_abplot_px_abx.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/illness_abplot.pdf")
+knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/illness_abplot_px_abx.pdf")
 
 ```
 ### Figure 6: The make-up of antimicrobial utility function (AUF) first-line treatment recommendations by antibiotic agent depending on illness severity. The top plot is for AUF recommendations, the bottom plot for antibiotics that were actually prescribed.
