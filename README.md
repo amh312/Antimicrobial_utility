@@ -27,7 +27,7 @@ Before running the code, the data and *Python* files should be saved into a secu
 
 To reproduce the study, all csv files above must be stored in the working directory, and list that directory in place of #FILEPATH# in the script(s) marked with an asterisk below. The scripts must then be run in this order:  
 
-   1. **UF_packages&setup.R**^*
+   1. **UF_packages&setup.R***
    2. **UF_cleaning.R**
    3. **UF_preprocessing.R**
    4. **UF_S_model_tuning_1.R**
