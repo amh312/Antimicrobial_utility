@@ -19,7 +19,7 @@ library(glue)
 ## Appendix 1: Data processing workflow
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Data flow chart.pdf")
+knitr::include_graphics("#FILEPATH#/Data flow chart.pdf")
 ```
 
 ### Appendix 1: Data processing workflow. Created in BioRender. Howard, A. (2025) https://BioRender.com/r77h648
@@ -38,19 +38,19 @@ The factors listed are AWaRe classification*, risk of Clostridioides difficile d
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
 knitr::include_graphics(c(
-  "/Users/alexhoward/Documents/Projects/UDAST_code/S1.png",
-  "/Users/alexhoward/Documents/Projects/UDAST_code/S2.png",
-  "/Users/alexhoward/Documents/Projects/UDAST_code/S3.png",
-  "/Users/alexhoward/Documents/Projects/UDAST_code/S4.png",
-  "/Users/alexhoward/Documents/Projects/UDAST_code/S5.png",
-  "/Users/alexhoward/Documents/Projects/UDAST_code/S6.png",
-  "/Users/alexhoward/Documents/Projects/UDAST_code/S7.png",
-  "/Users/alexhoward/Documents/Projects/UDAST_code/S8.png",
-  "/Users/alexhoward/Documents/Projects/UDAST_code/S9.png",
-  "/Users/alexhoward/Documents/Projects/UDAST_code/S10.png",
-  "/Users/alexhoward/Documents/Projects/UDAST_code/S11.png",
-  "/Users/alexhoward/Documents/Projects/UDAST_code/S12.png",
-  "/Users/alexhoward/Documents/Projects/UDAST_code/S13.png"
+  "#FILEPATH#/S1.png",
+  "#FILEPATH#/S2.png",
+  "#FILEPATH#/S3.png",
+  "#FILEPATH#/S4.png",
+  "#FILEPATH#/S5.png",
+  "#FILEPATH#/S6.png",
+  "#FILEPATH#/S7.png",
+  "#FILEPATH#/S8.png",
+  "#FILEPATH#/S9.png",
+  "#FILEPATH#/S10.png",
+  "#FILEPATH#/S11.png",
+  "#FILEPATH#/S12.png",
+  "#FILEPATH#/S13.png"
                           ))
                       
 
@@ -94,7 +94,7 @@ For the discrete choice experiment to produce component weights $w$, the ranking
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
-desc_tab <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/uf_desctab.csv")
+desc_tab <- read_csv("#FILEPATH#/uf_desctab.csv")
 
 desc_tab$Characteristic[is.na(desc_tab$Characteristic)] <- "··"
 
@@ -109,7 +109,7 @@ knitr::kable(desc_tab)
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
-ab_tab <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/ab_tab.csv")
+ab_tab <- read_csv("#FILEPATH#/ab_tab.csv")
 
 knitr::kable(ab_tab,)
 
@@ -122,7 +122,7 @@ knitr::kable(ab_tab,)
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
-hyp_tab <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/hyp_tab_singles.csv")
+hyp_tab <- read_csv("#FILEPATH#/hyp_tab_singles.csv")
 
 knitr::kable(hyp_tab)
 
@@ -135,7 +135,7 @@ knitr::kable(hyp_tab)
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
-feat_table <- read_csv("/Users/alexhoward/Documents/Projects/UDAST_code/feat_table_singles.csv")
+feat_table <- read_csv("#FILEPATH#/feat_table_singles.csv")
 
 knitr::kable(feat_table)
 
@@ -148,11 +148,11 @@ knitr::kable(feat_table)
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/stability_AUC-ROC.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/stability_Precision.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/stability_Recall.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/stability_F1 score.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/stability_Accuracy.pdf")
+knitr::include_graphics("#FILEPATH#/stability_AUC-ROC.pdf")
+knitr::include_graphics("#FILEPATH#/stability_Precision.pdf")
+knitr::include_graphics("#FILEPATH#/stability_Recall.pdf")
+knitr::include_graphics("#FILEPATH#/stability_F1 score.pdf")
+knitr::include_graphics("#FILEPATH#/stability_Accuracy.pdf")
   
 ```
 
@@ -163,29 +163,29 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/stabili
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2008 - 2010_AUC-ROC.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2008 - 2010_Precision.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2008 - 2010_Recall.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2008 - 2010_F1 score.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2008 - 2010_Accuracy.pdf")
+knitr::include_graphics("#FILEPATH#/timesens_2008 - 2010_AUC-ROC.pdf")
+knitr::include_graphics("#FILEPATH#/timesens_2008 - 2010_Precision.pdf")
+knitr::include_graphics("#FILEPATH#/timesens_2008 - 2010_Recall.pdf")
+knitr::include_graphics("#FILEPATH#/timesens_2008 - 2010_F1 score.pdf")
+knitr::include_graphics("#FILEPATH#/timesens_2008 - 2010_Accuracy.pdf")
 
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2011 - 2013_AUC-ROC.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2011 - 2013_Precision.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2011 - 2013_Recall.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2011 - 2013_F1 score.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2011 - 2013_Accuracy.pdf")
+knitr::include_graphics("#FILEPATH#/timesens_2011 - 2013_AUC-ROC.pdf")
+knitr::include_graphics("#FILEPATH#/timesens_2011 - 2013_Precision.pdf")
+knitr::include_graphics("#FILEPATH#/timesens_2011 - 2013_Recall.pdf")
+knitr::include_graphics("#FILEPATH#/timesens_2011 - 2013_F1 score.pdf")
+knitr::include_graphics("#FILEPATH#/timesens_2011 - 2013_Accuracy.pdf")
 
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2014 - 2016_AUC-ROC.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2014 - 2016_Precision.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2014 - 2016_Recall.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2014 - 2016_F1 score.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2014 - 2016_Accuracy.pdf")
+knitr::include_graphics("#FILEPATH#/timesens_2014 - 2016_AUC-ROC.pdf")
+knitr::include_graphics("#FILEPATH#/timesens_2014 - 2016_Precision.pdf")
+knitr::include_graphics("#FILEPATH#/timesens_2014 - 2016_Recall.pdf")
+knitr::include_graphics("#FILEPATH#/timesens_2014 - 2016_F1 score.pdf")
+knitr::include_graphics("#FILEPATH#/timesens_2014 - 2016_Accuracy.pdf")
 
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2017 - 2019_AUC-ROC.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2017 - 2019_Precision.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2017 - 2019_Recall.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2017 - 2019_F1 score.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesens_2017 - 2019_Accuracy.pdf")
+knitr::include_graphics("#FILEPATH#/timesens_2017 - 2019_AUC-ROC.pdf")
+knitr::include_graphics("#FILEPATH#/timesens_2017 - 2019_Precision.pdf")
+knitr::include_graphics("#FILEPATH#/timesens_2017 - 2019_Recall.pdf")
+knitr::include_graphics("#FILEPATH#/timesens_2017 - 2019_F1 score.pdf")
+knitr::include_graphics("#FILEPATH#/timesens_2017 - 2019_Accuracy.pdf")
 
 ```
 
@@ -196,23 +196,23 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/timesen
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_Age group_AUC-ROC.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_Age group_Precision.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_Age group_Recall.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_Age group_F1 score.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_Age group_Accuracy.pdf")
+knitr::include_graphics("#FILEPATH#/protchar_Age group_AUC-ROC.pdf")
+knitr::include_graphics("#FILEPATH#/protchar_Age group_Precision.pdf")
+knitr::include_graphics("#FILEPATH#/protchar_Age group_Recall.pdf")
+knitr::include_graphics("#FILEPATH#/protchar_Age group_F1 score.pdf")
+knitr::include_graphics("#FILEPATH#/protchar_Age group_Accuracy.pdf")
 
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_Race_AUC-ROC.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_Race_Precision.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_Race_Recall.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_Race_F1 score.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_Race_Accuracy.pdf")
+knitr::include_graphics("#FILEPATH#/protchar_Race_AUC-ROC.pdf")
+knitr::include_graphics("#FILEPATH#/protchar_Race_Precision.pdf")
+knitr::include_graphics("#FILEPATH#/protchar_Race_Recall.pdf")
+knitr::include_graphics("#FILEPATH#/protchar_Race_F1 score.pdf")
+knitr::include_graphics("#FILEPATH#/protchar_Race_Accuracy.pdf")
 
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_(Gender|Language|Marital)_AUC-ROC.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_(Gender|Language|Marital)_Precision.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_(Gender|Language|Marital)_Recall.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_(Gender|Language|Marital)_F1 score.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protchar_(Gender|Language|Marital)_Accuracy.pdf")
+knitr::include_graphics("#FILEPATH#/protchar_(Gender|Language|Marital)_AUC-ROC.pdf")
+knitr::include_graphics("#FILEPATH#/protchar_(Gender|Language|Marital)_Precision.pdf")
+knitr::include_graphics("#FILEPATH#/protchar_(Gender|Language|Marital)_Recall.pdf")
+knitr::include_graphics("#FILEPATH#/protchar_(Gender|Language|Marital)_F1 score.pdf")
+knitr::include_graphics("#FILEPATH#/protchar_(Gender|Language|Marital)_Accuracy.pdf")
 
   
 ```
@@ -224,11 +224,11 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/protcha
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Medicine_importances.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Surgery_importances.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Infection_importances.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Intensive care_importances.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/General Practice_importances.pdf")
+knitr::include_graphics("#FILEPATH#/Medicine_importances.pdf")
+knitr::include_graphics("#FILEPATH#/Surgery_importances.pdf")
+knitr::include_graphics("#FILEPATH#/Infection_importances.pdf")
+knitr::include_graphics("#FILEPATH#/Intensive care_importances.pdf")
+knitr::include_graphics("#FILEPATH#/General Practice_importances.pdf")
 
 ```
 
@@ -239,11 +239,11 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/General
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_ (single agent, medical specialties).pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_ (single agent, surgical specialties).pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_ (single agent, infection specialties).pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_ (single agent, intensive care).pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility_Treatment_ (single agent, general practice).pdf")
+knitr::include_graphics("#FILEPATH#/utility_Treatment_ (single agent, medical specialties).pdf")
+knitr::include_graphics("#FILEPATH#/utility_Treatment_ (single agent, surgical specialties).pdf")
+knitr::include_graphics("#FILEPATH#/utility_Treatment_ (single agent, infection specialties).pdf")
+knitr::include_graphics("#FILEPATH#/utility_Treatment_ (single agent, intensive care).pdf")
+knitr::include_graphics("#FILEPATH#/utility_Treatment_ (single agent, general practice).pdf")
 
 ```
 
@@ -254,8 +254,8 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/utility
 
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/UF_All agents_WHO access agents_plot.pdf")
-knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/UF_IV agents_Oral agents_plot.pdf")
+knitr::include_graphics("#FILEPATH#/UF_All agents_WHO access agents_plot.pdf")
+knitr::include_graphics("#FILEPATH#/UF_IV agents_Oral agents_plot.pdf")
 
 ```
 
