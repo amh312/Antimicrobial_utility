@@ -53,6 +53,7 @@ library(cowplot)
 library(boot)
 library(gridExtra)
 library(pdftools)
+library(ggpubr)
 
 ##SETUP
 options(error=NULL)
