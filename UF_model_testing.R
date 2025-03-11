@@ -16,7 +16,9 @@ stability_plot <- function(df,metric,perf_metric) {
   
   metric <- enquo(metric)
   
-  df <- df %>% mutate(Model=case_when(Model=="overall_tox"~"Toxicity",
+  df <- df %>% 
+    filter(!is.na(!!metric)) %>% 
+    mutate(Model=case_when(Model=="overall_tox"~"Toxicity",
                                       Model=="CDI"~"CDI",
                                       TRUE~ab_name(Model)))
   df <- df %>% rename(`Training dataset size`="Training_size")
@@ -46,6 +48,7 @@ protchar_plot <- function(df,prot_char,metric,perf_metric,title_bit) {
   metric <- enquo(metric)
   
   df <- df %>% filter(grepl(prot_char,Category)) %>% 
+    filter(!is.na(!!metric)) %>%
     mutate(Model=case_when(Model=="overall_tox"~"Toxicity",
                            Model=="CDI"~"CDI",
                            TRUE~ab_name(Model)))
@@ -77,6 +80,7 @@ timesens_plot <- function(df,tr_yr,metric,perf_metric) {
   metric <- enquo(metric)
   
   df <- df %>% filter(grepl(tr_yr,Train_year)) %>% 
+    filter(!is.na(!!metric)) %>%
     mutate(Model=case_when(Model=="overall_tox"~"Toxicity",
                            Model=="CDI"~"CDI",
                            TRUE~ab_name(Model)))
@@ -403,9 +407,10 @@ for (outcome in colnames(urines5_outcomes)[1:13]) {
     pdf(glue("{outcome}_xg_roc.pdf"), width = 10, height = 10)
     plot(roc_result, main = glue("{outcome} ROC Curve"), col = "blue")
     dev.off()
-    
     pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
+    pred_test_class <- factor(pred_test_class,levels=c(1,0))
     actual_test_class <- urines5Test[[outcome]]
+    actual_test_class <- factor(actual_test_class,levels=c(1,0))
     
     confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
     accuracy <- confusion$overall['Accuracy']
@@ -562,7 +567,9 @@ for (outcome in colnames(urines5_outcomes)[1:13]) {
           dev.off()
           
           pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
+          pred_test_class <- factor(pred_test_class,levels=c(1,0))
           actual_test_class <- urines5Test2[[outcome]]
+          actual_test_class <- factor(actual_test_class,levels=c(1,0))
           
           confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
           accuracy <- confusion$overall['Accuracy']
@@ -707,7 +714,9 @@ for (outcome in colnames(urines5_outcomes)[1:13]) {
           dev.off()
           
           pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
+          pred_test_class <- factor(pred_test_class,levels=c(1,0))
           actual_test_class <- urines5Test2[[outcome]]
+          actual_test_class <- factor(actual_test_class,levels=c(1,0))
           
           confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
           accuracy <- confusion$overall['Accuracy']
@@ -894,7 +903,9 @@ for (outcome in colnames(urines5_outcomes)[1:13]) {
         dev.off()
         
         pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
+        pred_test_class <- factor(pred_test_class,levels=c(1,0))
         actual_test_class <- urines5Test[[outcome]]
+        actual_test_class <- factor(actual_test_class,levels=c(1,0))
         
         confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
         accuracy <- confusion$overall['Accuracy']
@@ -1072,7 +1083,9 @@ for (outcome in colnames(abx_outcomes)) {
         dev.off()
         
         pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
+        pred_test_class <- factor(pred_test_class,levels=c(1,0))
         actual_test_class <- abxTest[[outcome]]
+        actual_test_class <- factor(actual_test_class,levels=c(1,0))
         
         confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
         accuracy <- confusion$overall['Accuracy']
@@ -1229,7 +1242,9 @@ for (outcome in colnames(abx_outcomes)) {
           dev.off()
           
           pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
+          pred_test_class <- factor(pred_test_class,levels=c(1,0))
           actual_test_class <- abxTest2[[outcome]]
+          actual_test_class <- factor(actual_test_class,levels=c(1,0))
           
           confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
           accuracy <- confusion$overall['Accuracy']
@@ -1374,7 +1389,9 @@ for (outcome in colnames(abx_outcomes)) {
           dev.off()
           
           pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
+          pred_test_class <- factor(pred_test_class,levels=c(1,0))
           actual_test_class <- abxTest2[[outcome]]
+          actual_test_class <- factor(actual_test_class,levels=c(1,0))
           
           confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
           accuracy <- confusion$overall['Accuracy']
@@ -1561,7 +1578,9 @@ for (outcome in colnames(abx_outcomes)) {
           dev.off()
           
           pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
+          pred_test_class <- factor(pred_test_class,levels=c(1,0))
           actual_test_class <- abxTest[[outcome]]
+          actual_test_class <- factor(actual_test_class,levels=c(1,0))
           
           confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
           accuracy <- confusion$overall['Accuracy']
