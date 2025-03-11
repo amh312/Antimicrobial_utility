@@ -358,11 +358,7 @@ R_util_sens <- function(df,probs_df,uf,min_val,max_val) {
     ##Survey results
     
     ###Engineer scores dataframe
-    rankings <- results %>% select(10:ncol(results)) %>% dplyr::slice(2:nrow(results))
-    colnames(rankings) <- c("Abelfenide","Acetemran","Adenomadin","Adrevenac",
-                            "Amrodine","Choriotroban","Cormide","Decloxone",
-                            "Dexaset","Endoxolol","Olanzasys","Pansolid",
-                            "Protestryl")
+    rankings <- results
     Characteristic <- c("AWaRe","CDI","Toxicity","UTI","Oral","IV","Cost")
     Abelfenide <- c("Reserve","Low","Low","No","Yes","Yes","High")
     Acetemran <- c("Watch","Low","Low","Yes","Yes","No","Low")
