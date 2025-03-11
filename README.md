@@ -1,4 +1,4 @@
-This repository houses the code for the academic paper **"A utility function to improve antibiotic decision-making: a simulation study"**, for the purpose of peer review and subsequent open-sourcing.
+This repository houses the code for the academic paper **"A utility function for antibiotic decision support systems: a simulation study"**, for the purpose of peer review and subsequent open-sourcing.
 
 If you use this code please cite this repository.
 
