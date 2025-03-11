@@ -2,6 +2,15 @@
 
 set.seed(123)
 
+##Functions
+
+###Factorise training and testing datasets
+factorise <- function(df) {
+  df %>% mutate(CDI = factor(CDI),
+                overall_tox = factor(overall_tox),
+                sepsis_ae=factor(sepsis_ae))
+}
+
 ###Read-in
 probs_df_overall <- read_csv("probs_df_overall.csv")
 
