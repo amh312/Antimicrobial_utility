@@ -27,7 +27,14 @@ knitr::include_graphics("/Users/alexhoward/Documents/Projects/UDAST_code/Data fl
 
 ## Appendix 2: Discrete choice experiment
 
-A patient has urinary tract infection. You have no other details about the patient at this stage (including disease severity). Please rank the following fictional antibiotic treatments from 1 to 13 in order of most to least preferred in this scenario by dragging and dropping options or using the arrows on the right. When finished, just click the 'Done' button at the bottom of the page.
+This survey is designed to ascertain the relative importance of different features of an antimicrobial to clinicians when prescribing. It should take 2-5 minutes to complete.
+Contextual information about the patient has intentionally been omitted - your decision should be made based on your experience of managing urinary tract infection in your usual clinical setting.
+The factors listed are AWaRe classification*, risk of Clostridioides difficile diarrhoea, toxicity risk (e.g., nephrotoxicity), UTI-specificity (whether the drug should only be used for UTI), oral option, intravenous option, and financial cost.
+
+* The WHO AWaRe classification assigns antibiotics ratings of Access, Watch and Reserve based on their risk of generating antimicrobial resistance. Those in the Access category are the lowest risk, those in Reserve are the highest.
+
+1. A patient has urinary tract infection. You have no other details about the patient at this stage (including disease severity). Please rank the following fictional antibiotic treatments from 1 to 13 in order of most to least preferred in this scenario by dragging and dropping options or using the arrows on the right. When finished, just click the 'Done' button at the bottom of the page.
+
 ```{r, echo=FALSE,message=FALSE,warning=FALSE}
 
 knitr::include_graphics(c(
