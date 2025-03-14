@@ -45,4 +45,4 @@ To reproduce the study, all csv files above must be stored in the working direct
    16. **UF_microsimulation.R**
    17. **UF_descriptive.R**
 
-The code in its entirety typically takes approximately 72-96 hours to run. Please note that the code also includes additional analyses that are not included in the paper for the purpose of brevity, that pertain to combination treatment and additional sensitivity analyses.
+Rendering **UF.qmd** and **UF_supplement.qmd** will then produce the manuscript and supplementary material respectively. The code in its entirety typically takes approximately 72-96 hours to run. Please note that the code also includes additional analyses that are not included in the paper for the purpose of brevity, that pertain to combination treatment and additional sensitivity analyses.
