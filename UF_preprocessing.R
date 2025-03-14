@@ -5,24 +5,36 @@
 ###Assigning previous event feature variable
 prev_event_assign <- function(df,B_var,event_df,event_var,no_days,no_events) {
   
+  #convert charttime to posix
   df <- df %>% mutate(charttime=as.POSIXct(charttime,format='%Y-%m-%d %H:%M:%S'))
   
+  
   event_df %>%
+    
+    #syncing var types and getting rid of nas
     mutate(event = {{event_var}}) %>% 
     select('subject_id', "event", charttime = 'admittime') %>% 
     mutate(charttime=as.POSIXct(charttime,format='%Y-%m-%d %H:%M:%S')) %>% 
     filter(!is.na(event)) %>% 
+    
+    #bind event df of interest
     bind_rows(df) %>% 
     mutate(event = case_when(!is.na(event) ~ "Yes",
                              TRUE ~ "No")) %>% 
+    
+    #check for prev events
     MIMER::check_previous_events(cols="event", sort_by_col='charttime',
                                  patient_id_col='subject_id', event_indi_value='Yes',
                                  new_col_prefix="pr_",
                                  time_period_in_days = no_days, minimum_prev_events = no_events,
                                  default_na_date = '9999-12-31 00:00:00') %>% 
+    
+    #ad prev event var
     mutate({{B_var}} := case_when(pr_event==TRUE ~ TRUE,
                                   TRUE ~ FALSE)) %>%
     mutate(event = NULL, pr_event=NULL) %>% 
+    
+    #filter to just urines
     filter(grepl('URINE', spec_type_desc))
   
 }
@@ -100,21 +112,31 @@ prev_event_type_assign <- function(df,B_var,event_df,event_var,event_type,no_day
   df <- df %>% mutate(charttime=as.POSIXct(charttime,format='%Y-%m-%d %H:%M:%S'))
   
   event_df %>%
+    
+    #sync up var types
     mutate(event = {{event_var}}) %>% 
     select('subject_id', "event", charttime = 'admittime') %>% 
     mutate(charttime=as.POSIXct(charttime,format='%Y-%m-%d %H:%M:%S')) %>% 
     filter(grepl(event_type, event)) %>%
+    
+    #bind event of interest df
     bind_rows(df) %>% 
     mutate(event = case_when(!is.na(event) ~ "Yes",
                              TRUE ~ "No")) %>% 
+    
+    #check prev events
     MIMER::check_previous_events(cols="event", sort_by_col='charttime',
                                  patient_id_col='subject_id', event_indi_value='Yes',
                                  new_col_prefix="pr_",
                                  time_period_in_days = no_days, minimum_prev_events = no_events,
                                  default_na_date = '9999-12-31 00:00:00') %>% 
+    
+    #make var
     mutate({{B_var}} := case_when(pr_event==TRUE ~ TRUE,
                                   TRUE ~ FALSE)) %>%
     mutate(event = NULL, pr_event=NULL) %>% 
+    
+    #filter to urines
     filter(grepl('URINE', spec_type_desc))
   
   
@@ -128,10 +150,18 @@ apply_prev_event <- function(df, param,organism) {
 
 ###Assigning "NT" variable to relevant NAs in microbiology dataframe
 NT_assigner <- function(df) {
+  
+  #split dfs into non_missing and missing
   micaborgs <- df %>% filter(!is.na(org_name))
   micabnas <- df %>% filter(is.na(org_name))
+  
+  #select ab columns
   micaborgab <- micaborgs %>% select(PEN:MTR)
+  
+  #replace nas with not tested
   micaborgab[is.na(micaborgab)] <- "NT"
+  
+  #select corresponding columns
   micaborgs[,17:81] <- micaborgab
   df2 <- tibble(rbind(micaborgs,micabnas))
   df2 %>% rename(admittime = "charttime")
@@ -140,15 +170,27 @@ NT_assigner <- function(df) {
 ###Applying previous AST result search across multiple result types
 prev_AST_applier <- function(df1,micro_data,suffix,result,timeframe=365,n_events=1) {
   
+  #add p prefix and result type suffix to abx list
   params <- paste0("p", antibiotics, suffix)
   
+  #redefine prev event func to allow arg passage from wrapping func
   apply_prev_event <- function(df, param, antibiotic) {
     df %>%
       prev_event_type_assign(!!sym(param), micro_data, !!sym(antibiotic), result, timeframe, n_events)
   }
-  df1 <- reduce(seq_along(antibiotics), function(df, i) {
-    apply_prev_event(df, params[i], antibiotics[i])
-  }, .init = df1) %>%
+  
+  #use reduce to loop along abx list and iteratively update urines df
+  df1 <- reduce(seq_along(antibiotics),
+                
+                #loop over abx and check for previous specified result
+                function(df, i) {
+                  apply_prev_event(df, params[i], antibiotics[i])
+                  }
+                
+                #define urines df as starting point
+                , .init = df1) %>%
+    
+    #remove leftover grouping from MIMER function
     ungroup()
   
 }
@@ -156,25 +198,36 @@ prev_AST_applier <- function(df1,micro_data,suffix,result,timeframe=365,n_events
 ###Assigning previous antimicrobial treatment variable
 prev_rx_assign <- function(df, B_var, drug_df, abx, abx_groupvar,no_days,no_events) {
   
+  #convert charttime to poxix
   ur_df <- df %>% mutate(charttime=as.POSIXct(charttime,format='%Y-%m-%d %H:%M:%S'))
   
+  #quosure for var
   abx_groupvar <- enquo(abx_groupvar)
   
+  #sync up var types in dfs before bind
   drug_df %>%
     select('subject_id', ab_name,charttime='starttime') %>%
     mutate(charttime=as.POSIXct(charttime,format='%Y-%m-%d %H:%M:%S')) %>% 
     filter(grepl(glue("{abx}"), !!abx_groupvar)) %>% 
+    
+    #bnd df with vars of interest
     bind_rows(ur_df) %>% 
     mutate(abx_treatment = case_when(!is.na(ab_name) ~ "Yes",
                                      TRUE ~ "No")) %>% 
+    
+    #look for prev vars
     MIMER::check_previous_events(cols="abx_treatment", sort_by_col='charttime',
                                  patient_id_col='subject_id', event_indi_value='Yes',
                                  new_col_prefix="pr_rx_",
                                  time_period_in_days = no_days, minimum_prev_events = no_events,
                                  default_na_date = '9999-12-31 00:00:00') %>% 
+    
+    #make new var
     mutate({{B_var}} := case_when(pr_rx_abx_treatment==TRUE ~ TRUE,
                                   TRUE ~ FALSE)) %>% 
     mutate(abx_treatment=NULL,pr_rx_abx_treatment=NULL) %>% 
+    
+    #filter back to urines only
     filter(grepl('URINE', spec_type_desc))
   
 }
@@ -182,13 +235,19 @@ prev_rx_assign <- function(df, B_var, drug_df, abx, abx_groupvar,no_days,no_even
 ###Finding abnormal inflammatory markers on day prior to urine test
 labevent_search <- function(df,search_term,feature_name) {
   
+  #quosure for feature var
   feature_name <- enquo(feature_name)
   
+  #find result name to filter by
   filter_term <- d_labitems %>%
     filter(grepl(search_term,label,ignore.case=T)) %>% 
     count(itemid) %>% arrange(n) %>% dplyr::slice(1) %>% select(itemid) %>% unlist()
+  
+  #filter by result name
   filtered_df <- labevents %>% filter(itemid==filter_term) %>% 
     filter(!is.na(valuenum)) %>% rename(admittime="charttime")
+  
+  #check for prev abnormal result
   df %>% 
     prev_event_type_assign(!!feature_name,filtered_df,flag,"abnormal",1,1) %>%
     ungroup()
@@ -198,11 +257,18 @@ labevent_search <- function(df,search_term,feature_name) {
 ###Assigning gender feature variable
 gender_assign <- function(df,B_var,gender_df) {
   
+  #make gender key df
   gender_df %>%
     select('subject_id', 'gender') %>%
+    
+    #join to urine df by key
     right_join(df) %>%
+    
+    #add new var
     mutate({{B_var}} := case_when(gender=="M" ~ TRUE,
                                   TRUE ~ FALSE)) %>%
+    
+    #get rid of residual gender var
     mutate(gender=NULL)
   
 }
@@ -210,11 +276,15 @@ gender_assign <- function(df,B_var,gender_df) {
 ###Finding patient demographic characeristics
 demographic_assign <- function(df,demographic) {
   
+  #quosure for demo var
   demographic <- enquo(demographic)
   
+  #demographic key df
   hadm_demographic <- hadm %>%
     select(subject_id,!!demographic) %>%
     distinct(subject_id,.keep_all = T)
+  
+  #join demo key to urine df
   df %>% left_join(hadm_demographic,by="subject_id") %>%
     mutate(!!demographic:=case_when(is.na(!!demographic) ~ "UNKNOWN",
                                     TRUE~!!demographic))
@@ -224,6 +294,7 @@ demographic_assign <- function(df,demographic) {
 ###Check for hospital admission from outpatient location
 outpatient_check <- function(df) {
   
+  #if no admission location, label as opd
   df %>% mutate(admission_location=case_when(is.na(admission_location) ~ "OUTPATIENT",
                                              TRUE~admission_location))
   
@@ -232,16 +303,32 @@ outpatient_check <- function(df) {
 ###Applying ICD-1O code search across multiple ICD-10 code prefixes
 prev_ICD_applier <- function(df,icd_df,prefix,codes) {
   
+  #define prev event applier func
   apply_prev_event_assignments <- function(df, code) {
+    
+    #add prefix to ICD code
     param_name <- paste0(prefix, code)
+    
+    #check for specified prev icd code using sym to convert str to varname
     df %>%
       prev_event_type_assign(!!sym(param_name), icd_df, icd_group, code, 365, 1)
   }
   
-  pos_urines <- reduce(codes, function(df, code) {
-    apply_prev_event_assignments(df, code)
-  }, .init = pos_urines) %>%
+  #iteratively update pos_urines with reduce
+  pos_urines <- reduce(codes,
+                       
+                       #loop prev event search across ICD list
+                       function(df, code) {
+                         apply_prev_event_assignments(df, code)
+                         }
+                       
+                       #specify urines df as starting point for reduce
+                       , .init = pos_urines) %>%
+    
+    #no U codes so remove
     mutate(pDIAG_U = FALSE) %>%
+    
+    #get rid of MIMER grouping
     ungroup()
   
 }
@@ -249,11 +336,15 @@ prev_ICD_applier <- function(df,icd_df,prefix,codes) {
 ###Checking for previous care events
 care_event_assigner <- function(df,search_df,search_term,search_column,feature_name,event_date_col,timeframe,n_events=1) {
   
+  #quosure feat name and search col
   feature_name <- enquo(feature_name)
   search_column <- enquo(search_column)
   
+  #make key for care event of interest
   care_event <- search_df %>% filter(grepl(search_term,!!search_column,ignore.case=T)) %>% mutate(
     !!search_column:=search_term) %>% rename(admittime=event_date_col)
+  
+  #check for that event previously
   df %>% 
     prev_event_type_assign(!!feature_name,care_event,!!search_column,search_term,timeframe,n_events) %>%
     ungroup()
@@ -262,23 +353,43 @@ care_event_assigner <- function(df,search_df,search_term,search_column,feature_n
 
 ###Applying BMI category search across multiple categories
 assign_bmi_events <- function(df, bmi_df, categories, days, min_events) {
-  reduce(categories, function(acc, category) {
-    param <- paste0("p", category)
-    prev_event_type_assign(acc, !!sym(param), bmi_df, BMI_cat, category, days, min_events)
-  }, .init = df)
+  
+  #use reduce to apply event search across bmi cats
+  reduce(categories,
+         
+         #loop prev event search across bmi cats with preceding p
+         function(acc, category) {
+           param <- paste0("p", category)
+           prev_event_type_assign(acc, !!sym(param), bmi_df, BMI_cat, category, days, min_events)
+           }
+         
+         #specify urines df as starting point
+         , .init = df)
 }
 
 ###Attaching CDI label
 CDI_label <- function(df,filter_term) {
   
+  #quosure for filter term
   filter_term <- enquo(filter_term)
   
+  #ensure spec types all urine
   df <- df %>% mutate(spec_type_desc="URINE") %>% 
+    
+    #push dates ahead 3m then look back for CDI (to check subsequent 3m)
     prev_event_type_assign(CDI,cdi_ref,org_fullname,"Clostridioides difficile",
-                           28*3,1) %>% ungroup()  %>% 
+                           28*3,1) %>% 
+    
+    #get rid of MIMER residual grouping
+    ungroup()  %>% 
+    
+    #use filter term to get back to original df
     filter(!is.na(!!filter_term))
+  
+  #factorise new CDI var
   df$CDI <- factor(df$CDI)
   
+  #return df
   df
   
 }
@@ -286,10 +397,14 @@ CDI_label <- function(df,filter_term) {
 ###Attaching previous CDI label
 pCDI_label <- function(df,filter_term) {
   
+  #quosure filter term
   filter_term <- enquo(filter_term)
   
+  #look for c diff in the last 10,000 days
   df %>% 
     prev_event_assign(pCDI,cdi_ref,org_fullname,1e4,1) %>% ungroup() %>% 
+    
+    #filter back to original df
     filter(!is.na(!!filter_term))
   
 }
@@ -297,10 +412,17 @@ pCDI_label <- function(df,filter_term) {
 ###Attaching previous hospital admission label
 hadm_label <- function(df,filter_term) {
   
+  #quosure filter term
   filter_term <- enquo(filter_term)
   
+  #check for prev hospital admission in last year
   df %>% 
-    prev_event_assign(pHADM,hadm,hadm_id,365,1) %>% ungroup() %>% 
+    prev_event_assign(pHADM,hadm,hadm_id,365,1) %>% 
+    
+    #get rid of MIMER grouping
+    ungroup() %>% 
+    
+    #filter back to original df
     filter(!is.na(!!filter_term))
   
 }
@@ -308,26 +430,43 @@ hadm_label <- function(df,filter_term) {
 ###Attaching AKI label
 AKI_label <- function(df,filter_term) {
   
+  #quosure filter term
   filter_term <- enquo(filter_term)
   
+  #check for aki in last 5d
   df %>% 
     prev_event_type_assign(AKI,creats,AKI3,TRUE,
-                           5,1) %>% ungroup() %>% 
+                           5,1) %>% 
+    
+    #get rid of mimer grouping
+    ungroup() %>% 
+    
+    #factorise aki variable
     mutate(AKI = factor(AKI)) %>% 
+    
+    #filter df back to original
     filter(!is.na(!!filter_term))
   
 }
 
 ###Attaching nephrotoxic drugs
 nephrotoxic_join <- function(df) {
+  
+  #join to key with nephrotoxic drugs
   df %>% left_join(nephrotoxics_key) %>% mutate(
+    
+    #make neph agent variable
     Nephrotoxic_agent = case_when(is.na(Nephrotoxic_agent) ~ FALSE, TRUE ~ Nephrotoxic_agent)
   )
 }
 
 ###Attaching contrast
 contrast_join <- function(df) {
+  
+  #join to contrast key df
   df %>% left_join(contrast) %>% mutate(
+    
+    #make new contrast var
     Contrast = case_when(is.na(Contrast) ~ FALSE, TRUE ~ Contrast)
   )
 }
@@ -336,6 +475,8 @@ contrast_join <- function(df) {
 AKI_adjusted_check <- function(df) {
   
   df %>% mutate(AKI = case_when(
+    
+    #qualify AKI by excluding cases with nephrotoxic agents and contrast
     AKI==TRUE & Nephrotoxic_agent==FALSE & Contrast==FALSE ~ TRUE,
     TRUE ~ FALSE
   ))
@@ -345,10 +486,18 @@ AKI_adjusted_check <- function(df) {
 ###Attaching previous AKI label
 prAKI_label <- function(df,filter_term) {
   
+  #quosure for filter term
   filter_term <- enquo(filter_term)
   
   df %>% 
-    prev_event_assign(prAKI,creats,AKI,1e4,1) %>% ungroup() %>% 
+    
+    #check for previous aki
+    prev_event_assign(prAKI,creats,AKI,1e4,1) %>% 
+    
+    #get rid of mimer grouping
+    ungroup() %>% 
+    
+    #filter back to original df
     filter(!is.na(!!filter_term))
   
 }
@@ -356,13 +505,20 @@ prAKI_label <- function(df,filter_term) {
 ###Attaching previous diagnosis label
 diag_label <- function(df,filter_term,label,timeframe,newvar) {
   
+  #quosure filter term
   filter_term <- enquo(filter_term)
   newvar <- enquo(newvar)
   
+  #check for previous diagnosis
   df <- df %>% 
     prev_event_type_assign(!!newvar,hadm,description,
                            label,
-                           timeframe,1) %>% ungroup() %>% 
+                           timeframe,1) %>% 
+    
+    #get rid of mimer grouping
+    ungroup() %>% 
+    
+    #filter back to original df
     filter(!is.na(!!filter_term))
   
 }
@@ -370,11 +526,17 @@ diag_label <- function(df,filter_term,label,timeframe,newvar) {
 ###Detection of new low blood test value
 new_lowvalue <- function(df,new_colname) {
   
+  #quosure new column name
   new_colname <- enquo(new_colname)
   
+  #group by patient
   df %>% group_by(subject_id) %>% mutate(
+    
+    #look for value below bottom end of ref range
     !!new_colname := case_when(
       (valuenum < as.numeric(ref_range_lower)) &
+        
+        #ensure low value is new by looking at row above
         !(lag(valuenum) < lag(as.numeric(ref_range_lower))) ~ TRUE,
       TRUE~FALSE)
   ) %>% ungroup()
@@ -384,11 +546,17 @@ new_lowvalue <- function(df,new_colname) {
 ###Detection of new high blood test value
 new_highvalue <- function(df,new_colname) {
   
+  #quosure new column name
   new_colname <- enquo(new_colname)
   
+  #group by patient
   df %>% group_by(subject_id) %>% mutate(
+    
+    #look for value above upper end of ref range
     !!new_colname := case_when(
       (valuenum > as.numeric(ref_range_upper)) &
+        
+        #ensure high value is new by looking at row above
         !(lag(valuenum) > lag(as.numeric(ref_range_upper))) ~ TRUE,
       TRUE~FALSE)
   ) %>% ungroup()
@@ -398,31 +566,47 @@ new_highvalue <- function(df,new_colname) {
 ###Attaching specified abnormal blood test value label
 abnormal_label <- function(df,df2,new_column,search_term,filter_term) {
   
+  #quosure column names
   filter_term <- enquo(filter_term)
   new_column <- enquo(new_column)
   search_term <- enquo(search_term)
   
-  df2 <- df2 %>% mutate(admittime = #adjust to search after rather than before
+  #jump event df backwards a week to adjust to look at that period after
+  df2 <- df2 %>% mutate(admittime =
                           charttime - (60*60*24*7))
   
   df %>% 
+    
+    #look at the 48h-7d period after the urine
     prev_event_type_assign(!!new_column,df2,!!search_term,TRUE,
                            5,1) %>% ungroup() %>% 
+    
+    #factorise the new column
     mutate(!!new_column := factor(!!new_column)) %>% 
+    
+    #remove nas
     filter(!is.na(!!filter_term))
   
 }
 
 ###Attaching bleeding diagnosis
 bleed_join <- function(df) {
+  
+  #join to bleeding diagnosis key
   df %>% left_join(bleeding) %>% mutate(
+    
+    #make bleeding diagnosis variable
     Bleeding_diagnosis = case_when(is.na(Bleeding_diagnosis) ~ FALSE, TRUE ~ Bleeding_diagnosis)
   )
 }
 
 ###Attaching cytotoxins
 cytotoxic_join <- function(df) {
+  
+  #join to cytotoxic key df
   df %>% left_join(cytotoxics_key) %>% mutate(
+    
+    #make cytotoxic var
     Cytotoxic_agent = case_when(is.na(Cytotoxic_agent) ~ FALSE, TRUE ~ Cytotoxic_agent)
   )
 }
@@ -430,8 +614,11 @@ cytotoxic_join <- function(df) {
 ###Check for marrow suppression adjusted by bleeding/cytotoxins
 marrow_check <- function(df) {
   
+  #look for cytopenias
   df %>% mutate(marrow_suppress = case_when(
     (leukopenia==TRUE|anaemia==TRUE|thrombocytopenia==TRUE)
+    
+    #qualify by excluding bleeding and cytotoxics
     & Bleeding_diagnosis==FALSE & Cytotoxic_agent==FALSE~TRUE, TRUE~FALSE
   ))
   
@@ -439,7 +626,11 @@ marrow_check <- function(df) {
 
 ###Attaching recent biliary procedure(s)
 bil_proc_join <- function(df) {
+  
+  #join to biliary procedure key df
   df %>% left_join(biliary) %>% mutate(
+    
+    #make biliary procedure var for same admission
     Biliary_procedure = case_when(is.na(Biliary_procedure) ~ FALSE, TRUE ~ Biliary_procedure)
   )
 }
@@ -447,8 +638,11 @@ bil_proc_join <- function(df) {
 ###Adjusted check for hepatotoxicity
 lft_check <- function(df) {
   
+  #look for deranged lfts
   df %>% mutate(deranged_lfts = case_when(
     (high_alp==TRUE|high_alt==TRUE|high_ast==TRUE) &
+      
+      #exclude liver failure and biliary procedure from same admission
       pLIVER==FALSE&Biliary_procedure==FALSE~TRUE, TRUE~FALSE
   ))
   
@@ -457,13 +651,14 @@ lft_check <- function(df) {
 ###Overall toxicity check
 toxicity_check <- function(df) {
   
+  #look for renal, liver, haem derangement or coded adverse event
   df %>% mutate(overall_tox = case_when(
     AKI==TRUE|marrow_suppress==TRUE|deranged_lfts==TRUE|abx_ae==TRUE ~TRUE, TRUE~FALSE
   ))
   
 }
 
-###Check for sepsis or high abs frequency on admission
+###Check for sepsis or high obs frequency on admission
 update_sepsis <- function(df) {
   
   df %>% mutate(admission_sepsis = case_when(((admission_infection==TRUE |
@@ -479,14 +674,20 @@ update_sepsis <- function(df) {
 ###Check for death in the following 28 days
 death_check <- function(df,df2,new_column,filter_term) {
   
+  #var quosures
   new_column <- enquo(new_column)
   filter_term <- enquo(filter_term)
   
+  #jump event df back 28days to capture time after
   df2 <- df2 %>% mutate(admittime = deathtime-(60*60*24*28))
   
   df %>% 
+    
+    #look back at the 28d jumped forwards (i.e., looking forwards 28d)
     prev_event_assign(!!new_column,df2,deathtime,
                       28,1) %>% ungroup() %>% 
+    
+    #factorise new column
     mutate(!!new_column := factor(!!new_column)) %>% 
     filter(!is.na(!!filter_term))
   
@@ -495,14 +696,20 @@ death_check <- function(df,df2,new_column,filter_term) {
 ###Check for prior abnormal BMI categorisations
 categorise_bmi <- function(df) {
   df %>%
+    
+    #filter events df down to bmi checks
     filter(grepl("BMI", result_name)) %>%
     mutate(
+      
+      #categorise bmis
       BMI_cat = case_when(
         as.numeric(result_value) >= 30 ~ "Obese",
         as.numeric(result_value) >= 25 & as.numeric(result_value) < 30 ~ "Overweight",
         as.numeric(result_value) >= 18.5 & as.numeric(result_value) < 25 ~ "Normal weight",
         as.numeric(result_value) < 18.5 ~ "Underweight"
       ),
+      
+      #ensure admittime is posix
       admittime = as.POSIXct(chartdate, format = '%Y-%m-%d %H:%M:%S')
     )
 }
@@ -510,15 +717,23 @@ categorise_bmi <- function(df) {
 ###Check for ICU in the following 28 days
 icu_check <- function(df,df2,new_column,filter_term) {
   
+  #var quosures
   new_column <- enquo(new_column)
   filter_term <- enquo(filter_term)
   
+  #push event df dates back 28 days to allow looking forwards
   df2 <- df2 %>% mutate(admittime = admittime-(60*60*24*28))
   
   df %>% 
+    
+    #look back 28 days at humped back df (effectively looking at 28d after)
     prev_event_type_assign(!!new_column,df2,field_value,"ICU",28,1) %>%
     ungroup() %>% 
+    
+    #factorise new variable
     mutate(!!new_column := factor(!!new_column)) %>% 
+    
+    #filter out nas to get back to same df
     filter(!is.na(!!filter_term))
   
 }
@@ -526,36 +741,51 @@ icu_check <- function(df,df2,new_column,filter_term) {
 ###Check if still an inpatient 7 days later
 inpt7d_check <- function(df){
   
+  #make discharge key df
   disch_key <- hadm %>% select(hadm_id,dischtime) %>% distinct(hadm_id,.keep_all = T)
   
-  df %>% left_join(disch_key) %>% mutate(inpatient_7d = 
-                                           case_when(dischtime>
-                                                       as_datetime(charttime) + (60*60*24*7) ~ TRUE,
-                                                     TRUE~FALSE))
+  #join to discharge key df
+  df %>% left_join(disch_key) %>% 
+    
+    #make boolean var for inpatient in last 7d
+    mutate(inpatient_7d = case_when(dischtime>as_datetime(charttime) 
+                                    + (60*60*24*7) ~ TRUE,
+                                    TRUE~FALSE))
 }
 
 ###Check overall sepsis adverse outcomes
 sepsis_ae_check <- function(df) {
   
+  #look for cases that met sepsis criteria and died, admit icu or in a week
   df %>% mutate(sepsis_ae = case_when(admission_sepsis==TRUE &
                                         (death_28d==TRUE |
                                            icu_28d==TRUE |
                                            inpatient_7d==TRUE) ~ TRUE,
                                       TRUE~FALSE),
+                
+                #factorise new var
                 sepsis_ae=factor(sepsis_ae))
 }
 
 ###Collapse multiple organisms to single resistance result per sample
 res_collapse <- function(df,col_name) { 
   
+  #quosure var name
   col_name <- enquo(col_name)
   
+  #group by specimen
   df %>% group_by(micro_specimen_id) %>% 
+    
+    #convert ast results to integers with desired priority
     mutate(!!col_name := case_when(!!col_name=="R"~3,
                                    !!col_name=="I"~2,
                                    !!col_name=="S"~1,
                                    !!col_name=="NT"~0)) %>% 
+    
+    #revert to the highest value for that specimen
     mutate(!!col_name := max(!!col_name)) %>%
+    
+    #convert that highest number back to the corresponding result
     mutate(!!col_name := case_when(!!col_name==3~"R",
                                    !!col_name==2~"I",
                                    !!col_name==1~"S",
@@ -588,8 +818,13 @@ big_res_collapse <- function(df) {
 ###Assigning splitting index
 split_indexer <- function(df,size,seed_no) {
   
+  #round down to nearest integer to desired sample proportion
   smp_size <- floor(size * nrow(df))
+  
+  #set specified seed
   set.seed(seed_no)
+  
+  #set training index based on sample size
   train_ind <- sample(seq_len(nrow(df)), size = smp_size)
   
 }
@@ -597,11 +832,19 @@ split_indexer <- function(df,size,seed_no) {
 ###Converting multinomial resistance variables to binary variables (full df)
 binarise_full_df <- function(df,NT_val,I_val) {
   
+  #select abx columns
   urref <- df %>% select(AMP:VAN)
+  
+  #convert not testeds to desired value
   urref[urref=="NT"] <- NT_val
+  
+  #convert Is to desired value
   urref[urref=="I"] <- I_val
+  
+  #replace abx values with new dataframe
   df[,1:13] <- urref
   
+  #return df as output
   df
   
 }
@@ -677,8 +920,12 @@ pc_dummies <- function(df) {
 combocheck <- function(df) {
   
   df %>%
+    
+    #arranging and grouping
     arrange(subject_id, starttime) %>%
     group_by(subject_id) %>%
+    
+    #look back 36 rows for drug stoptimes that overlap this drug's starttime
     mutate(combination_drug2 = case_when(
       starttime < lag(stoptime) &
         ab_name!=lag(ab_name)~ lag(ab_name),
@@ -864,6 +1111,7 @@ combocheck <- function(df) {
 }
 combodrugcheck <- function(df) {
   
+  #make boolean for the presence of any combinations of abx
   df %>% group_by(subject_id) %>% 
     mutate(
       combo_agent = case_when(
@@ -908,13 +1156,17 @@ combodrugcheck <- function(df) {
     ) %>% ungroup()
   
 }
-
+?pmap
 ###Prior agent start and stop times for combinations
 prior_agent_stoptimes <- function(df) {
   
   df %>%
+    
+    #arranging and grouping
     arrange(subject_id, starttime) %>%
     group_by(subject_id) %>%
+    
+    #get stop times of any agents given combined with this drug
     mutate(prioragent_stoptime2 = case_when(
       !is.na(combination_drug2)~lag(stoptime),
       TRUE~NA
@@ -1064,8 +1316,14 @@ prior_agent_stoptimes <- function(df) {
 }
 starttime_check <- function(df) {
   
+  
   df %>%
-    mutate(combo_starttime = map_dbl(pmap(list(
+    
+    #use map to apply function rowwise
+    mutate(combo_starttime = map_dbl(
+      
+      #map function over list of columns in parallel
+      pmap(list(
       starttime,prioragent_stoptime2,prioragent_stoptime3,
       prioragent_stoptime4,prioragent_stoptime5,prioragent_stoptime6,
       prioragent_stoptime7,prioragent_stoptime8,prioragent_stoptime9,
@@ -1079,13 +1337,22 @@ starttime_check <- function(df) {
       prioragent_stoptime31,prioragent_stoptime32,prioragent_stoptime33,
       prioragent_stoptime34,prioragent_stoptime35,prioragent_stoptime36,
       prioragent_stoptime37
-    ), ~ min(c(...), na.rm = TRUE)),as.POSIXct))
+      
+      #use min to retrieve earliest starttime from the above columns
+    ), ~ min(c(...), na.rm = TRUE)),
+    
+    #ensure result returned as posix date
+    as.POSIXct))
 }
 curr_regime_stoptimes <- function(df) {
   
   df %>%
+    
+    #arranging and grouping
     arrange(subject_id, starttime) %>%
     group_by(subject_id) %>%
+    
+    #check ahead for when current combination ends
     mutate(curr_regime_stoptime2 = case_when(
       !is.na(lead(combination_drug2))~lead(starttime),
       TRUE~NA
@@ -1235,7 +1502,12 @@ curr_regime_stoptimes <- function(df) {
 }
 stoptime_check <- function(df) {
   df %>%
-    mutate(combo_stoptime = map_dbl(pmap(list(
+    
+    #ensure applied rowwise over column vectors
+    mutate(combo_stoptime = map_dbl(
+      
+      #apply in parallel over list of stoptime colnames
+      pmap(list(
       stoptime,curr_regime_stoptime2,curr_regime_stoptime3,
       curr_regime_stoptime4,curr_regime_stoptime5,curr_regime_stoptime6,
       curr_regime_stoptime7,curr_regime_stoptime8,curr_regime_stoptime9,
@@ -1249,19 +1521,28 @@ stoptime_check <- function(df) {
       curr_regime_stoptime31,curr_regime_stoptime32,curr_regime_stoptime33,
       curr_regime_stoptime34,curr_regime_stoptime35,curr_regime_stoptime36,
       curr_regime_stoptime37
-    ), ~ min(c(...), na.rm = TRUE)),as.POSIXct))
+      
+      #check for earliest stoptime of current regime with min
+    ), ~ min(c(...), na.rm = TRUE)),
+    
+    #ensure rowwise output is posix date
+    as.POSIXct))
 }
 
 ###Check if second agent of combination
 combo_booleans <- function(df) {
   
   df <- df %>%
+    
+    #combine drugs in combination into single column with underscore seperator
     unite("all_combo_abs", ab_name,combination_drug2:combination_drug37, sep = "_", remove = FALSE,na.rm=TRUE)
   
+  #add suffix to ampicillin to differentiate from ampicillin-sulbactam
   df <- df %>% mutate(
     all_combo_abs = paste0(all_combo_abs,"_end")
   )
   
+  #booleans for presence of agents in new united variable
   df %>% mutate(
     Ampicillin = case_when(
       grepl("Ampicillin_",all_combo_abs)|grepl("Ampicillin_end",all_combo_abs) ~ TRUE,
@@ -1308,6 +1589,8 @@ combo_booleans <- function(df) {
 
 ###Count number of drugs in combination
 count_drugs <- function(df) {
+  
+  #count number of drugs in combination variable
   df %>% mutate(drug_count=Ampicillin+`Ampicillin/sulbactam`+
                   `Piperacillin/tazobactam`+Cefazolin+Ceftriaxone+
                   Ceftazidime+Cefepime+
@@ -1319,17 +1602,30 @@ count_drugs <- function(df) {
 ###Replace name, starttimes, and stoptimes with combination values
 combo_mutate <- function(df) {
   df %>%
-    mutate(ab_combination = apply(select(., start_col:end_col), 1, function(row) {
-      true_names <- names(row)[row]
-      str_c(true_names, collapse = "_")
-    }))
+    mutate(ab_combination = 
+             
+             #select specified range of columns
+             apply(select(., start_col:end_col), 1, 
+                                  function(row) {
+                                    
+                                    #get names in that row
+                                    true_names <- names(row)[row]
+                                    
+                                    #concatenate abx column names where true
+                                    str_c(true_names, collapse = "_")
+                                    }
+    ))
 }
 times_amend <- function(df) {
+  
+  #ensure there is either a single or combination starttime
   df %>% mutate(ab_name=ab_combination,ab_name=ab_combination,
                 starttime=case_when(
                   !is.na(combo_starttime)~as_datetime(combo_starttime),
                   TRUE~as_datetime(starttime)
                 ),
+                
+                #do the same for stoptime
                 stoptime=case_when(
                   !is.na(combo_stoptime)~as_datetime(combo_stoptime),
                   TRUE~as_datetime(stoptime)
@@ -1339,25 +1635,44 @@ times_amend <- function(df) {
 
 ###Filtering and binding combinations to full dataset
 dup_remove <- function(df) {
+  
+  #distinct by patient, antibiotic and starttime
   df %>% distinct(subject_id,ab_name,as.Date(starttime),.keep_all = T) %>% 
+    
+    #remove starttimes
     select(-`as.Date(starttime)`)
 }
 bind_combos <- function(abx_df,combo_df) {
+  
+  #filter abx df to just single abx
   abx_df <- abx_df %>% anti_join(combo_df,by="poe_id")
+  
+  #bind single and combination abs togather
   tibble(rbind(abx_df,combo_df)) %>% arrange(subject_id,starttime)
 }
 rowids <- function(df) {
+  
+  #get row ids
   df %>% mutate(row_id = seq(1,nrow(df))) %>% 
+    
+    #move row ids to first column
     relocate(row_id,.before = "subject_id")
 }
 
 ###Make 2-agent combination susceptibilities
 double_sens_columns <- function(df) {
   
+  ##
   for (pair in comb_pairs) {
+    
+    #make vectors with two AST result columns of interest
     col1 <- df[[pair[1]]]
     col2 <- df[[pair[2]]]
+    
+    #paste abx together to make new columb name
     new_col_name <- paste(pair, collapse = "_")
+    
+    #if any r results, return r, otherwise s
     df[[new_col_name]] <- ifelse(col1 == 'R' & col2 == 'R', 'R', 'S')
   }
   
@@ -1367,9 +1682,13 @@ double_sens_columns <- function(df) {
 
 ###Amending results for chromosomal AmpCs
 AmpC_variable <- function(df) {
+  
+  #check if organism is contitutive ampc producer
   df %>% mutate(AmpC=case_when(org_fullname %in% ampc_species~TRUE,TRUE~FALSE))
 }
 AmpC_converter <- function(df) {
+  
+  #populate resistances conferrred by ampc
   df %>% mutate(
     AMP=case_when(AmpC~"R",TRUE~AMP),SAM=case_when(AmpC~"R",TRUE~SAM),
     TZP=case_when(AmpC~"R",TRUE~TZP),CZO=case_when(AmpC~"R",TRUE~CZO),
@@ -1387,6 +1706,8 @@ AmpC_converter <- function(df) {
 
 ###Key generation for triage data and observations
 keymaker <- function(df) {
+  
+  #make ket dataframe with observations
   df %>% select(hadm_id,temperature,heartrate,
                 resprate,o2sat,sbp,dbp,
                 chiefcomplaint) %>% 
