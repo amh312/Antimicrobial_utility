@@ -867,7 +867,20 @@ for (outcome in colnames(urines5_outcomes)[1:13]) {
           
         urines5_filtered2 <- urines5_combined[which(urines_ref$anchor_year_group==time_seq[tim2]),]
         trainIndex2 <- createDataPartition(urines5_filtered2[[outcome]], p = 0.8, list = FALSE, times = 1)
+        
+        if (time_seq[tim]==time_seq[tim2]) {
+          
+          urines5Test <- urines5_filtered1[-trainIndex1, ]
+          
+          print("same time period")
+          
+        } else {
+        
         urines5Test <- urines5_filtered2[-trainIndex2, ]
+        
+        print("different time period")
+        
+        }
         
         predictor_columns <- colnames(urines5_predictors)
         selected_columns <- intersect(predictor_columns, colnames(urines5Train))
@@ -1542,7 +1555,16 @@ for (outcome in colnames(abx_outcomes)) {
           
           abx_filtered2 <- abx_combined[which(urines_ref$anchor_year_group==time_seq[tim2]),]
           trainIndex2 <- createDataPartition(abx_filtered2[[outcome]], p = 0.8, list = FALSE, times = 1)
-          abxTest <- abx_filtered2[-trainIndex2, ]
+          
+          if (time_seq[tim]==time_seq[tim2]) {
+            
+            abxTest <- abx_filtered1[-trainIndex1, ]
+            
+          } else {
+            
+            abxTest <- abx_filtered2[-trainIndex2, ]
+            
+          }
           
           predictor_columns <- colnames(abx_predictors)
           selected_columns <- intersect(predictor_columns, colnames(abxTrain))
@@ -1807,10 +1829,12 @@ max_timemets <- timemets %>% group_by(Model,Train_year,Test_year) %>%
 max_timemets %>% arrange(desc(maxAUC_meandif))
 max_timemets %>% arrange(desc(max_sd))
 timemets %>% group_by(Model,Train_year,Test_year) %>% 
-  summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% filter(Model=="overall_tox") %>% 
+  summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% 
+  filter(Model==max_timemets %>% arrange(desc(maxAUC_meandif)) %>% dplyr::slice(1) %>% select(Model) %>% unlist()) %>% 
   arrange(desc(mean_AUC))
 timemets %>% group_by(Model,Train_year,Test_year) %>% 
-  summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% filter(Model=="CDI") %>% 
+  summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% 
+  filter(Model==max_timemets %>% arrange(desc(max_sd)) %>% dplyr::slice(1) %>% select(Model) %>% unlist()) %>% 
   arrange(desc(sd_AUC))
 
 ###Fairness analysis
