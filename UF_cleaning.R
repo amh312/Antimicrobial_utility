@@ -335,14 +335,15 @@ res_sim <- function(df,col,condition,col2,condition2,antibiotic,alpha_prior,beta
                                        grepl(condition2,!!col2) &
                                        is.na(!!antibiotic)))
       
-      #function to apply bayes' theorem to each potential value of x* (predicted n res)
+      #vectorised function to apply bayes' theorem to each potential value of x* (predicted n res)
       BetaBinom <- Vectorize(function(x_star){
         
         #use bayes' theorem to calculate posterior pred density (log to avoid overflow from large vals)
         log.val <- lchoose(N_star, x_star) + lbeta(posterior_alpha+x_star,posterior_beta+N_star-x_star) - lbeta(posterior_alpha,posterior_beta)
         
         #convert log vals back to actual
-        return(exp(log.val))
+        exp(log.val)
+        
       })
       
       #run vectorised function to get beta-binom posterior predictive
@@ -1317,6 +1318,16 @@ icd_grouping <- function(df) {
   
 }
 
+###Imputing not tested
+not_tested <- function(df) {
+  df %>% mutate(MEM = case_when(grepl("Enterococcus",org_fullname) &
+                                  is.na(MEM) ~ "NT",
+                                TRUE ~ MEM),
+                SXT = case_when(grepl("Enterococcus",org_fullname) &
+                                  is.na(SXT) ~ "NT",
+                                TRUE ~ SXT))
+}
+
 ##Data upload (CSV files accessible at https://physionet.org/content/mimiciv/2.2/)
 drugs <- read_csv("prescriptions.csv") #Prescriptions
 diagnoses <- read_csv("diagnoses_icd.csv") #ICD-coded diagnoses
@@ -1765,14 +1776,6 @@ pos_urines <- pos_urines %>% filter(!is.na(TZP))
 missing_check(pos_urines)
 
 ###Impute 'not tested' variable for missing Enterococus meropenem and septrin results
-not_tested <- function(df) {
-  df %>% mutate(MEM = case_when(grepl("Enterococcus",org_fullname) &
-                                  is.na(MEM) ~ "NT",
-                                TRUE ~ MEM),
-                SXT = case_when(grepl("Enterococcus",org_fullname) &
-                                  is.na(SXT) ~ "NT",
-                                TRUE ~ SXT))
-}
 pos_urines <- pos_urines %>% not_tested()
 micro <- micro %>% not_tested()
 
