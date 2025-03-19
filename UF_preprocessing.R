@@ -13,7 +13,7 @@ prev_event_assign <- function(df,B_var,event_df,event_var,no_days,no_events) {
     
     #syncing var types and getting rid of nas
     mutate(event = {{event_var}}) %>% 
-    select('subject_id', "event", charttime = 'admittime') %>% 
+    select(subject_id, event, charttime = 'admittime') %>% 
     mutate(charttime=as.POSIXct(charttime,format='%Y-%m-%d %H:%M:%S')) %>% 
     filter(!is.na(event)) %>% 
     
@@ -115,7 +115,7 @@ prev_event_type_assign <- function(df,B_var,event_df,event_var,event_type,no_day
     
     #sync up var types
     mutate(event = {{event_var}}) %>% 
-    select('subject_id', "event", charttime = 'admittime') %>% 
+    select(subject_id, event, charttime = 'admittime') %>% 
     mutate(charttime=as.POSIXct(charttime,format='%Y-%m-%d %H:%M:%S')) %>% 
     filter(grepl(event_type, event)) %>%
     
@@ -143,9 +143,9 @@ prev_event_type_assign <- function(df,B_var,event_df,event_var,event_type,no_day
 }
 
 ###Search for previous event across multiple variables
-apply_prev_event <- function(df, param,organism) {
+apply_prev_event <- function(df, event,organism) {
   df %>%
-    prev_event_type_assign(!!sym(param), urine_df, org_fullname,organism, 365, 1)
+    prev_event_type_assign(!!sym(event), urine_df, org_fullname,organism, 365, 1)
 }
 
 ###Assigning "NT" variable to relevant NAs in microbiology dataframe
@@ -171,12 +171,12 @@ NT_assigner <- function(df) {
 prev_AST_applier <- function(df1,micro_data,suffix,result,timeframe=365,n_events=1) {
   
   #add p prefix and result type suffix to abx list
-  params <- paste0("p", antibiotics, suffix)
+  ast_featnames <- paste0("p", antibiotics, suffix)
   
   #redefine prev event func to allow arg passage from wrapping func
-  apply_prev_event <- function(df, param, antibiotic) {
+  apply_prev_event <- function(df, newvar, antibiotic) {
     df %>%
-      prev_event_type_assign(!!sym(param), micro_data, !!sym(antibiotic), result, timeframe, n_events)
+      prev_event_type_assign(!!sym(newvar), micro_data, !!sym(antibiotic), result, timeframe, n_events)
   }
   
   #use reduce to loop along abx list and iteratively update urines df
@@ -184,7 +184,7 @@ prev_AST_applier <- function(df1,micro_data,suffix,result,timeframe=365,n_events
                 
                 #loop over abx and check for previous specified result
                 function(df, i) {
-                  apply_prev_event(df, params[i], antibiotics[i])
+                  apply_prev_event(df, ast_featnames[i], antibiotics[i])
                   }
                 
                 #define urines df as starting point
@@ -307,11 +307,11 @@ prev_ICD_applier <- function(df,icd_df,prefix,codes) {
   apply_prev_event_assignments <- function(df, code) {
     
     #add prefix to ICD code
-    param_name <- paste0(prefix, code)
+    icd_featname <- paste0(prefix, code)
     
     #check for specified prev icd code using sym to convert str to varname
     df %>%
-      prev_event_type_assign(!!sym(param_name), icd_df, icd_group, code, 365, 1)
+      prev_event_type_assign(!!sym(icd_featname), icd_df, icd_group, code, 365, 1)
   }
   
   #iteratively update pos_urines with reduce
@@ -359,8 +359,12 @@ assign_bmi_events <- function(df, bmi_df, categories, days, min_events) {
          
          #loop prev event search across bmi cats with preceding p
          function(acc, category) {
-           param <- paste0("p", category)
-           prev_event_type_assign(acc, !!sym(param), bmi_df, BMI_cat, category, days, min_events)
+           
+           #make features name for bmi
+           bmi_featname <- paste0("p", category)
+           
+           prev_event_type_assign(acc, !!sym(bmi_featname), bmi_df, BMI_cat, category, days, min_events)
+           
            }
          
          #specify urines df as starting point
@@ -726,7 +730,7 @@ icu_check <- function(df,df2,new_column,filter_term) {
   
   df %>% 
     
-    #look back 28 days at humped back df (effectively looking at 28d after)
+    #look back 28 days at jumped back df (effectively looking at 28d after)
     prev_event_type_assign(!!new_column,df2,field_value,"ICU",28,1) %>%
     ungroup() %>% 
     
@@ -1156,7 +1160,7 @@ combodrugcheck <- function(df) {
     ) %>% ungroup()
   
 }
-?pmap
+
 ###Prior agent start and stop times for combinations
 prior_agent_stoptimes <- function(df) {
   
@@ -1503,10 +1507,10 @@ curr_regime_stoptimes <- function(df) {
 stoptime_check <- function(df) {
   df %>%
     
-    #ensure applied rowwise over column vectors
+    #map_dbl to allow application of posix reformat over output vector
     mutate(combo_stoptime = map_dbl(
       
-      #apply in parallel over list of stoptime colnames
+      #pmap to allow application of min value check across list of vectors
       pmap(list(
       stoptime,curr_regime_stoptime2,curr_regime_stoptime3,
       curr_regime_stoptime4,curr_regime_stoptime5,curr_regime_stoptime6,
@@ -1522,10 +1526,10 @@ stoptime_check <- function(df) {
       curr_regime_stoptime34,curr_regime_stoptime35,curr_regime_stoptime36,
       curr_regime_stoptime37
       
-      #check for earliest stoptime of current regime with min
+      #apply min across list of stoptime vectors to produce vector of earliest stoptimes
     ), ~ min(c(...), na.rm = TRUE)),
     
-    #ensure rowwise output is posix date
+    #apply posix across the output vector to convert back to datetime
     as.POSIXct))
 }
 
@@ -1663,7 +1667,7 @@ rowids <- function(df) {
 double_sens_columns <- function(df) {
   
   ##
-  for (pair in comb_pairs) {
+  for (pair in ab_pairs) {
     
     #make vectors with two AST result columns of interest
     col1 <- df[[pair[1]]]
@@ -1688,7 +1692,7 @@ AmpC_variable <- function(df) {
 }
 AmpC_converter <- function(df) {
   
-  #populate resistances conferrred by ampc
+  #populate resistances conferred by ampc
   df %>% mutate(
     AMP=case_when(AmpC~"R",TRUE~AMP),SAM=case_when(AmpC~"R",TRUE~SAM),
     TZP=case_when(AmpC~"R",TRUE~TZP),CZO=case_when(AmpC~"R",TRUE~CZO),
@@ -1707,13 +1711,72 @@ AmpC_converter <- function(df) {
 ###Key generation for triage data and observations
 keymaker <- function(df) {
   
-  #make ket dataframe with observations
+  #make key dataframe with observations
   df %>% select(hadm_id,temperature,heartrate,
                 resprate,o2sat,sbp,dbp,
                 chiefcomplaint) %>% 
     distinct(hadm_id,.keep_all = T)
   
 }
+
+###Binding blood test events to urines df
+blood_binder <- function(df,df2,test_name) {
+  
+  #quosure
+  test_name <- enquo(test_name)
+  
+  #change charttime to character to match target df
+  df2 <- df2 %>% mutate(charttime=as.character(charttime))
+  
+  #group by patient and arrange by charttime
+  df %>% 
+    bind_rows(df2) %>%
+    group_by(subject_id) %>% 
+    arrange(charttime) %>% 
+    
+    #check for blood test in previous 5 rows
+    mutate(!!test_name := case_when(is.na(lag(micro_specimen_id))~lag(valuenum),
+                                    !is.na(lag(micro_specimen_id))&is.na(lag(micro_specimen_id,n=2))~lag(valuenum,n=2),
+                                    !is.na(lag(micro_specimen_id))&!is.na(lag(micro_specimen_id,n=2))&is.na(lag(micro_specimen_id,n=3))~lag(valuenum,n=3),
+                                    !is.na(lag(micro_specimen_id))&!is.na(lag(micro_specimen_id,n=2))&!is.na(lag(micro_specimen_id,n=3))&is.na(lag(micro_specimen_id,n=4))~lag(valuenum,n=4),
+                                    !is.na(lag(micro_specimen_id))&!is.na(lag(micro_specimen_id,n=2))&!is.na(lag(micro_specimen_id,n=3))&!is.na(lag(micro_specimen_id,n=4))&is.na(lag(micro_specimen_id,n=5))~lag(valuenum,n=5),
+                                    TRUE~NA
+    )) %>%
+    ungroup() %>%
+    
+    #filter back to target dataframe
+    filter(!is.na(micro_specimen_id)) %>% 
+    
+    #remove linking variables
+    select(-(labevent_id:priority))
+  
+}
+
+###Check for antibiotic prescription in the last year according to vector element
+apply_prev_rx365 <- function(df, suffix, antibiotic) {
+  
+  #make previous antibiotic feature name
+  abx_featname <- paste0("p", suffix)
+  
+  df %>%
+    
+    #apply previous treatment check to that antibiotic
+    prev_rx_assign(!!sym(abx_featname), drugs, antibiotic, ab_name, 365, 1)
+}
+
+###Check for antibiotic prescription in the last week according to vector element
+apply_prev_rx7 <- function(df, suffix, antibiotic) {
+  
+  #paste day 7 onto antibiotic name for feature name
+  abx_featname <- paste0("d7", suffix)
+  
+  df %>%
+    
+    #check for specified previous antibiotic for that antibiotic name
+    prev_rx_assign(!!sym(abx_featname), drugs, antibiotic, ab_name, 7, 1)
+  
+}
+
 
 ##Data upload (CSV files accessible at https://physionet.org/content/mimiciv/2.2/)
 
@@ -1725,15 +1788,15 @@ pats <- read_csv("patients.csv") #Patient demographics
 services <- read_csv("services.csv") #Service providers
 d_icd_diagnoses <- read_csv("d_icd_diagnoses.csv") #icd codes
 diagnoses_raw <- read_csv("diagnoses_icd.csv") #icd epi
-diagnoses <- read_csv("diagnoses_clean.csv")
-procedures <- read_csv("procedures_clean.csv")
-poe <- read_csv("poe_clean.csv")
-micro <- read_csv("micro_clean2.csv")
-drugs <- read_csv("drugs_clean.csv")
-vitalsign <- read_csv("vitalsign.csv")
-triage <- read_csv("triage.csv")
-edstays <- read_csv("edstays.csv")
-pos_urines <- read_csv("pos_urines_pre_features.csv")
+diagnoses <- read_csv("diagnoses_clean.csv") #diagnoses cleaned in UF_clean
+procedures <- read_csv("procedures_clean.csv") #procedures cleaned in UF_clean
+poe <- read_csv("poe_clean.csv") #care events cleaned in UF_clean
+micro <- read_csv("micro_clean2.csv") #micro cleaned in UF_clean
+drugs <- read_csv("drugs_clean.csv") #prescriptions cleaned in UF_clean
+vitalsign <- read_csv("vitalsign.csv") #vita slign data for observations
+triage <- read_csv("triage.csv") #triage info for illness severity score
+edstays <- read_csv("edstays.csv") #edstays to link severity scores to admissions
+pos_urines <- read_csv("pos_urines_pre_features.csv") #urines cleaned in UF_clean
 
 ##Finding previous AST results
 
@@ -1769,9 +1832,13 @@ urine_df <- micro %>% filter(test_name=="URINE CULTURE" & !is.na(org_fullname)) 
   mutate(admittime=charttime)
 organisms <- urine_df %>% count(org_fullname) %>% arrange(desc(n)) %>% 
   dplyr::slice(1:10) %>% pull(org_fullname)
-params <- paste0("pG", organisms,"Urine")
+org_featnames <- paste0("pG", organisms,"Urine")
 pos_urines <- reduce(seq_along(organisms), function(df, i) {
-  apply_prev_event(df, params[i], organisms[i])
+  
+  #apply previous event check across organism list
+  apply_prev_event(df, org_featnames[i], organisms[i])
+  
+  #feed in urines df at each iteration
 }, .init = pos_urines) %>%
   ungroup()
 
@@ -1779,36 +1846,31 @@ pos_urines <- reduce(seq_along(organisms), function(df, i) {
 
 ###Assigning reference lists of antimicrobials and new feature suffixes
 antibiotics <- c("Ampicillin", "Amoxicillin", "Amoxicillin/clavulanic acid", "Ampicillin/sulbactam",
-                 "Piperacillin/tazobactam", "Cefazolin", "Cefalexin", "Cefpodoxime proxetil",
+                 "Piperacillin/tazobactam", "Cefazolin",
                  "Ceftriaxone", "Ceftazidime", "Cefepime", "Meropenem", "Ertapenem",
                  "Aztreonam", "Ciprofloxacin", "Levofloxacin", "Gentamicin", "Tobramycin",
                  "Amikacin", "Rifampicin", "Trimethoprim/sulfamethoxazole", "Nitrofurantoin",
                  "Erythromycin", "Clarithromycin", "Azithromycin", "Clindamycin", "Vancomycin",
                  "Metronidazole", "Linezolid", "Daptomycin", "Doxycycline")
-suffixes <- c("AMPrx", "AMXrx", "AMCrx", "SAMrx", "TZPrx", "CZOrx", "CZOrx", "CZOrx",
-              "CROrx", "CAZrx", "FEPrx", "MEMrx", "ETPrx", "ATMrx", "CIPrx", "CIPrx",
-              "GENrx", "TOBrx", "AMKrx", "RIFrx", "SXTrx", "NITrx", "ERYrx", "CLRrx",
-              "AZMrx", "CLIrx", "VANrx", "MTRrx", "LNZrx", "DAPrx", "DOXrx")
+suffixes <- antibiotics %>% as.ab() %>% paste0("rx")
 
 ###At least one inpatient antimicrobial prescription in the last year
-apply_prev_rx <- function(df, suffix, antibiotic) {
-  param_name <- paste0("p", suffix)
-  df %>%
-    prev_rx_assign(!!sym(param_name), drugs, antibiotic, ab_name, 365, 1)
-}
 pos_urines <- reduce(seq_along(antibiotics), function(df, i) {
-  apply_prev_rx(df, suffixes[i], antibiotics[i])
+  
+  #apply previous prescription check across antibiotic names
+  apply_prev_rx365(df, suffixes[i], antibiotics[i])
+  
+  #feed urines df back in to update
 }, .init = pos_urines) %>%
   ungroup()
 
 ###At least one inpatient antimicrobial prescription in the last week
-apply_prev_rx <- function(df, suffix, antibiotic) {
-  param_name <- paste0("d7", suffix)
-  df %>%
-    prev_rx_assign(!!sym(param_name), drugs, antibiotic, ab_name, 7, 1)
-}
 pos_urines <- reduce(seq_along(antibiotics), function(df, i) {
-  apply_prev_rx(df, suffixes[i], antibiotics[i])
+  
+  #apply 7d check across full antibiotic list
+  apply_prev_rx7(df, suffixes[i], antibiotics[i])
+  
+  #feed urine df back in to update
 }, .init = pos_urines) %>%
   ungroup()
 
@@ -1837,15 +1899,22 @@ pos_urines <- pos_urines %>%
   gender_assign(MALE,pats)
 
 ###Patient age group at time of admission
-pats <- pats %>% mutate(standard_age = case_when(anchor_age < 30 ~ 18,
-                                                 anchor_age >=30 & anchor_age < 40 ~ 30,
-                                                 anchor_age >=40 & anchor_age < 50 ~ 40,
-                                                 anchor_age >=50 & anchor_age < 60 ~ 50,
-                                                 anchor_age >=60 & anchor_age < 70 ~ 60,
-                                                 anchor_age >=70 & anchor_age < 80 ~ 70,
-                                                 anchor_age >=80 & anchor_age < 90 ~ 80,
-                                                 anchor_age >=90 ~ 90)) %>% 
-  group_by(subject_id) %>% summarise(standard_age=mean(standard_age,na.rm=TRUE))
+agelist <- seq(30,80,10)
+pats <- pats %>% mutate(standard_age=anchor_age)
+pats <- reduce(seq_along(agelist),function(df,i){
+  
+  #call anyone under 30 18
+  df %>% mutate(standard_age=case_when(anchor_age < 30 ~ 18,
+                                       
+    #otherwise take the floor value of that decade
+    anchor_age>=agelist[i] &
+      anchor_age<agelist[i]+10 ~ agelist[i],
+    
+    #unless over 90, in which case call 90
+    anchor_age >=90 ~ 90,TRUE~standard_age))
+  
+},.init=pats)
+pats <- pats %>% group_by(subject_id) %>% summarise(standard_age=mean(standard_age,na.rm=TRUE))
 pos_urines <- left_join(pos_urines,pats,by="subject_id")
 
 ###Other patient demographics
@@ -1865,9 +1934,7 @@ pos_urines <- left_join(pos_urines,hadm_admission,by="hadm_id") %>%
   outpatient_check()
 
 ###Coded ICD-10 diagnosis groups for admissions in the last year
-diag_codes <- c("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", 
-                "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T",
-                "V", "W", "X", "Y", "Z")
+diag_codes <- LETTERS[LETTERS!="U"]
 pos_urines <- pos_urines %>% prev_ICD_applier(diagnoses,"pDIAG_",diag_codes)
 
 ###Coded ICD-10 procedure groups for admissions in the last year
@@ -1915,29 +1982,48 @@ pos_urines <- pos_urines %>% mutate(ordertime=chartdate) %>%
                                    ob_freq = standardize(ob_freq)) %>% 
   select(-ordertime)
 
-###Other specific previous care events
-pos_urines <- pos_urines %>% 
-  care_event_assigner(poe,"cath",field_value,pCATH,"ordertime",28) %>%  ###At least one urinary catheter insertion in the last 28 days
-  care_event_assigner(poe,"DNR",field_value,pDNR,"ordertime",365) %>% ###At least one 'do not resuscitate' order in the last year
-  care_event_assigner(poe,"Discharge",field_value,pDISC,"ordertime",28) %>% ###At least one discharge from hospital in the last 28 days
-  care_event_assigner(poe,"ICU",field_value,pICU,"ordertime",28) %>% ###At least one intensive care admission in the last 28 days
-  care_event_assigner(poe,"Psychiatry",field_value,pPsych,"ordertime",365) %>% ###At least one psychiatry review in the last year
-  care_event_assigner(poe,"Nephrostomy",field_value,pNeph,"ordertime",365) %>% ###At least one nephrostomy insertion in the last year
-  care_event_assigner(poe,"Surgery",field_value,pSURG,"ordertime",365) %>% ###At least one surgical procedure in the last year
-  care_event_assigner(poe,"Hydration",field_value,pHyd,"ordertime",28) %>% ###At least one hydration order in the last 28 days
-  care_event_assigner(poe,"NGT",field_value,pNGT,"ordertime",28) %>% ###At least one nasogastric tube insertion in the last 28 days
-  care_event_assigner(poe,"Chemo",field_value,pChemo,"ordertime",28) %>%  ###At least one administration of cancer chemotherapy in the last 28 days
-  care_event_assigner(poe,"Nutrition consult",order_subtype,pNUTR,"ordertime",365) %>%  ###At least one nutrition consultation in the last year
-  care_event_assigner(poe,"Physical Therapy",order_subtype,pPhysio,"ordertime",365) %>% ###At least one physiotherapy consultation in the last year
-  care_event_assigner(poe,"Restraints",order_subtype,pRestr,"ordertime",365) %>% ###At least one requirement for restraints in the last year
-  care_event_assigner(poe,"Occupational Therapy",order_subtype,pOT,"ordertime",365) %>% ###At least one occupational therapy consultation in the last year
-  care_event_assigner(poe,"Central TPN",order_subtype,pTPN,"ordertime",365) ###At least one administration of total parenteral nutrition in the last year
+###Care events (fields)
+fieldlist <- c("cath","DNR","Discharge","ICU","Psychiatry","Nephrostomy",         
+                "Surgery","Hydration","NGT","Chemo")
+fieldnames <- c("pCATH","pDNR","pDISC","pICU","pPsych","pNeph","pSURG",
+                "pHyd","pNGT","pChemo")
+fieldtfram <- c(28,365,28,28,365,365,365,28,28,28)
+pos_urines <- reduce(seq_along(fieldlist),function(df,i){
+  
+  df %>%
+    
+    #check specified event
+    care_event_assigner(poe,fieldlist[i],field_value,
+                        
+                        #populate specified feature name
+                        !!sym(fieldnames[i]),"ordertime",
+                        
+                        #check specified timeframe
+                        fieldtfram[i])
+    
+},.init=pos_urines)
 
-##Name of organism grown
-recipethis <- recipe(~org_fullname,data=pos_urines)
-dummies <- recipethis %>% step_dummy(org_fullname) %>% prep(training = pos_urines)
-dummy_data <- bake(dummies,new_data = NULL)
-pos_urines <- pos_urines %>% cbind(dummy_data) %>% tibble()
+#Care events (orders)
+orderlist <- c("Nutrition consult","Physical Therapy","Restraints",
+               "Occupational Therapy","Central TPN")
+ordernames <- c("pNUTR","pPhysio","pRestr","pOT","pTPN")
+pos_urines <- reduce(seq_along(orderlist),function(df,i){
+  
+  df %>% 
+    
+    #check for specified event
+    care_event_assigner(poe,orderlist[i],order_subtype,
+                        
+                        #allocate specified feature name, check 365 days
+                        !!sym(ordernames[i]),"ordertime",365)
+  
+},.init=pos_urines)
+
+##Name of organism grown (dummy boolean features)
+org_recipe <- recipe(~org_fullname,data=pos_urines)
+orgdummyvars <- org_recipe %>% step_dummy(org_fullname) %>% prep(training = pos_urines)
+orgvar_cols <- bake(orgdummyvars,new_data = NULL)
+pos_urines <- pos_urines %>% cbind(orgvar_cols) %>% tibble()
 
 ##Standardised observations
 
@@ -1950,34 +2036,22 @@ triagekey <- triage %>% select(hadm_id,temperature,heartrate,
                                chiefcomplaint) %>% 
   distinct(hadm_id,.keep_all = T)
 pos_urines <- pos_urines %>% left_join(triagekey)
-pos_urines <- pos_urines %>% mutate(o2sat = case_when(o2sat>100 ~ 100,
+pos_urines <- pos_urines %>% mutate(o2sat = case_when(o2sat>100 ~ 100, #remove implausible sats
                                                       TRUE~o2sat))
-pos_urines <- pos_urines %>% mutate(dbp = case_when(dbp==775 ~ 75,
+pos_urines <- pos_urines %>% mutate(dbp = case_when(dbp==775 ~ 75, #remove implausible hr
                                                       TRUE~dbp))
-
-pos_urines <- pos_urines %>% mutate(heartrate=case_when(is.na(heartrate)~mean(pos_urines$heartrate,na.rm=T),
-                                                      TRUE~heartrate),
-                      resprate=case_when(is.na(resprate)~mean(pos_urines$resprate,na.rm=T),
-                                          TRUE~resprate),
-                      sbp=case_when(is.na(sbp)~mean(pos_urines$sbp,na.rm=T),
-                                          TRUE~sbp),
-                      dbp=case_when(is.na(dbp)~mean(pos_urines$dbp,na.rm=T),
-                                          TRUE~dbp),
-                      acuity=case_when(is.na(acuity)~mean(pos_urines$acuity,na.rm=T),
-                                          TRUE~acuity),
-                      o2sat=case_when(is.na(o2sat)~mean(pos_urines$o2sat,na.rm=T),
-                                          TRUE~o2sat),
-                      temperature=case_when(is.na(temperature)~mean(pos_urines$temperature,na.rm=T),
-                                      TRUE~temperature),
-                      )
-pos_urines <- pos_urines %>% mutate(heartrate=standardize(heartrate),
-                                    resprate=standardize(heartrate),
-                                    sbp=standardize(heartrate),
-                                    dbp=standardize(heartrate),
-                                    acuity=standardize(heartrate),
-                                    o2sat=standardize(heartrate),
-                                    temperature=standardize(temperature))
-
+obslist <- c("heartrate","resprate","sbp","dbp","acuity","o2sat","temperature")
+pos_urines <- reduce(seq_along(obslist),function(df,i){
+  
+  #impute missing obs values with mean of the rest of the column
+  df %>% mutate(!!sym(obslist[i]):=case_when(is.na(!!sym(obslist[i]))~
+                                               mean(!!sym(obslist[i]),na.rm=T),
+                                            TRUE~!!sym(obslist[i]))) %>% 
+    
+    #standardise obs
+    mutate(!!sym(obslist[i]):=standardize(!!sym(obslist[i])))
+  
+},.init=pos_urines)
 
 ###Adding presenting complaint variables
 pos_urines %>% count(chiefcomplaint) %>% arrange(desc(n)) %>% print(n=200)
@@ -1985,139 +2059,38 @@ pos_urines <- pos_urines %>% pc_dummies() %>% select(-chiefcomplaint)
 
 ###Preceding blood tests
 labevents_urine <- labevents %>% semi_join(pos_urines,by="hadm_id")
-alt <- d_labitems %>% filter(grepl("Alanine Aminotransferase",label))
-alb <- d_labitems %>% filter(grepl("Albumin",label))
-alp <- d_labitems %>% filter(grepl("Alkaline Phosphatase",label))
-bic <- d_labitems %>% filter(grepl("Bicarbonate",label))
-bil <- d_labitems %>% filter(grepl("Bilirubin, Total",label))
-cre <- d_labitems %>% filter(grepl("^Creatinine$",label))
-pot <- d_labitems %>% filter(grepl("Potassium",label))
-sod <- d_labitems %>% filter(grepl("Sodium",label))
-hct <- d_labitems %>% filter(grepl("Hematocrit",label))
-hb <- d_labitems %>% filter(grepl("Hemoglobin",label))
-lym <- d_labitems %>% filter(grepl("Lymphocytes",label))
-mon <- d_labitems %>% filter(grepl("Monocytes",label))
-neu <- d_labitems %>% filter(grepl("Neutrophils",label))
-plt <- d_labitems %>% filter(grepl("Platelet Count",label))
-pt <- d_labitems %>% filter(grepl("^PT$",label))
-ptt <- d_labitems %>% filter(grepl("PTT",label))
-rdw <- d_labitems %>% filter(grepl("^RDW$",label))
-rbc <- d_labitems %>% filter(grepl("Red Blood Cells",label))
-wbc <- d_labitems %>% filter(grepl("White Blood Cells",label))
-lac <- d_labitems %>% filter(grepl("^Lactate$",label))
-ldh <- d_labitems %>% filter(grepl("Lactate Dehydrogenase",label))
-labevents_alt <- labevents_urine %>% semi_join(alt,by="itemid")
-labevents_alb <- labevents_urine %>% semi_join(alb,by="itemid")
-labevents_alp <- labevents_urine %>% semi_join(alp,by="itemid")
-labevents_bic <- labevents_urine %>% semi_join(bic,by="itemid")
-labevents_bil <- labevents_urine %>% semi_join(bil,by="itemid")
-labevents_cre <- labevents_urine %>% semi_join(cre,by="itemid")
-labevents_pot <- labevents_urine %>% semi_join(pot,by="itemid")
-labevents_sod <- labevents_urine %>% semi_join(sod,by="itemid")
-labevents_hct <- labevents_urine %>% semi_join(hct,by="itemid")
-labevents_hb <- labevents_urine %>% semi_join(hb,by="itemid")
-labevents_lym <- labevents_urine %>% semi_join(lym,by="itemid")
-labevents_mon <- labevents_urine %>% semi_join(mon,by="itemid")
-labevents_neu <- labevents_urine %>% semi_join(neu,by="itemid")
-labevents_plt <- labevents_urine %>% semi_join(plt,by="itemid")
-labevents_pt <- labevents_urine %>% semi_join(pt,by="itemid")
-labevents_ptt <- labevents_urine %>% semi_join(ptt,by="itemid")
-labevents_rdw <- labevents_urine %>% semi_join(rdw,by="itemid")
-labevents_rbc <- labevents_urine %>% semi_join(rbc,by="itemid")
-labevents_wbc <- labevents_urine %>% semi_join(wbc,by="itemid")
-labevents_lac <- labevents_urine %>% semi_join(lac,by="itemid")
-labevents_ldh <- labevents_urine %>% semi_join(ldh,by="itemid")
-blood_binder <- function(df,df2,test_name) {
-  
-  test_name <- enquo(test_name)
-  
-  df2 <- df2 %>% mutate(charttime=as.character(charttime))
-  
-  df %>% 
-    bind_rows(df2) %>%
-    group_by(subject_id) %>% 
-    arrange(charttime) %>% 
-    mutate(!!test_name := case_when(is.na(lag(micro_specimen_id))~lag(valuenum),
-                                    !is.na(lag(micro_specimen_id))&is.na(lag(micro_specimen_id,n=2))~lag(valuenum,n=2),
-                                    !is.na(lag(micro_specimen_id))&!is.na(lag(micro_specimen_id,n=2))&is.na(lag(micro_specimen_id,n=3))~lag(valuenum,n=3),
-                                    !is.na(lag(micro_specimen_id))&!is.na(lag(micro_specimen_id,n=2))&!is.na(lag(micro_specimen_id,n=3))&is.na(lag(micro_specimen_id,n=4))~lag(valuenum,n=4),
-                                    !is.na(lag(micro_specimen_id))&!is.na(lag(micro_specimen_id,n=2))&!is.na(lag(micro_specimen_id,n=3))&!is.na(lag(micro_specimen_id,n=4))&is.na(lag(micro_specimen_id,n=5))~lag(valuenum,n=5),
-                                    TRUE~NA
-                                                )) %>%
-    ungroup() %>%                   
-    filter(!is.na(micro_specimen_id)) %>% 
-    select(-(labevent_id:priority))
-  
-}
-
-pos_urines <- pos_urines %>% 
-  blood_binder(labevents_alt,`Alanine Aminotransferase`)%>% 
-  blood_binder(labevents_alb,Albumin) %>% 
-  blood_binder(labevents_alp,`Alkaline Phosphatase`) %>% 
-  blood_binder(labevents_bic,Bicarbonate) %>% 
-  blood_binder(labevents_bil,`Bilirubin, Total`) %>% 
-  blood_binder(labevents_cre,Creatinine) %>% 
-  blood_binder(labevents_pot,Potassium) %>% 
-  blood_binder(labevents_sod,Sodium) %>% 
-  blood_binder(labevents_hct,Hematocrit) %>% 
-  blood_binder(labevents_hb,Hemoglobin) %>% 
-  blood_binder(labevents_lym,Lymphocytes) %>% 
-  blood_binder(labevents_mon,Monocytes) %>% 
-  blood_binder(labevents_neu,Neutrophils) %>% 
-  blood_binder(labevents_plt,`Platelet Count`) %>% 
-  blood_binder(labevents_pt,PT) %>% 
-  blood_binder(labevents_ptt,PTT) %>% 
-  blood_binder(labevents_rdw,RDW) %>% 
-  blood_binder(labevents_rbc,`Red blood Cells`) %>% 
-  blood_binder(labevents_wbc,`White Blood Cells`) %>% 
-  blood_binder(labevents_lac,Lactate) %>% 
-  blood_binder(labevents_ldh,`Lactate Dehydrogenase`) 
-
-pos_urines <- pos_urines %>% select(-PT)
-pos_urines <- pos_urines %>% 
-  mutate(
-    Lactate = case_when(is.na(Lactate) ~ mean(as.numeric(Lactate), na.rm = TRUE), TRUE ~ as.numeric(Lactate)),
-    Hematocrit = case_when(is.na(Hematocrit) ~ mean(as.numeric(Hematocrit), na.rm = TRUE), TRUE ~ as.numeric(Hematocrit)),
-    PTT = case_when(is.na(PTT) ~ mean(as.numeric(PTT), na.rm = TRUE), TRUE ~ as.numeric(PTT)),
-    Hemoglobin = case_when(is.na(Hemoglobin) ~ mean(as.numeric(Hemoglobin), na.rm = TRUE), TRUE ~ as.numeric(Hemoglobin)),
-    Lymphocytes = case_when(is.na(Lymphocytes) ~ mean(as.numeric(Lymphocytes), na.rm = TRUE), TRUE ~ as.numeric(Lymphocytes)),
-    Monocytes = case_when(is.na(Monocytes) ~ mean(as.numeric(Monocytes), na.rm = TRUE), TRUE ~ as.numeric(Monocytes)),
-    Neutrophils = case_when(is.na(Neutrophils) ~ mean(as.numeric(Neutrophils), na.rm = TRUE), TRUE ~ as.numeric(Neutrophils)),
-    `Platelet Count` = case_when(is.na(`Platelet Count`) ~ mean(as.numeric(`Platelet Count`), na.rm = TRUE), TRUE ~ as.numeric(`Platelet Count`)),
-    RDW = case_when(is.na(RDW) ~ mean(as.numeric(RDW), na.rm = TRUE), TRUE ~ as.numeric(RDW)),
-    `Red blood Cells` = case_when(is.na(`Red blood Cells`) ~ mean(as.numeric(`Red blood Cells`), na.rm = TRUE), TRUE ~ as.numeric(`Red blood Cells`)),
-    `White Blood Cells` = case_when(is.na(`White Blood Cells`) ~ mean(as.numeric(`White Blood Cells`), na.rm = TRUE), TRUE ~ as.numeric(`White Blood Cells`)),
-    Bicarbonate = case_when(is.na(Bicarbonate) ~ mean(as.numeric(Bicarbonate), na.rm = TRUE), TRUE ~ as.numeric(Bicarbonate)),
-    Creatinine = case_when(is.na(Creatinine) ~ mean(as.numeric(Creatinine), na.rm = TRUE), TRUE ~ as.numeric(Creatinine)),
-    Sodium = case_when(is.na(Sodium) ~ mean(as.numeric(Sodium), na.rm = TRUE), TRUE ~ as.numeric(Sodium)),
-    Albumin = case_when(is.na(Albumin) ~ mean(as.numeric(Albumin), na.rm = TRUE), TRUE ~ as.numeric(Albumin)),
-    `Alkaline Phosphatase` = case_when(is.na(`Alkaline Phosphatase`) ~ mean(as.numeric(`Alkaline Phosphatase`), na.rm = TRUE), TRUE ~ as.numeric(`Alkaline Phosphatase`)),
-    `Bilirubin, Total` = case_when(is.na(`Bilirubin, Total`) ~ mean(as.numeric(`Bilirubin, Total`), na.rm = TRUE), TRUE ~ as.numeric(`Bilirubin, Total`)),
-    Potassium = case_when(is.na(Potassium) ~ mean(as.numeric(Potassium), na.rm = TRUE), TRUE ~ as.numeric(Potassium)),
-    `Lactate Dehydrogenase` = case_when(is.na(`Lactate Dehydrogenase`) ~ mean(as.numeric(`Lactate Dehydrogenase`), na.rm = TRUE), TRUE ~ as.numeric(`Lactate Dehydrogenase`)),
-    `Alanine Aminotransferase` = case_when(is.na(`Alanine Aminotransferase`) ~ mean(as.numeric(`Alanine Aminotransferase`), na.rm = TRUE), TRUE ~ as.numeric(`Alanine Aminotransferase`))
-  )
-
-pos_urines <- pos_urines %>% mutate(Lactate = standardize(Lactate),
-                                    Hematocrit = standardize(Hematocrit),
-                                    PTT = standardize(PTT),
-                                    Hemoglobin = standardize(Hemoglobin),
-                                    Lymphocytes = standardize(Lymphocytes),
-                                    Monocytes = standardize(Monocytes),
-                                    Neutrophils = standardize(Neutrophils),
-                                    `Platelet Count` = standardize(`Platelet Count`),
-                                    RDW = standardize(RDW),
-                                    `Red blood Cells` = standardize(`Red blood Cells`),
-                                    `White Blood Cells` = standardize(`White Blood Cells`),
-                                    Bicarbonate = standardize(Bicarbonate),
-                                    Creatinine = standardize(Creatinine),
-                                    Sodium = standardize(Sodium),
-                                    Albumin = standardize(Albumin),
-                                    `Alkaline Phosphatase` = standardize(`Alkaline Phosphatase`),
-                                    `Bilirubin, Total` = standardize(`Bilirubin, Total`),
-                                    Potassium = standardize(Potassium),
-                                    `Lactate Dehydrogenase` = standardize(`Lactate Dehydrogenase`),
-                                    `Alanine Aminotransferase` = standardize(`Alanine Aminotransferase`))
+bltestvec <- c("Alanine Aminotransferase","Albumin","Alkaline Phosphatase",
+             "Bicarbonate","Bilirubin, Total","^Creatinine$","Potassium",
+             "Sodium","Hematocrit","Hemoglobin","Lymphocytes","Monocytes",
+             "Neutrophils","Platelet Count","^RDW$","Red Blood Cells",
+             "White Blood Cells","^Lactate$","Lactate Dehydrogenase")
+pos_urines <- reduce(seq_along(bltestvec),
+                     function(df,i){
+                       
+                       #filter labitems to test of interest
+                       bltest <- d_labitems %>% filter(grepl(bltestvec[i],label))
+                       
+                       #match labevents to that label
+                       labev_bltest <- labevents_urine %>% semi_join(bltest,by="itemid")
+                       
+                       #remove grepl search punctuation from names to get colnames
+                       bltestnam <- gsub("[[:punct:]]+","",bltestvec)
+                       
+                       df %>% 
+                         
+                         #bind and check for tests in urine dataframe
+                         blood_binder(labev_bltest,!!sym(bltestvec[i])) %>% 
+                         
+                         #if test is na then impute the mean
+                         mutate(
+                           !!sym(bltestnam[i]):=case_when(is.na(!!sym(bltestnam[i])) ~ mean(as.numeric(!!sym(bltestnam[i])), na.rm = TRUE),
+                                               TRUE ~ as.numeric(!!sym(bltestnam[i])))
+                         ) %>% 
+                         
+                         #standardise values
+                         mutate(!!sym(bltestnam[i]):=standardize(!!sym(bltestnam[i])))
+                       
+                     },.init=pos_urines)
 
 ###Arrival transport and disposition (from edstays)
 transp_key <- edstays %>% filter(!is.na(hadm_id)&!is.na(stay_id)) %>% 
@@ -2198,8 +2171,8 @@ urines5 <- urines5 %>% binarise_full_df("R","S")
 urines5_ent <- urines5_ent %>% binarise_full_df("R","S")
 
 ###Make 2-agent combination susceptibilities from urines and ur_util dataframes
-columns <- c("AMP", "SAM", "TZP", "CZO", "CRO", "CAZ", "FEP", "MEM", "CIP", "GEN", "SXT", "NIT", "VAN")
-comb_pairs <- combn(columns, 2, simplify = FALSE)
+ab_columns <- c("AMP", "SAM", "TZP", "CZO", "CRO", "CAZ", "FEP", "MEM", "CIP", "GEN", "SXT", "NIT", "VAN")
+ab_pairs <- combn(ab_columns, 2, simplify = FALSE)
 ur_util <- ur_util %>% double_sens_columns()
 urines5 <- urines5 %>% double_sens_columns()
 urines5_ent <- urines5_ent %>% double_sens_columns()
@@ -2281,7 +2254,7 @@ creats <- creats %>% mutate(admittime = #adjust to search after rather than befo
 abx <- abx %>% AKI_label(ab_name)
 ur_util <- ur_util %>% AKI_label(AMP)
 
-###Check for other nephrotoxins
+###Check for other nephrotoxins (as per BNF list)
 nephrotoxins <- c("aceclofenac",	"aciclovir",	"adefovir",
                   "aspirin","captopril",	"carboplatin",	"cefaclor",
                   "cefadroxil",	"cefalexin","cefixime",	
