@@ -1340,6 +1340,7 @@ hadm <- read_csv("admissions.csv")
 
 ###Identifying antimicrobial agents in prescription data
 drugs <- MIMER::clean_antibiotics(drugs,drug_col=drug)
+drugs <- drugs %>% rename(ab_name="abx_name")
 write_csv(drugs,"drugs_clean.csv")
 
 ###Standardising ICD codes
