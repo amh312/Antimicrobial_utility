@@ -2317,25 +2317,34 @@ hadm <- hadm %>% left_join(ckdkey,by="hadm_id")
 abx <- abx %>% diag_label(ab_name,"CHRONIC KIDNEY",1e4,pCKD)
 ur_util <- ur_util %>% diag_label(AMP,"CHRONIC KIDNEY",1e4,pCKD)
 
-###Check for diabetes mellitus
-abx <- abx %>% diag_label(ab_name,"DIAB",1e4,pDIAB)
-ur_util <- ur_util %>% diag_label(AMP,"DIAB",1e4,pDIAB)
-
-###Check for chronic liver disease
-abx <- abx %>% diag_label(ab_name,"LIVER",1e4,pLIVER)
-ur_util <- ur_util %>% diag_label(AMP,"LIVER",1e4,pLIVER)
-
-###Check for cardiovascular disease
-abx <- abx %>% diag_label(ab_name,"(HEART|CARDI)",1e4,pCARD)
-ur_util <- ur_util %>% diag_label(AMP,"(HEART|CARDI))",1e4,pCARD)
-
-###Check for malignancy in the last year
-abx <- abx %>% diag_label(ab_name,"MALIG",365,pCA)
-ur_util <- ur_util %>% diag_label(AMP,"MALIG",365,pCA)
-
-###Check for previous stroke
-abx <- abx %>% diag_label(ab_name,"STROKE",1e4,pCVA)
-ur_util <- ur_util %>% diag_label(AMP,"STROKE",1e4,pCVA)
+###Check for other diagnoses
+diagno_list <- c("DIAB","LIVER","(HEART|CARDI)","MALIG","STROKE")
+diag_namelist <- c("pDIAB","pLIVER","pCARD","pCA","pCVA")
+timediaglist <- c(rep(1e4,3),365,1e4)
+abx <- reduce(seq_along(diagno_list),function(df,i){
+  
+  #diagnosis name to search
+  df %>% diag_label(ab_name,diagno_list[i],
+                    
+                    #timeframe to search
+                    timediaglist[i],
+                    
+                    #new variable name
+                    !!sym(diag_namelist[i]))
+  
+},.init=abx)
+ur_util <- reduce(seq_along(diagno_list),function(df,i){
+  
+  #diagnosis name to search
+  df %>% diag_label(AMP,diagno_list[i],
+                    
+                    #timeframe to search
+                    timediaglist[i],
+                    
+                    #new variable name
+                    !!sym(diag_namelist[i]))
+  
+},.init=ur_util)
 
 ###Add male label to abx dataframe
 patskey2 <- pats %>% mutate(MALE = case_when(gender=="M" ~ TRUE, TRUE~FALSE)) %>% 
@@ -2350,14 +2359,14 @@ serv_key <- services %>% select(hadm_id,curr_service) %>% distinct(hadm_id,.keep
 abx <- abx %>% left_join(serv_key,by="hadm_id") %>% mutate(
   curr_service = case_when(is.na(curr_service) ~ "UNKNOWN",
                            TRUE ~ curr_service))
-recipethis <- recipe(~curr_service,data=abx)
-dummies <- recipethis %>% step_dummy(curr_service) %>% prep(training = abx)
-dummy_data <- bake(dummies,new_data = NULL)
-abx <- abx %>% cbind(dummy_data) %>% tibble()
-recipethis <- recipe(~curr_service,data=ur_util)
-dummies <- recipethis %>% step_dummy(curr_service) %>% prep(training = ur_util)
-dummy_data <- bake(dummies,new_data = NULL)
-ur_util <- ur_util %>% cbind(dummy_data) %>% tibble()
+servrecipe <- recipe(~curr_service,data=abx)
+servdum <- servrecipe %>% step_dummy(curr_service) %>% prep(training = abx)
+servdummy_data <- bake(servdum,new_data = NULL)
+abx <- abx %>% cbind(servdummy_data) %>% tibble()
+servurrec <- recipe(~curr_service,data=ur_util)
+sudummies <- servurrec %>% step_dummy(curr_service) %>% prep(training = ur_util)
+sudummy_data <- bake(sudummies,new_data = NULL)
+ur_util <- ur_util %>% cbind(sudummy_data) %>% tibble()
 
 ###Check for recent ICU admission
 poe <- read_csv("poe_clean.csv")
@@ -2385,11 +2394,11 @@ med_course_key <- abx %>% select(ab_name,median_course) %>%
   rename(Antimicrobial="ab_name") %>% distinct() %>% 
   mutate(Antimicrobial = str_replace(Antimicrobial,"/","-"))
 
-###Engineer ddummy variables for antimicrobial agents
-recipethis <- recipe(~ab_name,data=abx)
-dummies <- recipethis %>% step_dummy(ab_name) %>% prep(training = abx)
-dummy_data <- bake(dummies,new_data = NULL)
-abx <- abx %>% cbind(dummy_data) %>% tibble()
+###Engineer dummy variables for antimicrobial agents
+abrecipe <- recipe(~ab_name,data=abx)
+abdummy <- abrecipe %>% step_dummy(ab_name) %>% prep(training = abx)
+abdummy_data <- bake(abdummy,new_data = NULL)
+abx <- abx %>% cbind(abdummy_data) %>% tibble()
 abx <- abx %>% mutate(ab_name_Ampicillin = 
                         case_when(ab_name=="Ampicillin" ~
                                     1, TRUE ~ 0))
@@ -2699,10 +2708,10 @@ abx <- abx %>% mutate(combo_24h = case_when(as.numeric(stoptime-starttime) > 1~T
 
 ###Re-engineer antimicrobial dummy variables#
 abx <- abx %>% select(-(ab_name_Ampicillin.sulbactam:ab_name_Ampicillin))
-recipethis <- recipe(~ab_name,data=abx)
-dummies <- recipethis %>% step_dummy(ab_name) %>% prep(training = abx)
-dummy_data <- bake(dummies,new_data = NULL)
-abx <- abx %>% cbind(dummy_data) %>% tibble()
+abrecipe2 <- recipe(~ab_name,data=abx)
+ab2dummies <- abrecipe2 %>% step_dummy(ab_name) %>% prep(training = abx)
+ab2dummy_data <- bake(ab2dummies,new_data = NULL)
+abx <- abx %>% cbind(ab2dummy_data) %>% tibble()
 abx <- abx %>% mutate(ab_name_Ampicillin = 
                         case_when(ab_name=="Ampicillin" ~
                                     1, TRUE ~ 0))
