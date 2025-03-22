@@ -1,4 +1,4 @@
-###COVERAGE MODEL FINAL TRAINING AND VALIDATION
+###SUSCEPTIBILITY PREDICTION MODEL FINAL TRAINING AND VALIDATION
 
 set.seed(123)
 
@@ -164,29 +164,6 @@ model_matrixmaker <- function(dataset,predictors,outc) {
   
 }
 
-###Model training
-xg_training <- function(trainmat,lr,mtd,mcw,ss,csb,bnr,outc){
-  
-  urparams <- list(
-    objective = "binary:logistic",
-    eval_metric = "auc",
-    eta = lr,
-    max_depth = mtd,
-    min_child_weight = mcw,
-    subsample = ss,
-    colsample_bytree = csb
-  )
-  
-  print(glue("Training for {outc}"))
-  
-  xgb.train(
-    params = urparams,
-    data = trainmat,
-    nrounds = bnr
-  )
-  
-}
-
 ###Feature importance calculation
 shapper <- function(trainmat,model,outc) {
   
@@ -212,6 +189,53 @@ mat_feat_selector <- function(dataset,shapsum,outc) {
   
   xgb.DMatrix(data = as.matrix(dataset %>% select(shapsum %>% pull(Feature))), 
               label = dataset[[outc]])
+  
+}
+
+###Retrieving predicted probabilities/classes and actual class
+probclassactual <- function(testdf,testmat,outc,
+                            probnam,classnam,actnam) {
+  
+  ur_predprobs <- predict(xgb_urinemodel, newdata = urtest_matrix)
+  ur_predclass <- ifelse(ur_predprobs > 0.5, 1, 0)
+  ur_predclass <- relevel(factor(ur_predclass), ref = "1")
+  ur_actclass <- urines5Test[[outc]]
+  ur_actclass <- relevel(factor(ur_actclass), ref = "1")
+  
+  assign(probnam,ur_predprobs,.GlobalEnv)
+  assign(classnam,ur_predclass,.GlobalEnv)
+  assign(actnam,ur_actclass,.GlobalEnv)
+  
+}
+
+###AUROC value and ROC curve
+roc_maker <- function(actclass,predpr,outc,aurocnam,
+                      abmap){
+  
+  urroc <- roc(actclass, predpr,levels=c(0,1))
+  ur_auroc_value <- auc(urroc)
+  print(glue("Validation AUROC for {outc} = {round(ur_auroc_value,2)}"))
+  assign(aurocnam,ur_auroc_value)
+  
+  ggroc(urroc,color = "blue3") + 
+    ggtitle(glue("{abcombo_replace(outc,abmap)}\nROC Curve"))+
+    theme_minimal()+
+    labs(x = "False positive rate", y = "True positive rate")+
+    geom_segment(aes(x = 1, y = 0, xend = 0, yend = 1),
+                 color = "grey", linetype = "dashed")+
+    geom_rect(aes(xmin = 0.1, xmax = 0.4, ymin = 0.1, ymax = 0.2), 
+              fill = "white", alpha = 0.2, color = "grey9") +
+    annotate("text", x = 0.25, y = 0.15, label = glue("AUC: {round(ur_auroc_value,2)}"),
+             size = 10, color = "grey9") +
+    theme_minimal()+
+    theme(
+      plot.title = element_text(hjust = 0.5,size=30),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title.x = element_text(size = 20),
+      axis.title.y = element_text(size = 20)
+      
+    )
   
 }
 
@@ -251,14 +275,14 @@ test_probs_df <- data.frame(matrix(nrow=floor(nrow(urines5_combined)*0.2),ncol=0
 micro_probs_df <- data.frame(matrix(nrow=nrow(ur_xg_combined),ncol=0))
 
 ###Blank dataframes
-aucs <- data.frame(matrix(nrow=1,ncol=0))
+ur_aucs <- data.frame(matrix(nrow=1,ncol=0))
 shap_ur_summary_tables <- list()
 metrics_list <- list()
 roc_plots <- list()
 calibration_plots <- list()
 confidence_biglist <- list()
 
-##Model training and validation
+##Model training
 
 ###Read in hyperparameters
 final_bestparams <- hypparamreader("final_params_",combined_antimicrobial_map)
@@ -284,15 +308,23 @@ for (outcome in colnames(urines5_outcomes)) {
     urtest_matrix <- urines5Test %>% model_matrixmaker(urines5_predictors,'AMP')
     urmicro_matrix <- ur_xg_combined %>% model_matrixmaker(urines5_predictors,'AMP')
     
-    ###First training
-    xgb_urinemodel <- urtrain_matrix %>%
-      xg_training(lr=final_bestparams[[outcome]]$eta,
-                  mtd=final_bestparams[[outcome]]$max_depth,
-                  mcw=final_bestparams[[outcome]]$min_child_weight,
-                  ss=final_bestparams[[outcome]]$subsample,
-                  csb=final_bestparams[[outcome]]$colsample_bytree,
-                  bnr=final_bestparams[[outcome]]$best_nrounds,
-                  outc=outcome)
+    ###Set parameters
+    urparams <- list(
+      objective = "binary:logistic",
+      eval_metric = "auc",
+      eta = final_bestparams[[outcome]]$eta,
+      max_depth = final_bestparams[[outcome]]$max_depth,
+      min_child_weight = final_bestparams[[outcome]]$min_child_weight,
+      subsample = final_bestparams[[outcome]]$subsample,
+      colsample_bytree = final_bestparams[[outcome]]$colsample_bytree
+    )
+    
+    ###First training with all features
+    print(glue("First training for {outcome}"))
+    xgb_urinemodel <- xgb.train(
+      params = urparams,data = urtrain_matrix,
+      nrounds = final_bestparams[[outcome]]$best_nrounds
+    )
     
     ###Feature importances
     shap_ur_summary <- urtrain_matrix %>% shapper(xgb_urinemodel,outcome)
@@ -302,48 +334,39 @@ for (outcome in colnames(urines5_outcomes)) {
     urtest_matrix <- urines5Test %>% mat_feat_selector(shap_ur_summary,outcome)
     urmicro_matrix <- ur_xg_combined %>% mat_feat_selector(shap_ur_summary,outcome)
     
-    ###Second training
-    xgb_urinemodel <- urtrain_matrix %>%
-      xg_training(lr=final_bestparams[[outcome]]$eta,
-                  mtd=final_bestparams[[outcome]]$max_depth,
-                  mcw=final_bestparams[[outcome]]$min_child_weight,
-                  ss=final_bestparams[[outcome]]$subsample,
-                  csb=final_bestparams[[outcome]]$colsample_bytree,
-                  bnr=final_bestparams[[outcome]]$best_nrounds,
-                  outc=outcome)
+    ###Second training with only selected features
+    print(glue("Second training for {outcome}"))
+    xgb_urinemodel <- xgb.train(
+      params = urparams,data = urtrain_matrix,
+      nrounds = final_bestparams[[outcome]]$best_nrounds
+    )
+    
+    ##Model validation
+    
+    ###Get predicted probability/class and actual class
+    urtestmatrix %>% probclassactual(urines5Test,'AMP','ur_predprobs',
+                                     'ur_predclass','ur_actualclass')
+    
+    ###ROC curve and AUROC
+    roc_plot_ur <- roc_maker(ur_actualclass,ur_predprobs,'AMP',
+                             "ur_auroc",combined_antimicrobial_map)
+    
+    ###Save ROC to file
+    ggsave(filename = glue("{outcome}_xg_roc.pdf"), plot = roc_plot_ur,
+           width = 10, height = 10)
+    
+    ###Update AUROC  and ROC curve lists
+    ur_aucs[[outcome]] <- ur_auroc
+    roc_plots[[outcome]] <- roc_plot_ur
     
     
     
     
-    pred_prob_test <- predict(xgb_urinemodel, newdata = test_matrix)
-    pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
-    pred_test_class <- relevel(factor(pred_test_class), ref = "1")
-    actual_test_class <- urines5Test[[outcome]]
-    actual_test_class <- relevel(factor(actual_test_class), ref = "1")
-    roc_result <- roc(actual_test_class, pred_prob_test)
-    auc_value <- auc(roc_result)
-    print(paste("AUC-ROC:", auc_value))
-    aucs[[outcome]] <- auc_value
-    roc_plot <- ggroc(roc_result) + 
-      ggtitle(glue("{abcombo_replace(outcome,combined_antimicrobial_map)}\nROC Curve"))+
-      theme_minimal()+
-      labs(x = "1 - Specificity", y = "Sensitivity")+
-      theme(plot.title = element_text(hjust = 0.5))+
-      theme(
-        plot.title = element_text(hjust = 0.5),
-        axis.text = element_blank(),
-        axis.ticks = element_blank()
-      )+
-      geom_segment(aes(x = 1, y = 0, xend = 0, yend = 1),
-                   color = "grey", linetype = "dashed")
     
-    roc_plots[[outcome]] <- roc_plot
-    
-    ggsave(filename = glue("{outcome}_xg_roc.pdf"), plot = roc_plot, width = 10, height = 10)
     
     calibration_data <- data.frame(
-      predicted_prob = pred_prob_test,
-      actual = as.numeric(as.character(actual_test_class))
+      predicted_prob = ur_predprobs,
+      actual = as.numeric(as.character(ur_actualclass))
     )
     
     calibration_data$bin <- cut(calibration_data$predicted_prob, 
@@ -373,19 +396,19 @@ for (outcome in colnames(urines5_outcomes)) {
     
     pred_prob_micro <- predict(xgb_urinemodel, newdata = micro_matrix)
     
-    test_probs_df[[outcome]] <- pred_prob_test
+    test_probs_df[[outcome]] <- ur_predprobs
     micro_probs_df[[outcome]] <- pred_prob_micro
     
     
     
     shap_ur_summary_tables[[outcome]] <- shap_ur_summary
     
-    pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
-    pred_test_class <- relevel(factor(pred_test_class), ref = "1")
-    actual_test_class <- urines5Test[[outcome]]
-    actual_test_class <- relevel(factor(actual_test_class), ref = "1")
+    ur_predclass <- ifelse(ur_predprobs > 0.5, 1, 0)
+    ur_predclass <- relevel(factor(ur_predclass), ref = "1")
+    ur_actualclass <- urines5Test[[outcome]]
+    ur_actualclass <- relevel(factor(ur_actualclass), ref = "1")
     
-    confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
+    confusion <- confusionMatrix(factor(ur_predclass), factor(ur_actualclass))
     accuracy <- confusion$overall['Accuracy']
     precision <- confusion$byClass['Precision']
     recall <- confusion$byClass['Recall']
@@ -419,7 +442,7 @@ for (outcome in colnames(urines5_outcomes)) {
       return(c(auroc = auroc, precision = precision, recall = recall, accuracy = accuracy, f1 = f1_score))
     }
     
-    df_ys <- data.frame(y_true = actual_test_class, y_pred = pred_test_class,y_scores = pred_prob_test)
+    df_ys <- data.frame(y_true = ur_actualclass, y_pred = ur_predclass,y_scores = ur_predprobs)
     print(glue("Bootstrapping for {outcome} 2"))
     set.seed(123)
     boot_results <- boot(data = df_ys, statistic = calculate_metrics, R = n_bootstraps)
