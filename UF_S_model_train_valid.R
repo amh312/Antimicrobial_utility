@@ -136,12 +136,19 @@ TTsplitter <- function(dataset,outc,trainprop,chosnametrain,chosnametest){
   
 }
 
-###Line up features between dataframes
+###Line up dummy features between dataframes for class absence
 lineup_features <- function(microsim_df,pred_df,train_df){
   
+  #get column names of predictors
   predictor_columns <- colnames(pred_df)
+  
+  #get columns in common with training df
   selected_columns <- intersect(predictor_columns, colnames(train_df))
+  
+  #find out which columns are missing in microsim df
   missing_cols <- setdiff(selected_columns, colnames(microsim_df))
+  
+  #fill missing microsim df columns with 0
   microsim_df[missing_cols] <- 0
   
   microsim_df
@@ -167,16 +174,25 @@ model_matrixmaker <- function(dataset,predictors,outc) {
 ###Feature importance calculation
 shapper <- function(trainmat,model,outc) {
   
+  #update message
   print(glue("Checking feature importances for {outc}"))
   
+  #get shap values
   ur_shapvals <- predict(xgb_urinemodel, newdata = urtrain_matrix, predcontrib = TRUE)
+  
+  #make dataframe from shap list
   shap_df <- as.data.frame(ur_shapvals)
+  
+  #remove redundant last column
   shap_df <- shap_df[, -ncol(shap_df)]
+  
+  #make new dataframe with mean shaps for each feature
   shap_ursmry <- data.frame(
     Feature = colnames(shap_df),
     meanshap = colMeans(shap_df)
   )
   
+  #remove zero features
   shap_ursmry <- shap_ursmry %>% filter(meanshap!=0)
   shap_ursmry <- shap_ursmry[order(-shap_ursmry$meanshap), ]
   
@@ -215,7 +231,7 @@ roc_maker <- function(actclass,predpr,outc,aurocnam,
   urroc <- roc(actclass, predpr,levels=c(0,1))
   ur_auroc_value <- auc(urroc)
   print(glue("Validation AUROC for {outc} = {round(ur_auroc_value,2)}"))
-  assign(aurocnam,ur_auroc_value)
+  assign(aurocnam,ur_auroc_value,.GlobalEnv)
   
   ggroc(urroc,color = "blue3") + 
     ggtitle(glue("{abcombo_replace(outc,abmap)}\nROC curve"))+
@@ -242,7 +258,7 @@ roc_maker <- function(actclass,predpr,outc,aurocnam,
 ###Calibration curve and slope value
 calibmaker <- function(actc,predp,outc){
   
-  urcalib_df <- data.frame(
+  ur_calib_df <- data.frame(
     pred_probs = predp,
     act_probs = as.numeric(as.character(actc))
   ) %>% 
@@ -256,40 +272,45 @@ calibmaker <- function(actc,predp,outc){
               act_prop = mean(act_probs)) %>% 
     ungroup()
   
-  ur_calib_plotdf <- data.frame(meanpp=ur_lolist$x,
-                                act_prop=ur_lolist$y)
+  loesspreds <- predict(loess(ur_calib_df$act_prop~ur_calib_df$meanpp),
+                        span=1,se=T)
   
-  loesspreds <- predict(loess(ur_calib_df$act_prop~ur_calib_df$meanpp),se=T)
-  
-  ur_calib_df$upperci <- loesspreds$fit+qt(0.975,loesspreds$df)*loesspreds$se.fit
-  ur_calib_df$lowerci <- loesspreds$fit-qt(0.975,loesspreds$df)*loesspreds$se.fit
+  ur_calib_df$sm_act <- loesspreds$fit
+  ur_calib_df$upperci <- loesspreds$fit+1.96*loesspreds$se.fit
+  ur_calib_df$lowerci <- loesspreds$fit-1.96*loesspreds$se.fit
   
   urcalib_model <- lm(ur_calib_df$act_prop~ur_calib_df$meanpp)
   ur_calslope <- coef(urcalib_model)[2]
   
-  max_xbox <- max(ur_calib_plotdf$meanpp)*0.9
-  min_xbox <- max_xbox*0.7
+  xrange <- range(ur_calib_df$meanpp)
+  xrangesize <- xrange[2]-xrange[1]
+  yrange <- range(ur_calib_df$act_prop)
+  yrangesize <- yrange[2]-yrange[1]
+  max_xbox <- xrange[1]+xrangesize*0.65
+  min_xbox <- xrange[1]+xrangesize*0.95
   x_text <- mean(c(min_xbox,max_xbox))
-  min_y <- min(ur_calib_plotdf$act_prop)
-  max_y <- max(ur_calib_plotdf$act_prop)
-  min_y <- (max_y-min_y)*0.01
-  max_y <- min_y+0.06
+  min_y <- yrange[1]+yrangesize*0.01
+  max_y <- yrange[1]+yrangesize*0.12
   y_text <- mean(c(min_y,max_y))
   
-  ggplot(ur_calib_plotdf, aes(x = meanpp, y = act_prop)) +
+  ggplot(ur_calib_df, aes(x = meanpp, y = sm_act)) +
     geom_line(color = "green4", linetype = "solid") +
     geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "grey20") +
     geom_ribbon(data = ur_calib_df, aes(x = meanpp, ymin = lowerci, ymax = upperci), fill = "green4", alpha = 0.2)+
+    geom_point(data=ur_calib_df,aes(x=meanpp,y=act_prop),col="green4",size=3)+
     theme_minimal() +
     labs(x = "Mean predicted probability", y = "Actual proportion of positives",
          title = glue("{abcombo_replace(outc,combined_antimicrobial_map)}\ncalibration curve")) +
     theme(plot.title = element_text(hjust = 0.5,size = 30),
           axis.title.x = element_text(size = 20),
           axis.title.y = element_text(size = 20))+
+    ylim(min(ur_calib_df$lowerci),max(ur_calib_df$upperci))+
+    xlim(min(ur_calib_df$meanpp),max(ur_calib_df$meanpp))+
     geom_rect(aes(xmin = min_xbox, xmax = max_xbox, ymin = min_y, ymax = max_y), 
               fill = "white", alpha = 0.2, color = "grey9") +
     annotate("text", x = x_text, y = y_text, label = glue("Slope: {round(ur_calslope,2)}"),
              size = 10, color = "grey9")
+
   
 }
 
@@ -357,16 +378,18 @@ shapwriter <- function(shaptable,abmap) {
   for (i in 1:length(shaptable)) {
     
     #iterate over shap tables list
-    shappy <- data.frame(shaptable[i]) %>% 
+    shappy <- data.frame(shaptable[i])
+    
+    colnames(shappy) <- c("Feature","Shapley value")
+    
+    shappy <- shappy %>% 
       
       #round mean shapley value to 3 decimal places
-      mutate(meanshap=round(meanshap,3)) %>% 
+      mutate(`Shapley value`=round(`Shapley value`,3)) %>% 
       
       #filter to only non-zero values
-      filter(meanshap!= 0)
+      filter(`Shapley value`!= 0)
     
-    #rename columns
-    colnames(shappy) <- c("Feature","Variable")
     
     #write to csv
     write_csv(shappy,glue("SHAP_{abmap[i]}.csv"))
@@ -438,7 +461,6 @@ ci_writer <- function(conflist,outcomedf,filename){
 }
 
 ###Writing microsim probability predictions to csv
-
 prob_dfer <- function(probs_df,microsim_df,filename){
   
   #add specimen and subject ids to empty dataframe
@@ -468,7 +490,6 @@ prob_dfer <- function(probs_df,microsim_df,filename){
   write_csv(probs_df_overall,filename)
   
 }
-
 
 ##Read-in
 
@@ -501,11 +522,9 @@ abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>%
 abcombo_variants(combined_antimicrobial_map,
                  "fullmap","combined_antimicrobial_map","shortmap",abx_in_train)
 
-###Model testing and microsimulation reference dataframes
+###Blank dataframes/lists
 test_probs_df <- data.frame(matrix(nrow=floor(nrow(urines5_combined)*0.2),ncol=0))
 micro_probs_df <- data.frame(matrix(nrow=nrow(ur_xg_combined),ncol=0))
-
-###Blank dataframes
 ur_aucs <- data.frame(matrix(nrow=1,ncol=0))
 shap_ur_summary_tables <- list()
 ur_metrics_list <- list()
@@ -588,7 +607,7 @@ for (outcome in colnames(urines5_outcomes)) {
     ###Save plots to file
     ggsave(filename = glue("{outcome}_xg_roc.pdf"), plot = roc_plot_ur,
            width = 10, height = 10)
-    ggsave(filename = glue("AMP_calib_plot.pdf"), plot = ur_calibplot, width = 10, height = 10)
+    ggsave(filename = glue("{outcome}_calib_plot.pdf"), plot = ur_calibplot, width = 10, height = 10)
     
     ur_predclass <- ifelse(ur_predprobs > 0.5, 1, 0)
     ur_predclass <- relevel(factor(ur_predclass), ref = "1")
