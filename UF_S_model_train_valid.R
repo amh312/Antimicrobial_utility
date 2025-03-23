@@ -535,9 +535,9 @@ for (outcome in colnames(urines5_outcomes)) {
       lineup_features(urines5_predictors,urines5Train)
     
     ###Make xgboost training matrices
-    urtrain_matrix <- urines5Train %>% model_matrixmaker(urines5_predictors,'AMP')
-    urtest_matrix <- urines5Test %>% model_matrixmaker(urines5_predictors,'AMP')
-    urmicro_matrix <- ur_xg_combined %>% model_matrixmaker(urines5_predictors,'AMP')
+    urtrain_matrix <- urines5Train %>% model_matrixmaker(urines5_predictors,outcome)
+    urtest_matrix <- urines5Test %>% model_matrixmaker(urines5_predictors,outcome)
+    urmicro_matrix <- ur_xg_combined %>% model_matrixmaker(urines5_predictors,outcome)
     
     ###Set parameters
     urparams <- list(
@@ -575,11 +575,11 @@ for (outcome in colnames(urines5_outcomes)) {
     ##Model validation
     
     ###Get predicted probability/class and actual class
-    urtestmatrix %>% probclassactual(urines5Test,'AMP','ur_predprobs',
+    urtestmatrix %>% probclassactual(urines5Test,outcome,'ur_predprobs',
                                      'ur_predclass','ur_actualclass')
     
     ###ROC curve and AUROC
-    roc_plot_ur <- roc_maker(ur_actualclass,ur_predprobs,'AMP',
+    roc_plot_ur <- roc_maker(ur_actualclass,ur_predprobs,outcome,
                              "ur_auroc",combined_antimicrobial_map)
     
     ###Calibration plot and slope value
