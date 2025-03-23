@@ -218,7 +218,7 @@ roc_maker <- function(actclass,predpr,outc,aurocnam,
   assign(aurocnam,ur_auroc_value)
   
   ggroc(urroc,color = "blue3") + 
-    ggtitle(glue("{abcombo_replace(outc,abmap)}\nROC Curve"))+
+    ggtitle(glue("{abcombo_replace(outc,abmap)}\nROC curve"))+
     theme_minimal()+
     labs(x = "False positive rate", y = "True positive rate")+
     geom_segment(aes(x = 1, y = 0, xend = 0, yend = 1),
@@ -238,6 +238,237 @@ roc_maker <- function(actclass,predpr,outc,aurocnam,
     )
   
 }
+
+###Calibration curve and slope value
+calibmaker <- function(actc,predp,outc){
+  
+  urcalib_df <- data.frame(
+    pred_probs = predp,
+    act_probs = as.numeric(as.character(actc))
+  ) %>% 
+    mutate(probs_bin=cut(pred_probs,
+                         breaks=quantile(pred_probs,
+                                         probs=seq(0,1,by=0.1),
+                                         na.rm=T),
+                         labels=F)) %>% 
+    group_by(probs_bin) %>%
+    summarise(meanpp = mean(pred_probs),
+              act_prop = mean(act_probs)) %>% 
+    ungroup()
+  
+  ur_calib_plotdf <- data.frame(meanpp=ur_lolist$x,
+                                act_prop=ur_lolist$y)
+  
+  loesspreds <- predict(loess(ur_calib_df$act_prop~ur_calib_df$meanpp),se=T)
+  
+  ur_calib_df$upperci <- loesspreds$fit+qt(0.975,loesspreds$df)*loesspreds$se.fit
+  ur_calib_df$lowerci <- loesspreds$fit-qt(0.975,loesspreds$df)*loesspreds$se.fit
+  
+  urcalib_model <- lm(ur_calib_df$act_prop~ur_calib_df$meanpp)
+  ur_calslope <- coef(urcalib_model)[2]
+  
+  max_xbox <- max(ur_calib_plotdf$meanpp)*0.9
+  min_xbox <- max_xbox*0.7
+  x_text <- mean(c(min_xbox,max_xbox))
+  min_y <- min(ur_calib_plotdf$act_prop)
+  max_y <- max(ur_calib_plotdf$act_prop)
+  min_y <- (max_y-min_y)*0.01
+  max_y <- min_y+0.06
+  y_text <- mean(c(min_y,max_y))
+  
+  ggplot(ur_calib_plotdf, aes(x = meanpp, y = act_prop)) +
+    geom_line(color = "green4", linetype = "solid") +
+    geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "grey20") +
+    geom_ribbon(data = ur_calib_df, aes(x = meanpp, ymin = lowerci, ymax = upperci), fill = "green4", alpha = 0.2)+
+    theme_minimal() +
+    labs(x = "Mean predicted probability", y = "Actual proportion of positives",
+         title = glue("{abcombo_replace(outc,combined_antimicrobial_map)}\ncalibration curve")) +
+    theme(plot.title = element_text(hjust = 0.5,size = 30),
+          axis.title.x = element_text(size = 20),
+          axis.title.y = element_text(size = 20))+
+    geom_rect(aes(xmin = min_xbox, xmax = max_xbox, ymin = min_y, ymax = max_y), 
+              fill = "white", alpha = 0.2, color = "grey9") +
+    annotate("text", x = x_text, y = y_text, label = glue("Slope: {round(ur_calslope,2)}"),
+             size = 10, color = "grey9")
+  
+}
+
+###Classification report
+ur_perf_mets <- function(df, indexrows,bootstr=T) {
+  
+  if (bootstr==T) {
+    
+    ur_act <- df$act_val[indexrows]
+    ur_probs <- df$pred_probs[indexrows]
+    ur_class <- df$pred_class[indexrows]
+    
+    ur_confmat <- confusionMatrix(factor(ur_class), factor(ur_act))
+    acc <- ur_confmat$overall['Accuracy']
+    prec <- ur_confmat$byClass['Precision']
+    rec <- ur_confmat$byClass['Recall']
+    f1 <- 2 * (prec * rec) / (prec + rec)
+    auroc <- auc(roc(ur_act, ur_probs,levels=c(0,1)))
+    
+    c(auroc = auroc, precision = prec, recall = rec, accuracy = acc, f1 = f1)
+    
+  } else {
+    
+    ur_act <- df$act_val
+    ur_probs <- df$pred_probs
+    ur_class <- df$pred_class
+    
+    ur_confmat <- confusionMatrix(factor(ur_class), factor(ur_act))
+    acc <- ur_confmat$overall['Accuracy']
+    prec <- ur_confmat$byClass['Precision']
+    rec <- ur_confmat$byClass['Recall']
+    f1 <- 2 * (prec * rec) / (prec + rec)
+    auroc <- auc(roc(ur_act, ur_probs,levels=c(0,1)))
+    
+    list(
+      AUC = auroc,
+      Accuracy = acc,
+      Precision = prec,
+      Recall = rec,
+      F1_Score = f1
+    )
+    
+  }
+  
+}
+
+###Bootstrapping of performance metrics for CIs
+bootstrap_perfmets <- function(pred_df,classrep_func,n_samps,outc) {
+  
+  print(glue("Bootstrapping for {outc}"))
+  
+  set.seed(123)
+  ur_bootmetrics <- boot(data = pred_df, statistic = classrep_func, R = n_samps)
+  ur_bootmetrics[[1]][is.na(ur_bootmetrics[[1]])] <- 0
+  ur_bootmetrics[[2]][is.na(ur_bootmetrics[[2]])] <- 0
+  ur_cis <- lapply(1:5, function(i) boot.ci(ur_bootmetrics, type = "perc", index = i))
+  names(ur_cis) <- c("AUC", "Precision", "Recall", "Accuracy", "F1_Score")
+  ur_cis
+  
+}
+
+###Writing feature importances to csv
+shapwriter <- function(shaptable,abmap) {
+  
+  for (i in 1:length(shaptable)) {
+    
+    #iterate over shap tables list
+    shappy <- data.frame(shaptable[i]) %>% 
+      
+      #round mean shapley value to 3 decimal places
+      mutate(meanshap=round(meanshap,3)) %>% 
+      
+      #filter to only non-zero values
+      filter(meanshap!= 0)
+    
+    #rename columns
+    colnames(shappy) <- c("Feature","Variable")
+    
+    #write to csv
+    write_csv(shappy,glue("SHAP_{abmap[i]}.csv"))
+    
+  }
+  
+}
+
+###Writing performance metrics to CSV
+metricwriter <- function(metlist,abmap) {
+  
+  #iterate over abs
+  for (i in 1:length(metlist)) {
+    
+    #make df from list
+    metricky <- data.frame(metlist[i])
+    
+    #write to csv
+    write_csv(metricky,glue("metrics_{abmap[i]}.csv"))
+    
+  }
+  
+}
+
+###Writing confidence intervals on performance metrics to csv
+ci_writer <- function(conflist,outcomedf,filename){
+  
+  #empty dataframe
+  ci_df <- data.frame(matrix(nrow=length(outcomedf),ncol=5))
+  colnames(ci_df) <- c("AUROC_CI","Precision_CI","Recall_CI","F1_CI","Accuracy_CI")
+  
+  #iterate over antibiotics
+  for (i in 1: length(conflist)) {
+    
+    #paste AUC confidence intervals into brackets
+    ci_df$AUROC_CI[i] <- ifelse(
+      !is.null(conflist[[i]]$AUC$percent[4])&!is.null(conflist[[i]]$AUC$percent[5]),
+      glue(" ({round(conflist[[i]]$AUC$percent[4],3)}-{round(conflist[[i]]$AUC$percent[5],3)})"),
+      NA)
+    
+    #paste precision confidence intervals into brackets
+    ci_df$Precision_CI[i] <- ifelse(
+      !is.null(conflist[[i]]$Precision$percent[4])&!is_null(conflist[[i]]$Precision$percent[5]),
+      glue(" ({round(conflist[[i]]$Precision$percent[4],3)}-{round(conflist[[i]]$Precision$percent[5],3)})"),
+      NA)
+    
+    #paste recall confidence intervals into brackets
+    ci_df$Recall_CI[i] <- ifelse(
+      !is.null(conflist[[i]]$Recall$percent[4])&!is_null(conflist[[i]]$Recall$percent[5]),
+      glue(" ({round(conflist[[i]]$Recall$percent[4],3)}-{round(conflist[[i]]$Recall$percent[5],3)})"),
+      NA)
+    
+    #paste accuracy confidence intervals into brackets
+    ci_df$Accuracy_CI[i] <- ifelse(
+      !is.null(conflist[[i]]$Accuracy$percent[4])&!is_null(conflist[[i]]$Accuracy$percent[5]),
+      glue(" ({round(conflist[[i]]$Accuracy$percent[4],3)}-{round(conflist[[i]]$Accuracy$percent[5],3)})"),
+      NA)
+    
+    #paste F1 score confidence intervals into brackets
+    ci_df$F1_CI[i] <- ifelse(
+      !is.null(conflist[[i]]$F1_Score$percent[4])&!is_null(conflist[[i]]$F1_Score$percent[5]),
+      glue(" ({round(conflist[[i]]$F1_Score$percent[4],3)}-{round(conflist[[i]]$F1_Score$percent[5],3)})"),
+    )
+  }
+  
+  #write to csv
+  write_csv(ci_df,filename)
+  
+}
+
+###Writing microsim probability predictions to csv
+
+prob_dfer <- function(probs_df,microsim_df,filename){
+  
+  #add specimen and subject ids to empty dataframe
+  probs_df$micro_specimen_id <- microsim_df$micro_specimen_id
+  probs_df$subject_id <- microsim_df$subject_id
+  
+  probs_df_overall <- probs_df %>% 
+    
+    #melt table to long format
+    melt(id.vars=c("micro_specimen_id","subject_id")) %>% 
+    
+    #replace short antimicrobial names with full ones
+    mutate(variable=abcombo_replace(variable, combined_antimicrobial_map)) %>% 
+    
+    #rename columns and add resistance probability
+    rename(S="value",Antimicrobial="variable") %>% mutate(I=NA,R=1-S,NT=NA)
+  
+  probs_df_overall <- probs_df_overall %>% 
+    
+    #rearrange column order
+    relocate(micro_specimen_id,.after = "NT") %>% 
+    relocate(subject_id,.after="micro_specimen_id") %>% 
+    relocate(I,.before="S") %>% mutate(id_no=1:nrow(probs_df_overall)) %>% 
+    relocate(id_no,.before="Antimicrobial")
+  
+  #write to csv
+  write_csv(probs_df_overall,filename)
+  
+}
+
 
 ##Read-in
 
@@ -277,9 +508,9 @@ micro_probs_df <- data.frame(matrix(nrow=nrow(ur_xg_combined),ncol=0))
 ###Blank dataframes
 ur_aucs <- data.frame(matrix(nrow=1,ncol=0))
 shap_ur_summary_tables <- list()
-metrics_list <- list()
+ur_metrics_list <- list()
 roc_plots <- list()
-calibration_plots <- list()
+ur_calibplots <- list()
 confidence_biglist <- list()
 
 ##Model training
@@ -351,168 +582,55 @@ for (outcome in colnames(urines5_outcomes)) {
     roc_plot_ur <- roc_maker(ur_actualclass,ur_predprobs,'AMP',
                              "ur_auroc",combined_antimicrobial_map)
     
-    ###Save ROC to file
+    ###Calibration plot and slope value
+    ur_calibplot <- calibmaker(ur_actualclass,ur_predprobs,outcome)
+    
+    ###Save plots to file
     ggsave(filename = glue("{outcome}_xg_roc.pdf"), plot = roc_plot_ur,
            width = 10, height = 10)
-    
-    ###Update AUROC  and ROC curve lists
-    ur_aucs[[outcome]] <- ur_auroc
-    roc_plots[[outcome]] <- roc_plot_ur
-    
-    
-    
-    
-    
-    
-    calibration_data <- data.frame(
-      predicted_prob = ur_predprobs,
-      actual = as.numeric(as.character(ur_actualclass))
-    )
-    
-    calibration_data$bin <- cut(calibration_data$predicted_prob, 
-                                breaks = quantile(calibration_data$predicted_prob, probs = seq(0, 1, by = 0.1), na.rm = TRUE),
-                                include.lowest = TRUE, labels = FALSE)
-    
-    calibration_summary <- calibration_data %>%
-      group_by(bin) %>%
-      summarise(mean_pred = mean(predicted_prob),
-                observed_freq = mean(actual))
-    
-    calibration_plot <- ggplot(calibration_summary, aes(x = mean_pred, y = observed_freq)) +
-      geom_point(color = "blue", size = 3) +
-      geom_line(color = "blue", linetype = "solid") +
-      geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "grey") +
-      theme_minimal() +
-      xlim(0,1)+
-      ylim(0,1)+
-      labs(x = "Mean Predicted Probability", y = "Observed Frequency",
-           title = glue("{abcombo_replace(outcome,combined_antimicrobial_map)}\nCalibration Curve")) +
-      theme(plot.title = element_text(hjust = 0.5))
-    
-    calibration_plots[[outcome]] <- calibration_plot
-    print(calibration_plot)
-    
-    ggsave(filename = glue("{outcome}_calib_plot.pdf"), plot = calibration_plot, width = 10, height = 10)
-    
-    pred_prob_micro <- predict(xgb_urinemodel, newdata = micro_matrix)
-    
-    test_probs_df[[outcome]] <- ur_predprobs
-    micro_probs_df[[outcome]] <- pred_prob_micro
-    
-    
-    
-    shap_ur_summary_tables[[outcome]] <- shap_ur_summary
+    ggsave(filename = glue("AMP_calib_plot.pdf"), plot = ur_calibplot, width = 10, height = 10)
     
     ur_predclass <- ifelse(ur_predprobs > 0.5, 1, 0)
     ur_predclass <- relevel(factor(ur_predclass), ref = "1")
     ur_actualclass <- urines5Test[[outcome]]
     ur_actualclass <- relevel(factor(ur_actualclass), ref = "1")
     
-    confusion <- confusionMatrix(factor(ur_predclass), factor(ur_actualclass))
-    accuracy <- confusion$overall['Accuracy']
-    precision <- confusion$byClass['Precision']
-    recall <- confusion$byClass['Recall']
-    f1_score <- 2 * (precision * recall) / (precision + recall)
+    ###Other performance metrics
+    ur_predact_df <- data.frame(act_val = ur_actualclass, pred_class = ur_predclass,pred_probs = ur_predprobs)
+    ur_metrics <- ur_perf_mets(ur_predact_df,NULL,bootstr = F)
     
-    metrics_list[[outcome]] <- list(
-      AUC = auc_value,
-      Accuracy = accuracy,
-      Precision = precision,
-      Recall = recall,
-      F1_Score = f1_score
-    )
+    ###Bootstrapping for confidence intervals
+    ur_confints <- ur_predact_df %>%
+      bootstrap_perfmets(ur_perf_mets,1000,outcome)
     
-    #Bootstrapping for confidence intervals
+    ###Make probability predictions on microsimulation dataset
+    pred_prob_micro <- predict(xgb_urinemodel, newdata = urmicro_matrix)
     
-    print(glue("Bootstrapping for {outcome}"))
-    
-    n_bootstraps <- 1000
-    calculate_metrics <- function(df, indices) {
-      y_true_boot <- df$y_true[indices]
-      y_scores_boot <- df$y_scores[indices]
-      y_pred_boot <- df$y_pred[indices]
-      
-      confusion <- confusionMatrix(factor(y_pred_boot), factor(y_true_boot))
-      accuracy <- confusion$overall['Accuracy']
-      precision <- confusion$byClass['Precision']
-      recall <- confusion$byClass['Recall']
-      f1_score <- 2 * (precision * recall) / (precision + recall)
-      auroc <- auc(y_true_boot, y_scores_boot)
-      
-      return(c(auroc = auroc, precision = precision, recall = recall, accuracy = accuracy, f1 = f1_score))
-    }
-    
-    df_ys <- data.frame(y_true = ur_actualclass, y_pred = ur_predclass,y_scores = ur_predprobs)
-    print(glue("Bootstrapping for {outcome} 2"))
-    set.seed(123)
-    boot_results <- boot(data = df_ys, statistic = calculate_metrics, R = n_bootstraps)
-    boot_results[[1]][is.na(boot_results[[1]])] <- 0
-    boot_results[[2]][is.na(boot_results[[2]])] <- 0
-    print(glue("Bootstrapping for {outcome} 3"))
-    confidence_intervals <- lapply(1:5, function(i) boot.ci(boot_results, type = "perc", index = i))
-    print(glue("Bootstrapping for {outcome} 4"))
-    names(confidence_intervals) <- c("AUC", "Precision", "Recall", "Accuracy", "F1_Score")
-    print(glue("Bootstrapping for {outcome} 5"))
-    confidence_biglist[[outcome]] <- confidence_intervals
+    ###Add plots and values to lists
+    ur_aucs[[outcome]] <- ur_auroc
+    roc_plots[[outcome]] <- roc_plot_ur
+    ur_calibplots[[outcome]] <- ur_calibplot
+    test_probs_df[[outcome]] <- ur_predprobs
+    micro_probs_df[[outcome]] <- pred_prob_micro
+    shap_ur_summary_tables[[outcome]] <- shap_ur_summary
+    ur_metrics_list[[outcome]] <- ur_metrics
+    confidence_biglist[[outcome]] <- ur_confints
     
   }
-  print(paste("AUC-ROC:", auc_value))
-}
-
-
-for (i in 1:length(shap_ur_summary_tables)) {
-  
-  shappy <- data.frame(shap_ur_summary_tables[i]) %>% mutate(across(2, ~ round(., 3))) %>% filter(if_any(2, ~ . != 0))
-  
-  colnames(shappy) <- c("Feature","Variable")
-  
-  write_csv(shappy,glue("SHAP_{combined_antimicrobial_map[i]}.csv"))
   
 }
-for (i in 1:length(metrics_list)) {
-  
-  metricky <- data.frame(metrics_list[i])
-  
-  write_csv(metricky,glue("metrics_{combined_antimicrobial_map[i]}.csv"))
-  
-}
-ci_df <- data.frame(matrix(nrow=length(urines5_outcomes),ncol=5))
-colnames(ci_df) <- c("AUROC_CI","Precision_CI","Recall_CI","F1_CI","Accuracy_CI")
 
-for (i in 1: length(confidence_biglist)) {
-  
-  ci_df$AUROC_CI[i] <- ifelse(
-    !is.null(confidence_biglist[[i]]$AUC$percent[4])&!is.null(confidence_biglist[[i]]$AUC$percent[5]),
-    glue(" ({round(confidence_biglist[[i]]$AUC$percent[4],3)}-{round(confidence_biglist[[i]]$AUC$percent[5],3)})"),
-    NA)
-  ci_df$Precision_CI[i] <- ifelse(
-    !is.null(confidence_biglist[[i]]$Precision$percent[4])&!is_null(confidence_biglist[[i]]$Precision$percent[5]),
-    glue(" ({round(confidence_biglist[[i]]$Precision$percent[4],3)}-{round(confidence_biglist[[i]]$Precision$percent[5],3)})"),
-  NA)
-  ci_df$Recall_CI[i] <- ifelse(
-    !is.null(confidence_biglist[[i]]$Recall$percent[4])&!is_null(confidence_biglist[[i]]$Recall$percent[5]),
-    glue(" ({round(confidence_biglist[[i]]$Recall$percent[4],3)}-{round(confidence_biglist[[i]]$Recall$percent[5],3)})"),
-  NA)
-  ci_df$Accuracy_CI[i] <- ifelse(
-    !is.null(confidence_biglist[[i]]$Accuracy$percent[4])&!is_null(confidence_biglist[[i]]$Accuracy$percent[5]),
-    glue(" ({round(confidence_biglist[[i]]$Accuracy$percent[4],3)}-{round(confidence_biglist[[i]]$Accuracy$percent[5],3)})"),
-  NA)
-  ci_df$F1_CI[i] <- ifelse(
-    !is.null(confidence_biglist[[i]]$F1_Score$percent[4])&!is_null(confidence_biglist[[i]]$F1_Score$percent[5]),
-    glue(" ({round(confidence_biglist[[i]]$F1_Score$percent[4],3)}-{round(confidence_biglist[[i]]$F1_Score$percent[5],3)})"),
-  )
-}
+##Recording summaries to CSVs
 
-write_csv(ci_df,"interim_ci_df.csv")
+###Feature importances to CSV
+shap_ur_summary_tables %>% shapwriter(combined_antimicrobial_map)
 
-###Microsimulation dataframe
-micro_probs_df$micro_specimen_id <- ur_xg$micro_specimen_id
-micro_probs_df$subject_id <- ur_xg$subject_id
-probs_df_overall <- micro_probs_df %>% melt(id.vars=c("micro_specimen_id","subject_id")) %>% 
-  mutate(variable=abcombo_replace(variable, combined_antimicrobial_map)) %>% 
-  rename(S="value",Antimicrobial="variable") %>% mutate(I=NA,R=1-S,NT=NA)
-probs_df_overall <- probs_df_overall %>% relocate(micro_specimen_id,.after = "NT") %>% 
-  relocate(subject_id,.after="micro_specimen_id") %>% 
-  relocate(I,.before="S") %>% mutate(id_no=1:nrow(probs_df_overall)) %>% 
-  relocate(id_no,.before="Antimicrobial")
-write_csv(probs_df_overall,"probs_df_overall.csv")
+###Performance metrics to CSV
+ur_metrics_list %>% metricwriter(combined_antimicrobial_map)
+
+###Confidence intervals to csv
+confidence_biglist %>% ci_writer(urines5_outcomes,"interim_ci_df.csv")
+
+###Probability predictions dataframe for microsimulation study to csv
+micro_probs_df %>% prob_dfer(ur_xg,"probs_df_overall.csv")
+
