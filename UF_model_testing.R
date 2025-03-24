@@ -107,6 +107,593 @@ timesens_plot <- function(df,tr_yr,metric,perf_metric) {
   
 }
 
+###Generate combinations of antibiotics in a list
+ab_combiner <- function(abx_list,newname,combname) {
+  
+  #get list of all combinations
+  comblist <- combn(abx_list, 2, function(x) paste(x, collapse = "_"))
+  
+  #combine singles with combinations
+  all_list <- c(abx_list,comblist)
+  
+  #assign to global environment
+  assign(newname,comblist,envir = .GlobalEnv)
+  assign(combname,all_list,envir = .GlobalEnv)
+  
+}
+
+###Generate combinations of antibiotics in a mapped list
+abmap_combiner <- function(ab_map) {
+  
+  abcombos_map <- combn(names(ab_map), 2, simplify = FALSE)
+  c(antimicrobial_map,
+    setNames(
+      lapply(abcombos_map, function(x) paste(ab_map[x], collapse = "_")),
+      sapply(abcombos_map, function(x) paste(x, collapse = "_"))
+    )
+  )
+  
+}
+
+###Make filtered, full and short antimicrobial maps
+abcombo_variants <- function(abmap,fullname,mainname,shortname,abreflist) {
+  
+  fullmap <- abmap %>% unlist()
+  names(fullmap) <- NULL
+  abmap2 <- abmap[names(abmap) %in% abreflist]
+  shortmap <- abmap2 %>% unlist()
+  names(shortmap) <- NULL
+  
+  assign(fullname,fullmap,envir = .GlobalEnv)
+  assign(mainname,abmap2,envir = .GlobalEnv)
+  assign(shortname,shortmap,envir = .GlobalEnv)
+  
+}
+
+###Put metrics into dataframes
+metric_cleaner <- function(metric){
+  
+  metricdf <- data.frame(matrix(nrow=length(metrics_ablist),ncol=0))
+  metricdf$Antimicrobial <- metrics_ablist
+  for (i in 1:length(metrics_ablist)) {
+    
+    metricdf[i,2] <- read_csv(glue("metrics_{metrics_ablist[i]}.csv")) %>% select(contains(metric))
+    
+  }
+  colnames(metricdf) <- c("Antimicrobial",metric)
+  metricdf$Antimicrobial[1:37] <- names(metrics_ablist)[1:37]
+  metricdf[38,1] <- "CDI"
+  metricdf[39,1] <- "toxicity"
+  metricdf$Antimicrobial <- as.character(metricdf$Antimicrobial)
+  
+  metricdf
+  
+}
+
+###Compile metric table including confidence intervals
+metric_tablecompiler <- function(aucdf,precdf,recalldf,f1df,accdf,
+                                 singcitab,combcitab,outputsingtab,
+                                 outputcombtab){
+  
+  tablecleaner <- function(df,cidf){
+    
+    df %>% mutate(Model=case_when(Model=="toxicity"~"Toxicity",TRUE~Model)) %>%
+      left_join(cidf) %>% 
+      mutate(
+        AUROC = case_when(!is.na(AUROC_CI)&!is.na(AUROC)~glue("{AUROC} {AUROC_CI}"),
+                          TRUE~glue("{AUROC} (NA)")),
+        Precision = case_when(!is.na(Precision_CI)&!is.na(Precision)~glue("{Precision} {Precision_CI}"),
+                              TRUE~glue("{Precision} (NA)")),
+        Recall = case_when(!is.na(Recall_CI)&!is.na(Recall)~glue("{Recall} {Recall_CI}"),
+                           TRUE~glue("{Recall} (NA)")),
+        Accuracy = case_when(!is.na(Accuracy_CI)&!is.na(Accuracy)~glue("{Accuracy} {Accuracy_CI}"),
+                             TRUE~glue("{Accuracy} (NA)")),
+        `F1 score` = case_when(!is.na(F1_CI)&!is.na(`F1 score`)~glue("{`F1 score`} {F1_CI}"),
+                               TRUE~glue("{`F1 score`} (NA)"))) %>% select(Model:Accuracy)
+    
+  }
+  
+  metrics_manus_table <- aucdf %>% left_join(precdf,by="Antimicrobial") %>% 
+    left_join(recalldf,by="Antimicrobial") %>%
+    left_join(f1df,by="Antimicrobial") %>%
+    left_join(accdf,by="Antimicrobial") %>% 
+    rename(Model="Antimicrobial",AUROC="AUC",`F1 score`="F1") %>% 
+    mutate(across(AUROC:`Accuracy`, ~ round(.x,3)),
+           Model=str_replace_all(Model,"_"," & "))
+  
+  ci_singles_table <- read_csv(singcitab)
+  ci_combos_table <- read_csv(combcitab)
+  
+  metrics_singles_table <- metrics_manus_table %>% 
+    dplyr::slice(c(1:13,38:39)) %>% tablecleaner(ci_singles_table)
+  metrics_combos_table <- metrics_manus_table %>% 
+    dplyr::slice(c(14:39)) %>% tablecleaner(ci_combos_table)
+  
+  write_csv(metrics_singles_table,outputsingtab)
+  write_csv(metrics_combos_table,outputcombotab)
+  
+}
+
+###Preprocessing of urine model and microsimulation dataframes
+ur_datpreproc <- function(ur_df,ur_outcomename,ur_predictorname,ur_comboname,
+                          microsim_df,microsim_outcomename,microsim_predictorname,
+                          microsim_comboname) {
+  
+  #sub-function for filling in marital status NAs
+  mutmar <- function(dfx) {
+    
+    dfx %>% mutate(marital_status=case_when(is.na(marital_status)~"UNKNOWN",
+                                            TRUE~marital_status))
+    
+  }
+  
+  #sub-function to select and binarising ast results to 1s and 0s
+  binariseast <- function(dfx) {
+    
+    dfx %>% select(all_of(shortmap)) %>%
+      mutate_all(~ as.numeric(ifelse(. == "R" | . == "NT", 0, 
+                                     ifelse(. == "S" | . == "I", 1, NA))))
+    
+  }
+  
+  #sub-function to make dummy variables
+  dummyer <- function(dfx) {
+    
+    urfeatdummies <- dummyVars(" ~ .", data = dfx)
+    predict(urfeatdummies, newdata = dfx)
+    
+  }
+  
+  #fill marital status and select/binarise ast results
+  ur_df_outcomes <- ur_df %>% mutmar() %>% binariseast()
+  microsim_df_outcomes <- microsim_df %>% mutmar() %>% binariseast()
+  
+  #make predictor dataframes
+  ur_df_predictors <- ur_df %>% select(!all_of(fullmap))
+  microsim_df_predictors <- microsim_df %>%
+    select(any_of(colnames(ur_df_predictors)))
+  
+  #make dummy variables
+  ur_df_predictors <- ur_df_predictors %>% dummyer()
+  microsim_df_predictors <- microsim_df_predictors %>% dummyer()
+  
+  #make combined dataframes
+  ur_df_combined <- as.data.frame(cbind(ur_df_outcomes, ur_df_predictors))
+  microsim_df_combined <- as.data.frame(cbind(microsim_df_outcomes, microsim_df_predictors))
+  
+  #assign resulting dfs to global environment
+  assign(ur_outcomename,ur_df_outcomes,.GlobalEnv)
+  assign(ur_predictorname,ur_df_predictors,.GlobalEnv)
+  assign(ur_comboname,ur_df_combined,.GlobalEnv)
+  assign(microsim_outcomename,microsim_df_outcomes,.GlobalEnv)
+  assign(microsim_predictorname,microsim_df_predictors,.GlobalEnv)
+  assign(microsim_comboname,microsim_df_combined,.GlobalEnv)
+  
+  
+}
+
+###Reading in hyperparameters back to list from csvs
+hypparamreader <- function(namestring,namesmap) {
+  
+  #write file nanmes
+  file_names <- glue("{namestring}{namesmap}.csv")
+  
+  #apply read_csv across name list
+  hypparlist <- lapply(file_names, function(file) {
+    read_csv(file)
+  })
+  
+  #add names
+  namelist <- c("eta","max_depth","min_child_weight","subsample","colsample_bytree",
+                "best_nrounds")
+  
+  #iteratively add names to sublists
+  for (i in 1:length(hypparlist)) {
+    names(hypparlist[[i]])[3:8] <- namelist
+  }
+  
+  #add model names to list top level
+  names(hypparlist) <- namesmap
+  
+  hypparlist
+  
+}
+
+###Train-test splitting
+TTsplitter <- function(dataset,outc,trainprop,chosnametrain,chosnametest){
+  
+  #get partition index based on specified proportion
+  trainindex <- createDataPartition(dataset[[outc]], p = trainprop, list = FALSE, times = 1)
+  
+  #index training dataset
+  urdftrain <- dataset[trainindex, ]
+  
+  #index testing dataset
+  urdftest <- dataset[-trainindex, ]
+  
+  #assign to objects with 'Train' and 'Test' suffixes replacing '_combined' suffix
+  assign(chosnametrain,
+         urdftrain,envir=.GlobalEnv)
+  assign(chosnametest,
+         urdftest,envir=.GlobalEnv)
+  
+}
+
+###Line up dummy features between dataframes for class absence
+lineup_features <- function(microsim_df,pred_df,train_df){
+  
+  #get column names of predictors
+  predictor_columns <- colnames(pred_df)
+  
+  #get columns in common with training df
+  selected_columns <- intersect(predictor_columns, colnames(train_df))
+  
+  #find out which columns are missing in microsim df
+  missing_cols <- setdiff(selected_columns, colnames(microsim_df))
+  
+  #fill missing microsim df columns with 0
+  microsim_df[missing_cols] <- 0
+  
+  assign("selected_columns",selected_columns,envir=.GlobalEnv)
+  
+  microsim_df
+  
+}
+
+###Generate XGBoost matrix from model train or test dataset
+model_matrixmaker <- function(dataset,predictors,outc) {
+  
+  #get predictor feature names
+  predictorcols <- colnames(predictors)
+  
+  #ensure that all predictor column names are in specified data
+  selected_columns <- intersect(predictorcols, colnames(dataset))
+  
+  #make xgboost matrix
+  xgb.DMatrix(data = as.matrix(dataset %>% select(all_of(selected_columns))), 
+              label = dataset[[outc]])
+  
+  
+}
+
+###Stability metrics to data frame
+stabmets_writer <- function(big_list){
+  
+  metdf <- data.frame(matrix(nrow=0,ncol=7))
+  for (key in 1:length(names(big_list))) {
+    for (i in 1:length(big_list[[key]])) {
+      
+      for (j in 1:length(big_list[[key]][[i]])) {
+        
+        for (k in 1:length(big_list[[key]][[i]][[j]])) {
+          
+          print(big_list[[key]][[i]][[j]][[k]])
+          
+          results <- data.frame(
+            Antimicrobial = names(big_list)[key],
+            Training_size = names(big_list[[key]][[i]][1]),
+            AUC = big_list[[key]][[i]][[j]][[k]]$AUC,
+            Accuracy = big_list[[key]][[i]][[j]][[k]]$Accuracy,
+            Precision = big_list[[key]][[i]][[j]][[k]]$Precision,
+            Recall = big_list[[key]][[i]][[j]][[k]]$Recall,
+            F1_score = big_list[[key]][[i]][[j]][[k]]$F1_Score)
+          
+          colnames(metdf) <- colnames(results)
+          
+          metdf <- data.frame(
+            rbind(
+              metdf,results
+            )
+          )
+          
+        }
+      }
+    }
+  }
+  rownames(metdf) <- NULL
+  metdf
+  
+}
+
+###Protected characteristic dataframe assembler
+protchar_assembler <- function(comb_df,){
+  
+  comb_df %>% mutate(
+    language_NONENG = case_when(languageENGLISH!=1~1,TRUE~0),
+    race_ASIAN = rowSums(select(., contains("raceASIAN"))) > 0,
+    race_BLACK = rowSums(select(., contains("raceBLACK"))) > 0,
+    race_HISPANIC = rowSums(select(., contains("raceHISPANIC"))) > 0,
+    race_OTHER = rowSums(select(., matches("(raceOTHER|racePORTUGUESE|raceSOUTH|raceNATIVE|raceAMERICAN|raceMULTIPLE)"))) > 0,
+    race_WHITE = rowSums(select(., contains("raceWHITE"))) > 0,
+    marital_status_MARRIED = rowSums(select(., matches("(marital_statusMARRIED)"))) > 0,
+    marital_status_NONMARRIED = case_when(marital_statusMARRIED!=1~1,TRUE~0)
+  )
+  
+}
+
+###Classification report
+ur_perf_mets <- function(df, indexrows,bootstr=T) {
+  
+  #if bootstrapping
+  if (bootstr==T) {
+    
+    #subset by selected indices
+    ur_act <- df$act_val[indexrows]
+    ur_probs <- df$pred_probs[indexrows]
+    ur_class <- df$pred_class[indexrows]
+    
+    #confusion matrix
+    ur_confmat <- confusionMatrix(factor(ur_class), factor(ur_act))
+    
+    #accuracy
+    acc <- ur_confmat$overall['Accuracy']
+    
+    #precision
+    prec <- ur_confmat$byClass['Precision']
+    
+    #recall
+    rec <- ur_confmat$byClass['Recall']
+    
+    #f1 score
+    f1 <- 2 * (prec * rec) / (prec + rec)
+    
+    #auroc
+    auroc <- auc(roc(ur_act, ur_probs,levels=c(0,1)))
+    
+    #return vector
+    c(auroc = auroc, precision = prec, recall = rec, accuracy = acc, f1 = f1)
+    
+    #if not bootstrapping
+  } else {
+    
+    #use whole vectors
+    ur_act <- df$act_val
+    ur_probs <- df$pred_probs
+    ur_class <- df$pred_class
+    
+    #confusion matrix
+    ur_confmat <- confusionMatrix(factor(ur_class), factor(ur_act))
+    
+    #accuracy
+    acc <- ur_confmat$overall['Accuracy']
+    
+    #precision
+    prec <- ur_confmat$byClass['Precision']
+    
+    #recall
+    rec <- ur_confmat$byClass['Recall']
+    
+    #f1 score
+    f1 <- 2 * (prec * rec) / (prec + rec)
+    
+    #auroc
+    auroc <- auc(roc(ur_act, ur_probs,levels=c(0,1)))
+    
+    #return list
+    list(
+      AUC = auroc,
+      Accuracy = acc,
+      Precision = prec,
+      Recall = rec,
+      F1_Score = f1
+    )
+    
+  }
+  
+}
+
+###Fairness dataframe maker
+protchar_writer <- function(big_list){
+  
+  metdf <- data.frame(matrix(nrow=0,ncol=9))
+  for (key in 1:length(names(big_list))) {
+    for (i in 1:length(big_list[[key]])) {
+      
+      for (j in 1:length(big_list[[key]][[i]])) {
+        
+        for (k in 1:length(big_list[[key]][[i]][[j]])) {
+          
+          print(big_list[[key]][[i]][[j]][[k]])
+          
+          results <- data.frame(
+            Antimicrobial = names(big_list)[[key]],
+            Iteration = i,
+            Characteristic = big_list[[key]][[i]][[j]][[k]]$Characteristic,
+            AUC = big_list[[key]][[i]][[j]][[k]]$AUC,
+            Accuracy = big_list[[key]][[i]][[j]][[k]]$Accuracy,
+            Precision = big_list[[key]][[i]][[j]][[k]]$Precision,
+            Recall = big_list[[key]][[i]][[j]][[k]]$Recall,
+            F1_score = big_list[[key]][[i]][[j]][[k]]$F1_Score,
+            Test_support = big_list[[key]][[i]][[j]][[k]]$Test_support)
+          
+          colnames(metdf) <- colnames(results)
+          
+          metdf <- data.frame(
+            rbind(
+              metdf,results
+            )
+          )
+          
+        }
+      }
+    }
+  }
+  rownames(metdf) <- NULL
+  metdf
+  
+}
+
+###Combined age with other fairness metrics into dataframe
+agefairmettodf <- function(big_list,fairmetdf) {
+  
+  metdf <- data.frame(matrix(nrow=0,ncol=9))
+  for (key in 1:length(names(big_list))) {
+    for (i in 1:length(big_list[[key]])) {
+      
+      for (j in 1:length(big_list[[key]][[i]])) {
+        
+        for (k in 1:length(big_list[[key]][[i]][[j]])) {
+          
+          print(big_list[[key]][[i]][[j]][[k]])
+          
+          results <- data.frame(
+            Antimicrobial = names(big_list)[key],
+            Iteration = i,
+            Characteristic = big_list[[key]][[i]][[j]][[k]]$Characteristic,
+            AUC = big_list[[key]][[i]][[j]][[k]]$AUC,
+            Accuracy = big_list[[key]][[i]][[j]][[k]]$Accuracy,
+            Precision = big_list[[key]][[i]][[j]][[k]]$Precision,
+            Recall = big_list[[key]][[i]][[j]][[k]]$Recall,
+            F1_score = big_list[[key]][[i]][[j]][[k]]$F1_Score,
+            Test_support = big_list[[key]][[i]][[j]][[k]]$Test_support)
+          
+          colnames(metdf) <- colnames(results)
+          
+          metdf <- data.frame(
+            rbind(
+              metdf,results
+            )
+          )
+          
+        }
+      }
+    }
+  }
+  
+  rownames(metdf) <- NULL
+  
+  data.frame(rbind(fairmetdf,metdf)) %>%
+    mutate(Category = case_when(
+      grepl("MALE",Characteristic)~"Gender",
+      grepl("marital",Characteristic)~"Marital status",
+      grepl("language",Characteristic)~"Language spoken",
+      grepl("race",Characteristic)~"Race",
+      grepl("^age",Characteristic)~"Age group"
+    ),
+    Characteristic=case_when(
+      grepl("NONMARRIED",Characteristic)~"Non-married",
+      grepl("^marital_status_MARRIED$",Characteristic)~"Married",
+      grepl("WHITE",Characteristic)~"White",
+      grepl("BLACK",Characteristic)~"Black",
+      grepl("HISPANIC",Characteristic)~"Hispanic",
+      grepl("ASIAN",Characteristic)~"Asian",
+      grepl("OTHER",Characteristic)~"Other",
+      grepl("MALEFALSE",Characteristic)~"Female",
+      grepl("MALETRUE",Characteristic)~"Male",
+      grepl("ENGLISH",Characteristic)~"English",
+      grepl("NONENG",Characteristic)~"Non-English",
+      grepl("18",Characteristic)~"18-29",
+      grepl("30",Characteristic)~"30-39",
+      grepl("40",Characteristic)~"40-49",
+      grepl("50",Characteristic)~"50-59",
+      grepl("60",Characteristic)~"60-69",
+      grepl("70",Characteristic)~"70-79",
+      grepl("80",Characteristic)~"80-89",
+      grepl("90",Characteristic)~"≥ 90",
+    )) %>% relocate(Category,.before = "Characteristic") %>%
+    arrange(Antimicrobial, Iteration, Category, Characteristic)
+  
+}
+
+###Time sensitivity metrics to dataframe
+timesenstodf <- function(big_list){
+  
+  metdf4 <- data.frame(matrix(nrow=0,ncol=11))
+  for (key in 1:length(names(metrics_biglist4))) {
+    for (i in 1:length(metrics_biglist4[[key]])) {
+      
+      for (j in 1:length(metrics_biglist4[[key]][[i]])) {
+        
+        for (k in 1:length(metrics_biglist4[[key]][[i]][[j]])) {
+          
+          for (l in 1:length(metrics_biglist4[[key]][[i]][[j]][[k]])) {
+            
+            results <- data.frame(
+              Antimicrobial = names(metrics_biglist4)[key],
+              Iteration = i,
+              Train_year = names(metrics_biglist4[[key]][[i]][[j]][1]),
+              Test_year = names(metrics_biglist4[[key]][[i]][[j]][[k]]),
+              AUC = metrics_biglist4[[key]][[i]][[j]][[k]][[l]]$AUC,
+              Accuracy = metrics_biglist4[[key]][[i]][[j]][[k]][[l]]$Accuracy,
+              Precision = metrics_biglist4[[key]][[i]][[j]][[k]][[l]]$Precision,
+              Recall = metrics_biglist4[[key]][[i]][[j]][[k]][[l]]$Recall,
+              F1_score = metrics_biglist4[[key]][[i]][[j]][[k]][[l]]$F1_Score,
+              Train_support = metrics_biglist4[[key]][[i]][[j]][[k]][[l]]$Train_support,
+              Test_support = metrics_biglist4[[key]][[i]][[j]][[k]][[l]]$Test_support)
+            
+            colnames(metdf4) <- colnames(results)
+            
+            metdf4 <- data.frame(
+              rbind(
+                metdf4,results
+              )
+            )
+          }
+        }
+      }
+    }
+  }
+  rownames(metdf4) <- NULL
+  metdf
+  
+}
+
+###Prescription data preprocessing
+modeltest_preproc <- function(df){
+  
+  set.seed(123)
+  
+  hadm_key <- hadm %>% select(subject_id,race,language,marital_status) %>% 
+    distinct(subject_id,.keep_all=T)
+  age_key <- pats %>% select(subject_id,anchor_age) %>% mutate(age_grp=case_when(
+    anchor_age<30~18,anchor_age>=30&anchor_age<40~30,
+    anchor_age>=40&anchor_age<50~40,
+    anchor_age>=50&anchor_age<60~50,
+    anchor_age>=60&anchor_age<70~60,
+    anchor_age>=70&anchor_age<80~70,
+    anchor_age>=80&anchor_age<90~80,
+    anchor_age>=90~90
+  )) %>% select(-anchor_age) %>% distinct(subject_id,.keep_all = T)
+  dems_key <- left_join(hadm_key,age_key,by="subject_id")
+  df <- df %>% left_join(dems_key,by="subject_id")
+  df <- df %>% mutate(marital_status=case_when(is.na(marital_status)~"UNKNOWN",
+                                               TRUE~marital_status))
+  
+  df_outcomes <- df %>%
+    select(CDI,overall_tox) %>% mutate(CDI=case_when(CDI==TRUE~1,TRUE~0),
+                                       overall_tox=case_when(overall_tox==TRUE~1,TRUE~0))
+  df_predictors <- df %>% select(pHADM:age65,prAKI:pDIAB,pCARD:curr_service,pICU:pSEPSIS,ob_freq,highCRP,
+                                 temperature:dbp,inpatient_7d,
+                                 ab_name_Ampicillin_Ceftriaxone:ab_name_Ampicillin,race:age_grp)
+  
+  urdummies <- dummyVars(" ~ .", data = df_predictors)
+  df_predictors <- predict(urdummies, newdata = df_predictors)
+  df_combined <- as.data.frame(cbind(df_outcomes, df_predictors))
+  
+  assign(outcnam,df_outcomes,envir = .GlobalEnv)
+  assign(outcnam,df_predictors,envir = .GlobalEnv)
+  assign(outcnam,df_combined,envir = .GlobalEnv)
+  
+}
+
+###Printing fairness metrics
+fairnessprinter1 <- function(cat) {
+  max_fairmets <- fairmets %>% filter(Category==cat) %>% group_by(Model,Characteristic) %>%
+    summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% 
+    summarise(maxAUC_meandif=max(mean_AUC)-min(mean_AUC),
+              max_sd=max(sd_AUC)) %>% ungroup()
+  max_fairmets %>% arrange(desc(maxAUC_meandif)) %>% print()
+  max_fairmets %>% arrange(desc(max_sd)) %>% print()
+}
+fairnessprinter2 <- function(cat,cat1,cat2) {
+  fairmets %>% filter(Category==cat) %>% group_by(Model,Characteristic) %>% 
+    summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% filter(Model==cat1) %>% 
+    arrange(desc(mean_AUC)) %>% print()
+  fairmets %>% filter(Category==cat) %>% group_by(Model,Characteristic) %>%
+    summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% filter(Model==cat2) %>% 
+    arrange(desc(sd_AUC)) %>% print()
+}
+
 ##Read-in and mapping lists
 
 ###Read-in
@@ -120,235 +707,68 @@ test_abx <- read_csv("test_abx.csv")
 util_probs_df <- read_csv("probs_df_overall.csv")
 hadm <- read_csv("admissions.csv")
 
-###Make AUC list
-antimicrobial_map <- c(
-  "Ampicillin" = "AMP",
-  "Ampicillin-sulbactam" = "SAM",
-  "Piperacillin-tazobactam" = "TZP",
-  "Cefazolin" = "CZO",
-  "Ceftriaxone" = "CRO",
-  "Ceftazidime" = "CAZ",
-  "Cefepime" = "FEP",
-  "Meropenem" = "MEM",
-  "Ciprofloxacin" = "CIP",
-  "Gentamicin" = "GEN",
-  "Trimethoprim-sulfamethoxazole" = "SXT",
-  "Nitrofurantoin" = "NIT",
-  "Vancomycin" = "VAN"
-)
-
-map_combinations <- combn(names(antimicrobial_map), 2, simplify = FALSE)
-combined_antimicrobial_map <- c(
-  antimicrobial_map,
-  setNames(
-    lapply(map_combinations, function(x) paste(antimicrobial_map[x], collapse = "_")),
-    sapply(map_combinations, function(x) paste(x, collapse = "_"))
-  )
-)
-abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
-  str_replace_all("/","-")
-combined_antimicrobial_map <- combined_antimicrobial_map[names(combined_antimicrobial_map) %in% abx_in_train]
-metrics_ablist <- c(combined_antimicrobial_map,"CDI","toxicity")
-
-###Performance metrics summary
-auc_df <- data.frame(matrix(nrow=length(metrics_ablist),ncol=0))
-auc_df$Antimicrobial <- metrics_ablist
-for (i in 1:length(metrics_ablist)) {
-  
-  auc_df[i,2] <- read_csv(glue("metrics_{metrics_ablist[i]}.csv")) %>% select(contains("AUC"))
-  
-}
-colnames(auc_df) <- c("Antimicrobial","AUC")
-auc_df$Antimicrobial[1:37] <- names(metrics_ablist)[1:37]
-auc_df[38,1] <- "CDI"
-auc_df[39,1] <- "toxicity"
-auc_df$Antimicrobial <- as.character(auc_df$Antimicrobial)
-write_csv(auc_df,"auc_df.csv")
-recall_df <- data.frame(matrix(nrow=length(metrics_ablist),ncol=0))
-recall_df$Antimicrobial <- metrics_ablist
-for (i in 1:length(metrics_ablist)) {
-  
-  recall_df[i,2] <- read_csv(glue("metrics_{metrics_ablist[i]}.csv")) %>% select(contains("Recall"))
-  
-}
-colnames(recall_df) <- c("Antimicrobial","recall")
-recall_df$Antimicrobial[1:37] <- names(metrics_ablist)[1:37]
-recall_df[38,1] <- "CDI"
-recall_df[39,1] <- "toxicity"
-recall_df$Antimicrobial <- as.character(recall_df$Antimicrobial)
-write_csv(recall_df,"recall_df.csv")
-precision_df <- data.frame(matrix(nrow=length(metrics_ablist),ncol=0))
-precision_df$Antimicrobial <- metrics_ablist
-for (i in 1:length(metrics_ablist)) {
-  
-  precision_df[i,2] <- read_csv(glue("metrics_{metrics_ablist[i]}.csv")) %>% select(contains("Precision"))
-  
-}
-colnames(precision_df) <- c("Antimicrobial","precision")
-precision_df$Antimicrobial[1:37] <- names(metrics_ablist)[1:37]
-precision_df[38,1] <- "CDI"
-precision_df[39,1] <- "toxicity"
-precision_df$Antimicrobial <- as.character(precision_df$Antimicrobial)
-write_csv(precision_df,"precision_df.csv")
-accuracy_df <- data.frame(matrix(nrow=length(metrics_ablist),ncol=0))
-accuracy_df$Antimicrobial <- metrics_ablist
-for (i in 1:length(metrics_ablist)) {
-  
-  accuracy_df[i,2] <- read_csv(glue("metrics_{metrics_ablist[i]}.csv")) %>% select(contains("Accuracy"))
-  
-}
-colnames(accuracy_df) <- c("Antimicrobial","accuracy")
-accuracy_df$Antimicrobial[1:37] <- names(metrics_ablist)[1:37]
-accuracy_df[38,1] <- "CDI"
-accuracy_df[39,1] <- "toxicity"
-accuracy_df$Antimicrobial <- as.character(accuracy_df$Antimicrobial)
-write_csv(accuracy_df,"accuracy_df.csv")
-f1_score_df <- data.frame(matrix(nrow=length(metrics_ablist),ncol=0))
-f1_score_df$Antimicrobial <- metrics_ablist
-for (i in 1:length(metrics_ablist)) {
-  
-  f1_score_df[i,2] <- read_csv(glue("metrics_{metrics_ablist[i]}.csv")) %>% select(contains("F1"))
-  
-}
-colnames(f1_score_df) <- c("Antimicrobial","f1_score")
-f1_score_df$Antimicrobial[1:37] <- names(metrics_ablist)[1:37]
-f1_score_df[38,1] <- "CDI"
-f1_score_df[39,1] <- "toxicity"
-f1_score_df$Antimicrobial <- as.character(f1_score_df$Antimicrobial)
-write_csv(f1_score_df,"f1_score_df.csv")
-
-metrics_manus_table <- auc_df %>% left_join(precision_df,by="Antimicrobial") %>% 
-  left_join(recall_df,by="Antimicrobial") %>%
-  left_join(f1_score_df,by="Antimicrobial") %>%
-  left_join(accuracy_df,by="Antimicrobial") %>% 
-  rename(Model="Antimicrobial",AUROC="AUC",Precision="precision",
-         Recall="recall",`F1 score`="f1_score", Accuracy="accuracy") %>% 
-  mutate(across(AUROC:`Accuracy`, ~ round(.x,3)),
-         Model=str_replace_all(Model,"_"," & "))
-metrics_singles_table <- metrics_manus_table %>% dplyr::slice(
-  c(1:13,38:39)
-) %>% mutate(Model=case_when(Model=="toxicity"~"Toxicity",TRUE~Model))
-metrics_combos_table <- metrics_manus_table %>% dplyr::slice(
-  -c(1:13,38:39)
-) %>% mutate(Model=case_when(Model=="toxicity"~"Toxicity",TRUE~Model))
-
-ci_singles_table <- read_csv("ci_singles_table.csv")
-ci_combos_table <- read_csv("ci_combos_table.csv")
-
-
-metrics_singles_table <- metrics_singles_table %>% left_join(ci_singles_table)
-metrics_combos_table <- metrics_combos_table %>% left_join(ci_combos_table)
-
-metrics_singles_table <- metrics_singles_table %>% mutate(
-  AUROC = case_when(!is.na(AUROC_CI)&!is.na(AUROC)~glue("{AUROC} {AUROC_CI}"),
-                    TRUE~glue("{AUROC} (NA)")),
-  Precision = case_when(!is.na(Precision_CI)&!is.na(Precision)~glue("{Precision} {Precision_CI}"),
-                    TRUE~glue("{Precision} (NA)")),
-  Recall = case_when(!is.na(Recall_CI)&!is.na(Recall)~glue("{Recall} {Recall_CI}"),
-                    TRUE~glue("{Recall} (NA)")),
-  Accuracy = case_when(!is.na(Accuracy_CI)&!is.na(Accuracy)~glue("{Accuracy} {Accuracy_CI}"),
-                    TRUE~glue("{Accuracy} (NA)")),
-  `F1 score` = case_when(!is.na(F1_CI)&!is.na(`F1 score`)~glue("{`F1 score`} {F1_CI}"),
-                    TRUE~glue("{`F1 score`} (NA)"))) %>% select(Model:Accuracy)
-
-metrics_combos_table <- metrics_combos_table %>% mutate(
-  AUROC = case_when(!is.na(AUROC_CI)&AUROC_CI!="NA"~glue("{AUROC} {AUROC_CI}"),
-                    TRUE~glue("{AUROC} (NA)")),
-  Precision = case_when(!is.na(Precision_CI)&Precision_CI!="NA"~glue("{Precision} {Precision_CI}"),
-                        TRUE~glue("{Precision} (NA)")),
-  Recall = case_when(!is.na(Recall_CI)&Recall_CI!="NA"~glue("{Recall} {Recall_CI}"),
-                     TRUE~glue("{Recall} (NA)")),
-  Accuracy = case_when(!is.na(Accuracy_CI)&Accuracy_CI!="NA"~glue("{Accuracy} {Accuracy_CI}"),
-                       TRUE~glue("{Accuracy} (NA)")),
-  `F1 score` = case_when(!is.na(F1_CI)&F1_CI!="NA"~glue("{`F1 score`} {F1_CI}"),
-                         TRUE~glue("{`F1 score`} (NA)"))) %>% select(Model:Accuracy)
-
-write_csv(metrics_singles_table,"metrics_singles_table.csv")
-write_csv(metrics_combos_table,"metrics_combos_table.csv")
+##Reference lists
 
 ###Antimicrobial mapping lists
-all_singles <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
-                 "MEM","CIP","GEN","SXT","NIT")
-ab_singles <- all_singles
-all_combos <- combn(all_singles, 2, FUN = function(x) paste(x, collapse = "_"))
-all_abs <- c(all_singles,all_combos)
-iv_singles <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM",
-                "GEN","SXT")
-iv_ab_singles <- iv_singles
-iv_combos <- combn(iv_singles, 2, FUN = function(x) paste(x, collapse = "_"))
-all_ivs <- c(iv_singles, iv_combos)
-oral_singles <- c("AMP","SAM","CIP",
-                  "SXT","NIT")
-oral_ab_singles <- oral_singles
-oral_combos <- combn(oral_singles, 2, FUN = function(x) paste(x, collapse = "_"))
-all_orals <- c(oral_singles, oral_combos)
-access_singles <- c("AMP","SAM","GEN",
-                    "SXT","NIT","CZO")
-access_combos <- combn(access_singles, 2, FUN = function(x) paste(x, collapse = "_"))
-all_access <- c(access_singles, access_combos)
+antimicrobial_map <- c("Ampicillin" = "AMP","Ampicillin-sulbactam" = "SAM",
+                       "Piperacillin-tazobactam" = "TZP","Cefazolin" = "CZO","Ceftriaxone" = "CRO",
+                       "Ceftazidime" = "CAZ","Cefepime" = "FEP","Meropenem" = "MEM","Ciprofloxacin" = "CIP",
+                       "Gentamicin" = "GEN","Trimethoprim-sulfamethoxazole" = "SXT","Nitrofurantoin" = "NIT",
+                       "Vancomycin" = "VAN")
+all_singles <- antimicrobial_map %>% unname()
+iv_singles <- c("AMP","SAM","TZP","CIP","FEP","CAZ","CRO","CZO","MEM","GEN","SXT")
+oral_singles <- c("AMP","SAM","CIP","SXT","NIT")
+access_singles <- c("AMP","SAM","GEN","SXT","NIT","CZO")
 watch_singles <- c("CRO","CAZ","FEP","MEM","TZP","CIP","VAN")
-watch_combos <- combn(watch_singles, 2, FUN = function(x) paste(x, collapse = "_"))
-all_watch <- c(watch_singles, watch_combos)
-antimicrobial_map <- c(
-  "Ampicillin" = "AMP",
-  "Ampicillin-sulbactam" = "SAM",
-  "Piperacillin-tazobactam" = "TZP",
-  "Cefazolin" = "CZO",
-  "Ceftriaxone" = "CRO",
-  "Ceftazidime" = "CAZ",
-  "Cefepime" = "FEP",
-  "Meropenem" = "MEM",
-  "Ciprofloxacin" = "CIP",
-  "Gentamicin" = "GEN",
-  "Trimethoprim-sulfamethoxazole" = "SXT",
-  "Nitrofurantoin" = "NIT",
-  "Vancomycin" = "VAN"
-)
-map_combinations <- combn(names(antimicrobial_map), 2, simplify = FALSE)
-combined_antimicrobial_map <- c(
-  antimicrobial_map,
-  setNames(
-    lapply(map_combinations, function(x) paste(antimicrobial_map[x], collapse = "_")),
-    sapply(map_combinations, function(x) paste(x, collapse = "_"))
-  )
-)
+singlelists <- c("all_singles","iv_singles","oral_singles","access_singles","watch_singles")
+comblists <- str_replace(singlelists,"singles","combos")
+alllists <- c("all_abs","all_ivs","all_orals","all_access","all_watch")
+for (i in seq_along(singlelists)) {ab_combiner(get(singlelists[i]),comblists[i],alllists[i])}
+combined_antimicrobial_map <- abmap_combiner(antimicrobial_map)
 abx_in_train <- train_abx %>% distinct(ab_name) %>% unlist() %>% 
   str_replace_all("/","-")
-fullmap <- combined_antimicrobial_map %>% unlist()
-names(fullmap) <- NULL
-combined_antimicrobial_map <- combined_antimicrobial_map[names(combined_antimicrobial_map) %in% abx_in_train]
-shortmap <- combined_antimicrobial_map %>% unlist()
-names(shortmap) <- NULL
+abcombo_variants(combined_antimicrobial_map,
+                 "fullmap","combined_antimicrobial_map","shortmap",abx_in_train)
+
+###Outcome mapping list
+abx_outcome_map <- list("CDI","overall_tox")
+names(abx_outcome_map) <- c("C. difficile infection","Antibiotic toxicity")
+metrics_ablist <- c(combined_antimicrobial_map,"CDI","toxicity")
+
+###Big combined map
+overall_map <- append(combined_antimicrobial_map,abx_outcome_map)
+
+##Performance metrics summary
+
+###Metric dataframes
+auc_df <- metric_cleaner("AUC")
+recall_df <- metric_cleaner("Recall")
+precision_df <- metric_cleaner("Precision")
+accuracy_df <- metric_cleaner("Accuracy")
+f1_score_df <- metric_cleaner("F1")
+
+###Write dataframes to csvs
+write_csv(auc_df,"auc_df.csv")
+write_csv(recall_df,"recall_df.csv")
+write_csv(precision_df,"precision_df.csv")
+write_csv(accuracy_df,"accuracy_df.csv")
+write_csv(f1_score_df,"f1_score_df.csv")
+
+###Compile and write metric table including confidence intervals
+metric_tablecompiler(auc_df,precision_df,recall_df,f1_score_df,accuracy_df,
+                     "ci_singles_table.csv","ci_combos_table.csv",
+                     "metrics_singles_table.csv","metrics_combos_table.csv")
+
+##Urine model stability analysis
 
 ###Final preprocessing and dataset train/test splits - urines dataset
-urines5 <- urines5 %>% mutate(marital_status=case_when(is.na(marital_status)~"UNKNOWN",
-                                                       TRUE~marital_status))
-urines5_outcomes <- urines5 %>%
-  select(all_of(shortmap))
-ur_xg_outcomes <- ur_xg %>%
-  select(all_of(shortmap))
-urines5_outcomes <- urines5_outcomes %>%
-  mutate_all(~ as.numeric(ifelse(. == "R" | . == "NT", 0, 
-                                 ifelse(. == "S" | . == "I", 1, NA))))
-urines5_predictors <- urines5 %>% select(!all_of(fullmap))
-set.seed(123)
-dummies <- dummyVars(" ~ .", data = urines5_predictors)
-urines5_predictors <- predict(dummies, newdata = urines5_predictors)
-urines5_combined <- as.data.frame(cbind(urines5_outcomes, urines5_predictors))
+ur_datpreproc(urines5,"urines5_outcomes","urines5_predictors","urines5_combined",
+              ur_xg,"ur_xg_outcomes","ur_xg_predictors","ur_xg_combined")
 
-###Read-in chosen model parameters (resistance prediction)
-file_names <- glue("final_params_{combined_antimicrobial_map}.csv")
-final_bestparams <- lapply(file_names, function(file) {
-  read_csv(file)
-})
-namelist <- c("eta","max_depth","min_child_weight","subsample","colsample_bytree",
-              "best_nrounds")
-for (i in 1:length(final_bestparams)) {
-  names(final_bestparams[[i]])[3:8] <- namelist
-}
-names(final_bestparams) <- combined_antimicrobial_map
+###Read-in chosen model parameters (urine susceptibility prediction)
+final_bestparams <- hypparamreader("final_params_",combined_antimicrobial_map)
 
-###Model stability analysis (resistance prediction)
+###Model stability analysis (susceptibility prediction)
 
 ###Iterate training and testing over training dataset sizes
 tr_size_seq <- c(0.02,0.06,0.10,0.14)
@@ -371,18 +791,21 @@ for (outcome in colnames(urines5_outcomes)[1:13]) {
       print(iterrun)
     
     set.seed(seedpick)
-    trainIndex <- createDataPartition(urines5_combined[[outcome]], p = tr_size_seq[siz], list = FALSE, times = 1)
-    urines5Train <- urines5_combined[trainIndex, ]
-    urines5Test <- urines5_combined[-trainIndex, ]
     
-    predictor_columns <- colnames(urines5_predictors)
-    selected_columns <- intersect(predictor_columns, colnames(urines5Train))
-    train_matrix <- xgb.DMatrix(data = as.matrix(urines5Train %>% select(all_of(selected_columns))), 
-                                label = urines5Train[[outcome]])
-    test_matrix <- xgb.DMatrix(data = as.matrix(urines5Test %>% select(all_of(selected_columns))), 
-                               label = urines5Test[[outcome]])
+    ###Split df to train and test
+    urines5_combined %>% TTsplitter(outcome,tr_size_seq[siz],"urines5Train","urines5Test")
     
-    params <- list(
+    ###Ensure features line up between dataframes
+    ur_xg_combined <- ur_xg_combined %>%
+      lineup_features(urines5_predictors,urines5Train)
+    
+    ###Make xgboost training matrices
+    urtrain_matrix <- urines5Train %>% model_matrixmaker(urines5_predictors,outcome)
+    urtest_matrix <- urines5Test %>% model_matrixmaker(urines5_predictors,outcome)
+    urmicro_matrix <- ur_xg_combined %>% model_matrixmaker(urines5_predictors,outcome)
+    
+    ###Set parameters
+    urparams <- list(
       objective = "binary:logistic",
       eval_metric = "auc",
       eta = final_bestparams[[outcome]]$eta,
@@ -392,39 +815,22 @@ for (outcome in colnames(urines5_outcomes)[1:13]) {
       colsample_bytree = final_bestparams[[outcome]]$colsample_bytree
     )
     
-    print("Training...")
-    
-    xgb_model <- xgb.train(
-      params = params,
-      data = train_matrix,
+    ###Training
+    print(glue("Training for {outcome}"))
+    xgb_urinemodel <- xgb.train(
+      params = urparams,data = urtrain_matrix,
       nrounds = final_bestparams[[outcome]]$best_nrounds
     )
     
-    pred_prob_test <- predict(xgb_model, newdata = test_matrix)
-    roc_result <- roc(urines5Test[[outcome]], pred_prob_test)
-    auc_value <- auc(roc_result)
-    print(paste("AUC-ROC:", auc_value))
-    pdf(glue("{outcome}_xg_roc.pdf"), width = 10, height = 10)
-    plot(roc_result, main = glue("{outcome} ROC Curve"), col = "blue")
-    dev.off()
-    pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
-    pred_test_class <- factor(pred_test_class,levels=c(1,0))
-    actual_test_class <- urines5Test[[outcome]]
-    actual_test_class <- factor(actual_test_class,levels=c(1,0))
+    ###Get predicted probability/class and actual class
+    urtest_matrix %>% probclassactual(xgb_urinemodel,urines5Test,outcome,'ur_predprobs',
+                                     'ur_predclass','ur_actualclass')
     
-    confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
-    accuracy <- confusion$overall['Accuracy']
-    precision <- confusion$byClass['Precision']
-    recall <- confusion$byClass['Recall']
-    f1_score <- 2 * (precision * recall) / (precision + recall)
+    ###Performance metrics
+    ur_predact_df <- data.frame(act_val = ur_actualclass, pred_class = ur_predclass,pred_probs = ur_predprobs)
+    ur_metrics <- ur_perf_mets(ur_predact_df,NULL,bootstr = F)
     
-    metrics_list[[outcome]] <- list(
-      AUC = auc_value,
-      Accuracy = accuracy,
-      Precision = precision,
-      Recall = recall,
-      F1_Score = f1_score
-    )
+    metrics_list[[outcome]] <- ur_metrics
     
     metrics_litlist[[seedpick]] <- metrics_list
     
@@ -440,58 +846,22 @@ for (outcome in colnames(urines5_outcomes)[1:13]) {
 
 }
 
-###Write stability metrics to CSV
-metrics_df <- data.frame(matrix(nrow=0,ncol=7))
-for (key in 1:length(names(metrics_biglist))) {
-  for (i in 1:length(metrics_biglist[[key]])) {
-    
-    for (j in 1:length(metrics_biglist[[key]][[i]])) {
-      
-      for (k in 1:length(metrics_biglist[[key]][[i]][[j]])) {
-   
-    print(metrics_biglist[[key]][[i]][[j]][[k]])
-        
-        results <- data.frame(
-          Antimicrobial = names(metrics_biglist)[key],
-          Training_size = names(metrics_biglist[[key]][[i]][1]),
-          AUC = metrics_biglist[[key]][[i]][[j]][[k]]$AUC,
-          Accuracy = metrics_biglist[[key]][[i]][[j]][[k]]$Accuracy,
-          Precision = metrics_biglist[[key]][[i]][[j]][[k]]$Precision,
-          Recall = metrics_biglist[[key]][[i]][[j]][[k]]$Recall,
-          F1_score = metrics_biglist[[key]][[i]][[j]][[k]]$F1_Score)
-        
-        colnames(metrics_df) <- colnames(results)
-        
-        metrics_df <- data.frame(
-          rbind(
-            metrics_df,results
-          )
-        )
-     
-  }
-  }
-  }
-}
-rownames(metrics_df) <- NULL
+###Convert stability metrics to dataframe and write to csv
+metrics_df <- metrics_biglist %>% stabmets_writer()
 write_csv(metrics_df,"stability_metrics.csv")
 
 ##Model fairness analysis
 
 ###Protected characteristics excluding age
-ur_prot <- urines5_combined %>% mutate(
-  language_NONENG = case_when(languageENGLISH!=1~1,TRUE~0),
-  race_ASIAN = rowSums(select(., contains("raceASIAN"))) > 0,
-  race_BLACK = rowSums(select(., contains("raceBLACK"))) > 0,
-  race_HISPANIC = rowSums(select(., contains("raceHISPANIC"))) > 0,
-  race_OTHER = rowSums(select(., matches("(raceOTHER|racePORTUGUESE|raceSOUTH|raceNATIVE|raceAMERICAN|raceMULTIPLE)"))) > 0,
-  race_WHITE = rowSums(select(., contains("raceWHITE"))) > 0,
-  marital_status_MARRIED = rowSums(select(., matches("(marital_statusMARRIED)"))) > 0,
-  marital_status_NONMARRIED = case_when(marital_statusMARRIED!=1~1,TRUE~0)
-  )
+ur_prot <- urines5_combined %>% protchar_assembler()
 protchar_index <- which(grepl("(^marital_status_|^language|^MALE|^race_)",colnames(ur_prot))&
                           !grepl("(UNKNOWN|Other|\\?)",colnames(ur_prot)))
 protchars <- colnames(ur_prot)[protchar_index]
+
+###Empty performance metrics list
 metrics_biglist2 <- list()
+
+###Iterate over antimicrobial agents
 for (outcome in colnames(urines5_outcomes)[1:13]) {
     
     if (sum(!is.na(urines5_combined[[outcome]])) > 0) {
@@ -502,28 +872,23 @@ for (outcome in colnames(urines5_outcomes)[1:13]) {
           
           set.seed(seedpick)
           
-          trainIndex <- createDataPartition(urines5_combined[[outcome]], p = 0.8, list = FALSE, times = 1)
-          urines5Train <- urines5_combined[trainIndex, ]
-          urines5Test <- urines5_combined[-trainIndex, ]
-          urines5Test <- urines5Test %>% mutate(
-            language_NONENG = case_when(languageENGLISH!=1~1,TRUE~0),
-            race_ASIAN = rowSums(select(., contains("raceASIAN"))) > 0,
-            race_BLACK = rowSums(select(., contains("raceBLACK"))) > 0,
-            race_HISPANIC = rowSums(select(., contains("raceHISPANIC"))) > 0,
-            race_OTHER = rowSums(select(., matches("(raceOTHER|racePORTUGUESE|raceSOUTH|raceNATIVE|raceAMERICAN|raceMULTIPLE)"))) > 0,
-            race_WHITE = rowSums(select(., contains("raceWHITE"))) > 0,
-            marital_status_MARRIED = rowSums(select(., matches("(marital_statusMARRIED)"))) > 0,
-            marital_status_NONMARRIED = case_when(marital_statusMARRIED!=1~1,TRUE~0)
-          )
+          ###Split df to train and test
+          urines5_combined %>% TTsplitter(outcome,0.8,"urines5Train","urines5Test")
           
-          predictor_columns <- colnames(urines5_predictors)
-          selected_columns <- intersect(predictor_columns, colnames(urines5Train))
-          train_matrix <- xgb.DMatrix(data = as.matrix(urines5Train %>% select(all_of(selected_columns))), 
-                                      label = urines5Train[[outcome]])
-          test_matrix <- xgb.DMatrix(data = as.matrix(urines5Test %>% select(all_of(selected_columns))), 
-                                     label = urines5Test[[outcome]])
+          ###Ensure protected characteristics mutated
+          urines5Test <- urines5Test %>% protchar_assembler()
           
-          params <- list(
+          ###Ensure features line up between dataframes
+          ur_xg_combined <- ur_xg_combined %>%
+            lineup_features(urines5_predictors,urines5Train)
+          
+          ###Make xgboost training matrices
+          urtrain_matrix <- urines5Train %>% model_matrixmaker(urines5_predictors,outcome)
+          urtest_matrix <- urines5Test %>% model_matrixmaker(urines5_predictors,outcome)
+          urmicro_matrix <- ur_xg_combined %>% model_matrixmaker(urines5_predictors,outcome)
+          
+          ###Set parameters
+          urparams <- list(
             objective = "binary:logistic",
             eval_metric = "auc",
             eta = final_bestparams[[outcome]]$eta,
@@ -533,11 +898,10 @@ for (outcome in colnames(urines5_outcomes)[1:13]) {
             colsample_bytree = final_bestparams[[outcome]]$colsample_bytree
           )
           
-          print("Training...")
-          
-          xgb_model <- xgb.train(
-            params = params,
-            data = train_matrix,
+          ###Training
+          print(glue("Training for {outcome}"))
+          xgb_urinemodel <- xgb.train(
+            params = urparams,data = urtrain_matrix,
             nrounds = final_bestparams[[outcome]]$best_nrounds
           )
           
@@ -553,39 +917,24 @@ for (outcome in colnames(urines5_outcomes)[1:13]) {
           urines5Test2 <- urines5Test[urines5Test[protchar_index[protchar]]==1,]
           
           if (length(urines5Test2[[outcome]] %>% unique()) > 1) {
-          
             
-            test_matrix2 <- xgb.DMatrix(data = as.matrix(urines5Test2 %>% select(all_of(selected_columns))), 
-                                       label = urines5Test2[[outcome]])
+            ###Make xgboost training matrices
+            test_matrix2 <- urines5Test2 %>% model_matrixmaker(urines5_predictors,outcome)
             
-          pred_prob_test <- predict(xgb_model, newdata = test_matrix2)
-          roc_result <- roc(urines5Test2[[outcome]], pred_prob_test)
-          auc_value <- auc(roc_result)
-          print(paste("AUC-ROC:", auc_value))
-          pdf(glue("{outcome}_xg_roc.pdf"), width = 10, height = 10)
-          plot(roc_result, main = glue("{outcome} ROC Curve"), col = "blue")
-          dev.off()
+            ###Get predicted probability/class and actual class
+            urtest_matrix %>% probclassactual(xgb_urinemodel,urines5Test2,outcome,'ur_predprobs',
+                                             'ur_predclass','ur_actualclass')
+            
+            ###Performance metrics
+            ur_predact_df <- data.frame(act_val = ur_actualclass, pred_class = ur_predclass,pred_probs = ur_predprobs)
+            ur_metrics2 <- ur_perf_mets(ur_predact_df,NULL,bootstr = F)
+            charlist <- list(protchars[[protchar]])
+            names(charlist) <- "Characteristic"
+            testsup <- list(nrow(urines5Test2))
+            names(testsup) <- "Test_support"
+            ur_metrics2 <- c(charlist,ur_metrics2,testsup)
           
-          pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
-          pred_test_class <- factor(pred_test_class,levels=c(1,0))
-          actual_test_class <- urines5Test2[[outcome]]
-          actual_test_class <- factor(actual_test_class,levels=c(1,0))
-          
-          confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
-          accuracy <- confusion$overall['Accuracy']
-          precision <- confusion$byClass['Precision']
-          recall <- confusion$byClass['Recall']
-          f1_score <- 2 * (precision * recall) / (precision + recall)
-          
-          metrics_list2[[outcome]] <- list(
-            Characteristic = protchars[[protchar]],
-            AUC = auc_value,
-            Accuracy = accuracy,
-            Precision = precision,
-            Recall = recall,
-            F1_Score = f1_score,
-            Test_support = nrow(urines5Test2)
-          )
+          metrics_list2[[outcome]] <- ur_metrics2
           
           metrics_litlist2[[protchar]] <- metrics_list2
           
@@ -612,45 +961,20 @@ for (outcome in colnames(urines5_outcomes)[1:13]) {
     metrics_biglist2[[outcome]] <- metrics_medlist2
     
 }
-metrics_df2 <- data.frame(matrix(nrow=0,ncol=9))
-for (key in 1:length(names(metrics_biglist2))) {
-  for (i in 1:length(metrics_biglist2[[key]])) {
-    
-    for (j in 1:length(metrics_biglist2[[key]][[i]])) {
-      
-      for (k in 1:length(metrics_biglist2[[key]][[i]][[j]])) {
-        
-        print(metrics_biglist2[[key]][[i]][[j]][[k]])
-        
-        results <- data.frame(
-          Antimicrobial = names(metrics_biglist2)[[key]],
-          Iteration = i,
-          Characteristic = metrics_biglist2[[key]][[i]][[j]][[k]]$Characteristic,
-          AUC = metrics_biglist2[[key]][[i]][[j]][[k]]$AUC,
-          Accuracy = metrics_biglist2[[key]][[i]][[j]][[k]]$Accuracy,
-          Precision = metrics_biglist2[[key]][[i]][[j]][[k]]$Precision,
-          Recall = metrics_biglist2[[key]][[i]][[j]][[k]]$Recall,
-          F1_score = metrics_biglist2[[key]][[i]][[j]][[k]]$F1_Score,
-          Test_support = metrics_biglist2[[key]][[i]][[j]][[k]]$Test_support)
-        
-        colnames(metrics_df2) <- colnames(results)
-        
-        metrics_df2 <- data.frame(
-          rbind(
-            metrics_df2,results
-          )
-        )
-        
-      }
-    }
-  }
-}
-rownames(metrics_df2) <- NULL
+
+###Make fairness dataframe and write to csv
+metrics_df2 <- metrics_biglist2 %>% protchar_writer()
 write_csv(metrics_df2,"fairness_metrics1.csv")
 
 ###Age
+
+###Age list
 ages <- urines5_combined %>% distinct(standard_age) %>% unlist() %>% sort()
+
+###Empty performance metrics list
 metrics_biglist3 <- list()
+
+###Iterate over antimicrobials
 for (outcome in colnames(urines5_outcomes)[1:13]) {
   
   if (sum(!is.na(urines5_combined[[outcome]])) > 0) {
@@ -661,34 +985,38 @@ for (outcome in colnames(urines5_outcomes)[1:13]) {
         
         set.seed(seedpick)
         
-          trainIndex <- createDataPartition(urines5_combined[[outcome]], p = 0.8, list = FALSE, times = 1)
-          urines5Train <- urines5_combined[trainIndex, ]
-          urines5Test <- urines5_combined[-trainIndex, ]
-          
-          predictor_columns <- colnames(urines5_predictors)
-          selected_columns <- intersect(predictor_columns, colnames(urines5Train))
-          train_matrix <- xgb.DMatrix(data = as.matrix(urines5Train %>% select(all_of(selected_columns))), 
-                                      label = urines5Train[[outcome]])
-          test_matrix <- xgb.DMatrix(data = as.matrix(urines5Test %>% select(all_of(selected_columns))), 
-                                     label = urines5Test[[outcome]])
-          
-          params <- list(
-            objective = "binary:logistic",
-            eval_metric = "auc",
-            eta = final_bestparams[[outcome]]$eta,
-            max_depth = final_bestparams[[outcome]]$max_depth,
-            min_child_weight = final_bestparams[[outcome]]$min_child_weight,
-            subsample = final_bestparams[[outcome]]$subsample,
-            colsample_bytree = final_bestparams[[outcome]]$colsample_bytree
-          )
-          
-          print("Training...")
-          
-          xgb_model <- xgb.train(
-            params = params,
-            data = train_matrix,
-            nrounds = final_bestparams[[outcome]]$best_nrounds
-          )
+        ###Split df to train and test
+        urines5_combined %>% TTsplitter(outcome,0.8,"urines5Train","urines5Test")
+        
+        ###Ensure protected characteristics mutated
+        urines5Test <- urines5Test %>% protchar_assembler()
+        
+        ###Ensure features line up between dataframes
+        ur_xg_combined <- ur_xg_combined %>%
+          lineup_features(urines5_predictors,urines5Train)
+        
+        ###Make xgboost training matrices
+        urtrain_matrix <- urines5Train %>% model_matrixmaker(urines5_predictors,outcome)
+        urtest_matrix <- urines5Test %>% model_matrixmaker(urines5_predictors,outcome)
+        urmicro_matrix <- ur_xg_combined %>% model_matrixmaker(urines5_predictors,outcome)
+        
+        ###Set parameters
+        urparams <- list(
+          objective = "binary:logistic",
+          eval_metric = "auc",
+          eta = final_bestparams[[outcome]]$eta,
+          max_depth = final_bestparams[[outcome]]$max_depth,
+          min_child_weight = final_bestparams[[outcome]]$min_child_weight,
+          subsample = final_bestparams[[outcome]]$subsample,
+          colsample_bytree = final_bestparams[[outcome]]$colsample_bytree
+        )
+        
+        ###Training
+        print(glue("Training for {outcome}"))
+        xgb_urinemodel <- xgb.train(
+          params = urparams,data = urtrain_matrix,
+          nrounds = final_bestparams[[outcome]]$best_nrounds
+        )
           
           metrics_litlist3 <- list()
           
@@ -702,37 +1030,24 @@ for (outcome in colnames(urines5_outcomes)[1:13]) {
             if (sum(!is.na(urines5_combined[[outcome]])) > 0) {
               
               urines5Test2 <- urines5Test %>% filter(standard_age==ages[age])
-              test_matrix2 <- xgb.DMatrix(data = as.matrix(urines5Test2 %>% select(all_of(selected_columns))), 
-                                         label = urines5Test2[[outcome]])
+              
+              ###Make xgboost training matrix
+              test_matrix2 <- urines5Test2 %>% model_matrixmaker(urines5_predictors,outcome)
+              
+              ###Get predicted probability/class and actual class
+              test_matrix2 %>% probclassactual(xgb_urinemodel,urines5Test2,outcome,'ur_predprobs',
+                                               'ur_predclass','ur_actualclass')
+              
+              ###Performance metrics
+              ur_predact_df <- data.frame(act_val = ur_actualclass, pred_class = ur_predclass,pred_probs = ur_predprobs)
+              ur_metrics3 <- ur_perf_mets(ur_predact_df,NULL,bootstr = F)
+              charlist <- list(glue("age{ages[[age]]}"))
+              names(charlist) <- "Characteristic"
+              testsup <- list(nrow(urines5Test2))
+              names(testsup) <- "Test_support"
+              ur_metrics3 <- c(charlist,ur_metrics3,testsup)
           
-          pred_prob_test <- predict(xgb_model, newdata = test_matrix2)
-          roc_result <- roc(urines5Test2[[outcome]], pred_prob_test)
-          auc_value <- auc(roc_result)
-          print(paste("AUC-ROC:", auc_value))
-          pdf(glue("{outcome}_xg_roc.pdf"), width = 10, height = 10)
-          plot(roc_result, main = glue("{outcome} ROC Curve"), col = "blue")
-          dev.off()
-          
-          pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
-          pred_test_class <- factor(pred_test_class,levels=c(1,0))
-          actual_test_class <- urines5Test2[[outcome]]
-          actual_test_class <- factor(actual_test_class,levels=c(1,0))
-          
-          confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
-          accuracy <- confusion$overall['Accuracy']
-          precision <- confusion$byClass['Precision']
-          recall <- confusion$byClass['Recall']
-          f1_score <- 2 * (precision * recall) / (precision + recall)
-          
-          metrics_list3[[outcome]] <- list(
-            Characteristic = glue("age{ages[[age]]}"),
-            AUC = auc_value,
-            Accuracy = accuracy,
-            Precision = precision,
-            Recall = recall,
-            F1_Score = f1_score,
-            Test_support = nrow(urines5Test2)
-          )
+          metrics_list3[[outcome]] <- ur_metrics3
           
           metrics_litlist3[[age]] <- metrics_list3
           
@@ -760,84 +1075,28 @@ for (outcome in colnames(urines5_outcomes)[1:13]) {
   metrics_biglist3[[outcome]] <- metrics_medlist3
   
 }
-metrics_df3 <- data.frame(matrix(nrow=0,ncol=9))
-for (key in 1:length(names(metrics_biglist3))) {
-  for (i in 1:length(metrics_biglist3[[key]])) {
-    
-    for (j in 1:length(metrics_biglist3[[key]][[i]])) {
-      
-      for (k in 1:length(metrics_biglist3[[key]][[i]][[j]])) {
-        
-        print(metrics_biglist3[[key]][[i]][[j]][[k]])
-        
-        results <- data.frame(
-          Antimicrobial = names(metrics_biglist3)[key],
-          Iteration = i,
-          Characteristic = metrics_biglist3[[key]][[i]][[j]][[k]]$Characteristic,
-          AUC = metrics_biglist3[[key]][[i]][[j]][[k]]$AUC,
-          Accuracy = metrics_biglist3[[key]][[i]][[j]][[k]]$Accuracy,
-          Precision = metrics_biglist3[[key]][[i]][[j]][[k]]$Precision,
-          Recall = metrics_biglist3[[key]][[i]][[j]][[k]]$Recall,
-          F1_score = metrics_biglist3[[key]][[i]][[j]][[k]]$F1_Score,
-          Test_support = metrics_biglist3[[key]][[i]][[j]][[k]]$Test_support)
-        
-        colnames(metrics_df3) <- colnames(results)
-        
-        metrics_df3 <- data.frame(
-          rbind(
-            metrics_df3,results
-          )
-        )
-        
-      }
-    }
-  }
-}
-rownames(metrics_df3) <- NULL
 
-###Write fairness metrics to CSV
-metrics_protchar_df <- data.frame(rbind(metrics_df2,metrics_df3))
-metrics_protchar_df <- metrics_protchar_df %>% mutate(Category = case_when(
-  grepl("MALE",Characteristic)~"Gender",
-  grepl("marital",Characteristic)~"Marital status",
-  grepl("language",Characteristic)~"Language spoken",
-  grepl("race",Characteristic)~"Race",
-  grepl("^age",Characteristic)~"Age group"
-),
-Characteristic=case_when(
-  grepl("NONMARRIED",Characteristic)~"Non-married",
-  grepl("^marital_status_MARRIED$",Characteristic)~"Married",
-  grepl("WHITE",Characteristic)~"White",
-  grepl("BLACK",Characteristic)~"Black",
-  grepl("HISPANIC",Characteristic)~"Hispanic",
-  grepl("ASIAN",Characteristic)~"Asian",
-  grepl("OTHER",Characteristic)~"Other",
-  grepl("MALEFALSE",Characteristic)~"Female",
-  grepl("MALETRUE",Characteristic)~"Male",
-  grepl("ENGLISH",Characteristic)~"English",
-  grepl("NONENG",Characteristic)~"Non-English",
-  grepl("18",Characteristic)~"18-29",
-  grepl("30",Characteristic)~"30-39",
-  grepl("40",Characteristic)~"40-49",
-  grepl("50",Characteristic)~"50-59",
-  grepl("60",Characteristic)~"60-69",
-  grepl("70",Characteristic)~"70-79",
-  grepl("80",Characteristic)~"80-89",
-  grepl("90",Characteristic)~"≥ 90",
-)) %>% relocate(Category,.before = "Characteristic")
-metrics_protchar_df <- metrics_protchar_df %>% arrange(Antimicrobial, Iteration, Category, Characteristic)
+###Age metrics and other fairness metrics to dataframe
+metrics_df3 <- metrics_biglist3 %>% agemettodf()
+
+###Write fairness metrics to df, then to CSV
+metrics_protchar_df <- metrics_biglist3 %>% 
+  agefairmettodf(metrics_df2)
 write_csv(metrics_protchar_df,"fairness_metrics.csv")
 
 ##Time sensitivity analysis
+
+###Year group indexes in testing dataframe
 patkey <- pats %>% select(subject_id,anchor_year_group)
 urines_ref <- urines_ref %>% left_join(patkey)
-ind2008 <- which(urines_ref$anchor_year_group=="2008 - 2010")
-ind2011 <- which(urines_ref$anchor_year_group=="2011 - 2013")
-ind2014 <- which(urines_ref$anchor_year_group=="2014 - 2016")
-ind2017 <- which(urines_ref$anchor_year_group=="2017 - 2019")
 
+###Set time sequence
 time_seq <- c("2008 - 2010","2011 - 2013","2014 - 2016","2017 - 2019")
+
+###Set empty list
 metrics_biglist4 <- list()
+
+###Iterate over antimicrobials
 for (outcome in colnames(urines5_outcomes)[1:13]) {
   
   if (sum(!is.na(urines5_combined[[outcome]])) > 0) {
@@ -884,12 +1143,12 @@ for (outcome in colnames(urines5_outcomes)[1:13]) {
         
         predictor_columns <- colnames(urines5_predictors)
         selected_columns <- intersect(predictor_columns, colnames(urines5Train))
-        train_matrix <- xgb.DMatrix(data = as.matrix(urines5Train %>% select(all_of(selected_columns))), 
-                                    label = urines5Train[[outcome]])
-        test_matrix <- xgb.DMatrix(data = as.matrix(urines5Test %>% select(all_of(selected_columns))), 
-                                   label = urines5Test[[outcome]])
         
-        params <- list(
+        urtrain_matrix <- urines5Train %>% model_matrixmaker(urines5_predictors,outcome)
+        urtest_matrix <- urines5Test %>% model_matrixmaker(urines5_predictors,outcome)
+        
+        ###Set parameters
+        urparams <- list(
           objective = "binary:logistic",
           eval_metric = "auc",
           eta = final_bestparams[[outcome]]$eta,
@@ -899,42 +1158,23 @@ for (outcome in colnames(urines5_outcomes)[1:13]) {
           colsample_bytree = final_bestparams[[outcome]]$colsample_bytree
         )
         
-        print("Training...")
-        
-        xgb_model <- xgb.train(
-          params = params,
-          data = train_matrix,
+        ###Training
+        print(glue("Training for {outcome}"))
+        xgb_urinemodel <- xgb.train(
+          params = urparams,data = urtrain_matrix,
           nrounds = final_bestparams[[outcome]]$best_nrounds
         )
         
-        pred_prob_test <- predict(xgb_model, newdata = test_matrix)
-        roc_result <- roc(urines5Test[[outcome]], pred_prob_test)
-        auc_value <- auc(roc_result)
-        print(paste("AUC-ROC:", auc_value))
-        pdf(glue("{outcome}_xg_roc.pdf"), width = 10, height = 10)
-        plot(roc_result, main = glue("{outcome} ROC Curve"), col = "blue")
-        dev.off()
+        ###Performance metrics
+        ur_predact_df <- data.frame(act_val = ur_actualclass, pred_class = ur_predclass,pred_probs = ur_predprobs)
+        ur_metrics4<- ur_perf_mets(ur_predact_df,NULL,bootstr = F)
+        trainsup <- list(nrow(urines5Train))
+        names(trainsup) <- "Train_support"
+        testsup <- list(nrow(urines5Test))
+        names(testsup) <- "Test_support"
+        ur_metrics4 <- c(ur_metrics4,trainsup,testsup)
         
-        pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
-        pred_test_class <- factor(pred_test_class,levels=c(1,0))
-        actual_test_class <- urines5Test[[outcome]]
-        actual_test_class <- factor(actual_test_class,levels=c(1,0))
-        
-        confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
-        accuracy <- confusion$overall['Accuracy']
-        precision <- confusion$byClass['Precision']
-        recall <- confusion$byClass['Recall']
-        f1_score <- 2 * (precision * recall) / (precision + recall)
-        
-        metrics_list4[[outcome]] <- list(
-          AUC = auc_value,
-          Accuracy = accuracy,
-          Precision = precision,
-          Recall = recall,
-          F1_Score = f1_score,
-          Train_support = nrow(urines5Train),
-          Test_support = nrow(urines5Test)
-        )
+        metrics_list4[[outcome]] <- ur_metrics4
         
         metrics_litlist4[[tim2]] <- metrics_list4
         names(metrics_litlist4[[tim2]]) <- time_seq[tim2]
@@ -955,85 +1195,24 @@ for (outcome in colnames(urines5_outcomes)[1:13]) {
   metrics_biglist4[[outcome]] <- metrics_medlist4
   
 }
-metrics_df4 <- data.frame(matrix(nrow=0,ncol=11))
-for (key in 1:length(names(metrics_biglist4))) {
-  for (i in 1:length(metrics_biglist4[[key]])) {
-    
-    for (j in 1:length(metrics_biglist4[[key]][[i]])) {
-      
-      for (k in 1:length(metrics_biglist4[[key]][[i]][[j]])) {
-        
-        for (l in 1:length(metrics_biglist4[[key]][[i]][[j]][[k]])) {
-          
-        results <- data.frame(
-          Antimicrobial = names(metrics_biglist4)[key],
-          Iteration = i,
-          Train_year = names(metrics_biglist4[[key]][[i]][[j]][1]),
-          Test_year = names(metrics_biglist4[[key]][[i]][[j]][[k]]),
-          AUC = metrics_biglist4[[key]][[i]][[j]][[k]][[l]]$AUC,
-          Accuracy = metrics_biglist4[[key]][[i]][[j]][[k]][[l]]$Accuracy,
-          Precision = metrics_biglist4[[key]][[i]][[j]][[k]][[l]]$Precision,
-          Recall = metrics_biglist4[[key]][[i]][[j]][[k]][[l]]$Recall,
-          F1_score = metrics_biglist4[[key]][[i]][[j]][[k]][[l]]$F1_Score,
-          Train_support = metrics_biglist4[[key]][[i]][[j]][[k]][[l]]$Train_support,
-          Test_support = metrics_biglist4[[key]][[i]][[j]][[k]][[l]]$Test_support)
-        
-        colnames(metrics_df4) <- colnames(results)
-        
-        metrics_df4 <- data.frame(
-          rbind(
-            metrics_df4,results
-          )
-        )
-        }
-      }
-    }
-  }
-}
-rownames(metrics_df4) <- NULL
+
+###Time sensitivity metrics to dataframe
+metrics_df4 <- metrics_biglist4 %>% timesenstodf()
 write_csv(metrics_df4,"time_sens_metrics.csv")
 
+
 ##CDI and toxicity dataset preprocessing
+
+###Joining up abx dataframes
 train_abx <- train_abx %>% factorise()
 test_abx <- test_abx %>% factorise()
 abx <- data.frame(rbind(train_abx,test_abx))
-hadm_key <- hadm %>% select(subject_id,race,language,marital_status) %>% 
-  distinct(subject_id,.keep_all=T)
-age_key <- pats %>% select(subject_id,anchor_age) %>% mutate(age_grp=case_when(
-  anchor_age<30~18,anchor_age>=30&anchor_age<40~30,
-  anchor_age>=40&anchor_age<50~40,
-  anchor_age>=50&anchor_age<60~50,
-  anchor_age>=60&anchor_age<70~60,
-  anchor_age>=70&anchor_age<80~70,
-  anchor_age>=80&anchor_age<90~80,
-  anchor_age>=90~90
-)) %>% select(-anchor_age) %>% distinct(subject_id,.keep_all = T)
-dems_key <- left_join(hadm_key,age_key,by="subject_id")
-abx <- abx %>% left_join(dems_key,by="subject_id")
-abx <- abx %>% mutate(marital_status=case_when(is.na(marital_status)~"UNKNOWN",
-                                                       TRUE~marital_status))
-abx_outcomes <- abx %>%
-  select(CDI,overall_tox) %>% mutate(CDI=case_when(CDI==TRUE~1,TRUE~0),
-                                     overall_tox=case_when(overall_tox==TRUE~1,TRUE~0))
-abx_predictors <- abx %>% select(pHADM:age65,prAKI:pDIAB,pCARD:curr_service,pICU:pSEPSIS,ob_freq,highCRP,
-                                 temperature:dbp,inpatient_7d,
-                                 ab_name_Ampicillin_Ceftriaxone:ab_name_Ampicillin,race:age_grp)
-set.seed(123)
-dummies <- dummyVars(" ~ .", data = abx_predictors)
-abx_predictors <- predict(dummies, newdata = abx_predictors)
-abx_combined <- as.data.frame(cbind(abx_outcomes, abx_predictors))
 
-###Read-in chosen model parameters (CDI/toxicity)
-file_names <- glue("cdi_tox_final_params_{colnames(abx_outcomes)}.csv")
-cdi_tox_final_bestparams <- lapply(file_names, function(file) {
-  read_csv(file)
-})
-namelist <- c("eta","max_depth","min_child_weight","subsample","colsample_bytree",
-              "best_nrounds")
-for (i in 1:length(cdi_tox_final_bestparams)) {
-  names(cdi_tox_final_bestparams[[i]])[3:8] <- namelist
-}
-names(cdi_tox_final_bestparams) <- colnames(abx_outcomes)
+###Preprocessing
+abx %>% modeltest_preproc("abx_outcomes","abx_predictors","abx_combined")
+
+###Read in hyperparameters
+cdi_tox_final_bestparams <- hypparamreader("cdi_tox_final_params_",colnames(abx_outcomes))
 
 ###Model stability analysis (CDI and toxicity prediction)
 
@@ -1058,61 +1237,46 @@ for (outcome in colnames(abx_outcomes)) {
         print(iterrun)
         
         set.seed(seedpick)
-        trainIndex <- createDataPartition(abx_combined[[outcome]], p = tr_size_seq[siz], list = FALSE, times = 1)
-        abxTrain <- abx_combined[trainIndex, ]
-        abxTest <- abx_combined[-trainIndex, ]
         
-        predictor_columns <- colnames(abx_predictors)
-        selected_columns <- intersect(predictor_columns, colnames(abxTrain))
-        train_matrix <- xgb.DMatrix(data = as.matrix(abxTrain %>% select(all_of(selected_columns))), 
-                                    label = abxTrain[[outcome]])
-        test_matrix <- xgb.DMatrix(data = as.matrix(abxTest %>% select(all_of(selected_columns))), 
-                                   label = abxTest[[outcome]])
+        ###Split df to train and test
+        abx_combined %>% TTsplitter(outcome,tr_size_seq[siz],"abxTrain","abxTest")
         
-        params <- list(
+        ###Ensure features line up between dataframes
+        ur_abx_combined <- ur_abx_combined %>%
+          lineup_features(abx_predictors,abxTrain)
+        
+        ###Make xgboost training matrices
+        abxtrain_matrix <- abxTrain %>% model_matrixmaker(abx_predictors,outcome)
+        abxtest_matrix <- abxTest %>% model_matrixmaker(abx_predictors,outcome)
+        abxmicro_matrix <- ur_abx_combined %>% model_matrixmaker(abx_predictors,outcome)
+        
+        ###Set parameters
+        abxparams <- list(
           objective = "binary:logistic",
           eval_metric = "auc",
-          eta = cdi_tox_final_bestparams[[outcome]]$eta,
-          max_depth = cdi_tox_final_bestparams[[outcome]]$max_depth,
-          min_child_weight = cdi_tox_final_bestparams[[outcome]]$min_child_weight,
-          subsample = cdi_tox_final_bestparams[[outcome]]$subsample,
-          colsample_bytree = cdi_tox_final_bestparams[[outcome]]$colsample_bytree
+          eta = final_bestparams[[outcome]]$eta,
+          max_depth = final_bestparams[[outcome]]$max_depth,
+          min_child_weight = final_bestparams[[outcome]]$min_child_weight,
+          subsample = final_bestparams[[outcome]]$subsample,
+          colsample_bytree = final_bestparams[[outcome]]$colsample_bytree
         )
         
-        print("Training...")
-        
-        xgb_model <- xgb.train(
-          params = params,
-          data = train_matrix,
-          nrounds = cdi_tox_final_bestparams[[outcome]]$best_nrounds
+        ###Training
+        print(glue("Training for {outcome}"))
+        xgb_abxmodel <- xgb.train(
+          params = abxparams,data = abxtrain_matrix,
+          nrounds = final_bestparams[[outcome]]$best_nrounds
         )
         
-        pred_prob_test <- predict(xgb_model, newdata = test_matrix)
-        roc_result <- roc(abxTest[[outcome]], pred_prob_test)
-        auc_value <- auc(roc_result)
-        print(paste("AUC-ROC:", auc_value))
-        pdf(glue("{outcome}_xg_roc.pdf"), width = 10, height = 10)
-        plot(roc_result, main = glue("{outcome} ROC Curve"), col = "blue")
-        dev.off()
+        ###Get predicted probability/class and actual class
+        abxtest_matrix %>% probclassactual(xgb_abxmodel,abxTest,outcome,'abx_predprobs',
+                                          'abx_predclass','abx_actualclass')
         
-        pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
-        pred_test_class <- factor(pred_test_class,levels=c(1,0))
-        actual_test_class <- abxTest[[outcome]]
-        actual_test_class <- factor(actual_test_class,levels=c(1,0))
+        ###Performance metrics
+        abx_predact_df <- data.frame(act_val = abx_actualclass, pred_class = abx_predclass,pred_probs = abx_predprobs)
+        abx_metrics <- ur_perf_mets(abx_predact_df,NULL,bootstr = F)
         
-        confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
-        accuracy <- confusion$overall['Accuracy']
-        precision <- confusion$byClass['Precision']
-        recall <- confusion$byClass['Recall']
-        f1_score <- 2 * (precision * recall) / (precision + recall)
-        
-        metrics_list[[outcome]] <- list(
-          AUC = auc_value,
-          Accuracy = accuracy,
-          Precision = precision,
-          Recall = recall,
-          F1_Score = f1_score
-        )
+        metrics_list[[outcome]] <- abx_metrics
         
         metrics_litlist[[seedpick]] <- metrics_list
         
@@ -1129,57 +1293,21 @@ for (outcome in colnames(abx_outcomes)) {
 }
 
 ###Write stability metrics to CSV (CDI tox)
-metrics_df <- data.frame(matrix(nrow=0,ncol=7))
-for (key in 1:length(names(metrics_biglist))) {
-  for (i in 1:length(metrics_biglist[[key]])) {
-    
-    for (j in 1:length(metrics_biglist[[key]][[i]])) {
-      
-      for (k in 1:length(metrics_biglist[[key]][[i]][[j]])) {
-        
-        print(metrics_biglist[[key]][[i]][[j]][[k]])
-        
-        results <- data.frame(
-          Antimicrobial = names(metrics_biglist)[key],
-          Training_size = names(metrics_biglist[[key]][[i]][1]),
-          AUC = metrics_biglist[[key]][[i]][[j]][[k]]$AUC,
-          Accuracy = metrics_biglist[[key]][[i]][[j]][[k]]$Accuracy,
-          Precision = metrics_biglist[[key]][[i]][[j]][[k]]$Precision,
-          Recall = metrics_biglist[[key]][[i]][[j]][[k]]$Recall,
-          F1_score = metrics_biglist[[key]][[i]][[j]][[k]]$F1_Score)
-        
-        colnames(metrics_df) <- colnames(results)
-        
-        metrics_df <- data.frame(
-          rbind(
-            metrics_df,results
-          )
-        )
-        
-      }
-    }
-  }
-}
-rownames(metrics_df) <- NULL
+metrics_df <- metrics_biglist %>% stabmets_writer()
 write_csv(metrics_df,"cdi_tox_stability_metrics.csv")
 
 ##Model fairness analysis (CDI tox)
 
 ###Protected characteristics excluding age (CDI tox)
-ur_prot <- abx_combined %>% mutate(
-  language_NONENG = case_when(languageENGLISH!=1~1,TRUE~0),
-  race_ASIAN = rowSums(select(., contains("raceASIAN"))) > 0,
-  race_BLACK = rowSums(select(., contains("raceBLACK"))) > 0,
-  race_HISPANIC = rowSums(select(., contains("raceHISPANIC"))) > 0,
-  race_OTHER = rowSums(select(., matches("(raceOTHER|racePORTUGUESE|raceSOUTH|raceNATIVE|raceAMERICAN|raceMULTIPLE)"))) > 0,
-  race_WHITE = rowSums(select(., contains("raceWHITE"))) > 0,
-  marital_status_MARRIED = rowSums(select(., matches("(marital_statusMARRIED)"))) > 0,
-  marital_status_NONMARRIED = case_when(marital_statusMARRIED!=1~1,TRUE~0)
-)
-protchar_index <- which(grepl("(^marital_status_|^language|^MALE|^race_)",colnames(ur_prot))&
-                          !grepl("(UNKNOWN|Other|\\?)",colnames(ur_prot)))
-protchars <- colnames(ur_prot)[protchar_index]
+abx_prot <- abx_combined %>% protchar_assambler()
+protchar_index <- which(grepl("(^marital_status_|^language|^MALE|^race_)",colnames(abx_prot))&
+                          !grepl("(UNKNOWN|Other|\\?)",colnames(abx_prot)))
+protchars <- colnames(abx_prot)[protchar_index]
+
+###Empty metrics list
 metrics_biglist2 <- list()
+
+###Iterate over treatment outcomes
 for (outcome in colnames(abx_outcomes)) {
   
   if (sum(!is.na(abx_combined[[outcome]])) > 0) {
@@ -1190,43 +1318,37 @@ for (outcome in colnames(abx_outcomes)) {
       
       set.seed(seedpick)
       
-      trainIndex <- createDataPartition(abx_combined[[outcome]], p = 0.8, list = FALSE, times = 1)
-      abxTrain <- abx_combined[trainIndex, ]
-      abxTest <- abx_combined[-trainIndex, ]
-      abxTest <- abxTest %>% mutate(
-        language_NONENG = case_when(languageENGLISH!=1~1,TRUE~0),
-        race_ASIAN = rowSums(select(., contains("raceASIAN"))) > 0,
-        race_BLACK = rowSums(select(., contains("raceBLACK"))) > 0,
-        race_HISPANIC = rowSums(select(., contains("raceHISPANIC"))) > 0,
-        race_OTHER = rowSums(select(., matches("(raceOTHER|racePORTUGUESE|raceSOUTH|raceNATIVE|raceAMERICAN|raceMULTIPLE)"))) > 0,
-        race_WHITE = rowSums(select(., contains("raceWHITE"))) > 0,
-        marital_status_MARRIED = rowSums(select(., matches("(marital_statusMARRIED)"))) > 0,
-        marital_status_NONMARRIED = case_when(marital_statusMARRIED!=1~1,TRUE~0)
-      )
+      ###Split df to train and test
+      abx_combined %>% TTsplitter(outcome,0.8,"abxTrain","abxTest")
       
-      predictor_columns <- colnames(abx_predictors)
-      selected_columns <- intersect(predictor_columns, colnames(abxTrain))
-      train_matrix <- xgb.DMatrix(data = as.matrix(abxTrain %>% select(all_of(selected_columns))), 
-                                  label = abxTrain[[outcome]])
-      test_matrix <- xgb.DMatrix(data = as.matrix(abxTest %>% select(all_of(selected_columns))), 
-                                 label = abxTest[[outcome]])
+      ###Ensure protected characteristics mutated
+      abxTest <- abxTest %>% protchar_assembler()
       
-      params <- list(
+      ###Ensure features line up between dataframes
+      abx_xg_combined <- abx_xg_combined %>%
+        lineup_features(abx_predictors,abxTrain)
+      
+      ###Make xgboost training matrices
+      abxtrain_matrix <- abxTrain %>% model_matrixmaker(abx_predictors,outcome)
+      abxtest_matrix <- abxTest %>% model_matrixmaker(abx_predictors,outcome)
+      abxmicro_matrix <- abx_xg_combined %>% model_matrixmaker(abx_predictors,outcome)
+      
+      ###Set parameters
+      abxparams <- list(
         objective = "binary:logistic",
         eval_metric = "auc",
-        eta = cdi_tox_final_bestparams[[outcome]]$eta,
-        max_depth = cdi_tox_final_bestparams[[outcome]]$max_depth,
-        min_child_weight = cdi_tox_final_bestparams[[outcome]]$min_child_weight,
-        subsample = cdi_tox_final_bestparams[[outcome]]$subsample,
-        colsample_bytree = cdi_tox_final_bestparams[[outcome]]$colsample_bytree
+        eta = final_bestparams[[outcome]]$eta,
+        max_depth = final_bestparams[[outcome]]$max_depth,
+        min_child_weight = final_bestparams[[outcome]]$min_child_weight,
+        subsample = final_bestparams[[outcome]]$subsample,
+        colsample_bytree = final_bestparams[[outcome]]$colsample_bytree
       )
       
-      print("Training...")
-      
-      xgb_model <- xgb.train(
-        params = params,
-        data = train_matrix,
-        nrounds = cdi_tox_final_bestparams[[outcome]]$best_nrounds
+      ###Training
+      print(glue("Training for {outcome}"))
+      xgb_abxmodel <- xgb.train(
+        params = abxparams,data = abxtrain_matrix,
+        nrounds = final_bestparams[[outcome]]$best_nrounds
       )
       
       metrics_litlist2 <- list()
@@ -1242,38 +1364,23 @@ for (outcome in colnames(abx_outcomes)) {
         
         if (length(abxTest2[[outcome]] %>% unique()) > 1) {
           
+          ###Make xgboost training matrices
+          test_matrix2 <- abxTest2 %>% model_matrixmaker(abx_predictors,outcome)
           
-          test_matrix2 <- xgb.DMatrix(data = as.matrix(abxTest2 %>% select(all_of(selected_columns))), 
-                                      label = abxTest2[[outcome]])
+          ###Get predicted probability/class and actual class
+          abxtest_matrix %>% probclassactual(xgb_abxmodel,abxTest2,outcome,'abx_predprobs',
+                                           'abx_predclass','abx_actualclass')
           
-          pred_prob_test <- predict(xgb_model, newdata = test_matrix2)
-          roc_result <- roc(abxTest2[[outcome]], pred_prob_test)
-          auc_value <- auc(roc_result)
-          print(paste("AUC-ROC:", auc_value))
-          pdf(glue("{outcome}_xg_roc.pdf"), width = 10, height = 10)
-          plot(roc_result, main = glue("{outcome} ROC Curve"), col = "blue")
-          dev.off()
+          ###Performance metrics
+          abx_predact_df <- data.frame(act_val = abx_actualclass, pred_class = abx_predclass,pred_probs = abx_predprobs)
+          abx_metrics2 <- ur_perf_mets(abx_predact_df,NULL,bootstr = F)
+          charlist <- list(protchars[[protchar]])
+          names(charlist) <- "Characteristic"
+          testsup <- list(nrow(abxTest2))
+          names(testsup) <- "Test_support"
+          abx_metrics2 <- c(charlist,abx_metrics2,testsup)
           
-          pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
-          pred_test_class <- factor(pred_test_class,levels=c(1,0))
-          actual_test_class <- abxTest2[[outcome]]
-          actual_test_class <- factor(actual_test_class,levels=c(1,0))
-          
-          confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
-          accuracy <- confusion$overall['Accuracy']
-          precision <- confusion$byClass['Precision']
-          recall <- confusion$byClass['Recall']
-          f1_score <- 2 * (precision * recall) / (precision + recall)
-          
-          metrics_list2[[outcome]] <- list(
-            Characteristic = protchars[[protchar]],
-            AUC = auc_value,
-            Accuracy = accuracy,
-            Precision = precision,
-            Recall = recall,
-            F1_Score = f1_score,
-            Test_support = nrow(abxTest2)
-          )
+          metrics_list2[[outcome]] <- abx_metrics2
           
           metrics_litlist2[[protchar]] <- metrics_list2
           
@@ -1300,45 +1407,18 @@ for (outcome in colnames(abx_outcomes)) {
   metrics_biglist2[[outcome]] <- metrics_medlist2
   
 }
-metrics_df2 <- data.frame(matrix(nrow=0,ncol=9))
-for (key in 1:length(names(metrics_biglist2))) {
-  for (i in 1:length(metrics_biglist2[[key]])) {
-    
-    for (j in 1:length(metrics_biglist2[[key]][[i]])) {
-      
-      for (k in 1:length(metrics_biglist2[[key]][[i]][[j]])) {
-        
-        print(metrics_biglist2[[key]][[i]][[j]][[k]])
-        
-        results <- data.frame(
-          Antimicrobial = names(metrics_biglist2)[[key]],
-          Iteration = i,
-          Characteristic = metrics_biglist2[[key]][[i]][[j]][[k]]$Characteristic,
-          AUC = metrics_biglist2[[key]][[i]][[j]][[k]]$AUC,
-          Accuracy = metrics_biglist2[[key]][[i]][[j]][[k]]$Accuracy,
-          Precision = metrics_biglist2[[key]][[i]][[j]][[k]]$Precision,
-          Recall = metrics_biglist2[[key]][[i]][[j]][[k]]$Recall,
-          F1_score = metrics_biglist2[[key]][[i]][[j]][[k]]$F1_Score,
-          Test_support = metrics_biglist2[[key]][[i]][[j]][[k]]$Test_support)
-        
-        colnames(metrics_df2) <- colnames(results)
-        
-        metrics_df2 <- data.frame(
-          rbind(
-            metrics_df2,results
-          )
-        )
-        
-      }
-    }
-  }
-}
-rownames(metrics_df2) <- NULL
+
+###Write abx outcome fairness metrics to csv
+metrics_df2 <- metrics_biglist2 %>% protchar_writer()
 write_csv(metrics_df2,"cdi_tox_fairness_metrics1.csv")
 
-###Age (CDI tox)
+###List of ages
 ages <- abx_combined %>% distinct(age_grp) %>% unlist() %>% sort()
+
+###Empty metrics dataframe
 metrics_biglist3 <- list()
+
+###Iterate over abx outcomes
 for (outcome in colnames(abx_outcomes)) {
   
   if (sum(!is.na(abx_combined[[outcome]])) > 0) {
@@ -1349,33 +1429,37 @@ for (outcome in colnames(abx_outcomes)) {
       
       set.seed(seedpick)
       
-      trainIndex <- createDataPartition(abx_combined[[outcome]], p = 0.8, list = FALSE, times = 1)
-      abxTrain <- abx_combined[trainIndex, ]
-      abxTest <- abx_combined[-trainIndex, ]
+      ###Split df to train and test
+      abx_combined %>% TTsplitter(outcome,0.8,"abxTrain","abxTest")
       
-      predictor_columns <- colnames(abx_predictors)
-      selected_columns <- intersect(predictor_columns, colnames(abxTrain))
-      train_matrix <- xgb.DMatrix(data = as.matrix(abxTrain %>% select(all_of(selected_columns))), 
-                                  label = abxTrain[[outcome]])
-      test_matrix <- xgb.DMatrix(data = as.matrix(abxTest %>% select(all_of(selected_columns))), 
-                                 label = abxTest[[outcome]])
+      ###Ensure protected characteristics mutated
+      abxTest <- abxTest %>% protchar_assembler()
       
-      params <- list(
+      ###Ensure features line up between dataframes
+      abx_xg_combined <- abx_xg_combined %>%
+        lineup_features(abx_predictors,abxTrain)
+      
+      ###Make xgboost training matrices
+      abxtrain_matrix <- abxTrain %>% model_matrixmaker(abx_predictors,outcome)
+      abxtest_matrix <- abxTest %>% model_matrixmaker(abx_predictors,outcome)
+      abxmicro_matrix <- abx_xg_combined %>% model_matrixmaker(abx_predictors,outcome)
+      
+      ###Set parameters
+      abxparams <- list(
         objective = "binary:logistic",
         eval_metric = "auc",
-        eta = cdi_tox_final_bestparams[[outcome]]$eta,
-        max_depth = cdi_tox_final_bestparams[[outcome]]$max_depth,
-        min_child_weight = cdi_tox_final_bestparams[[outcome]]$min_child_weight,
-        subsample = cdi_tox_final_bestparams[[outcome]]$subsample,
-        colsample_bytree = cdi_tox_final_bestparams[[outcome]]$colsample_bytree
+        eta = final_bestparams[[outcome]]$eta,
+        max_depth = final_bestparams[[outcome]]$max_depth,
+        min_child_weight = final_bestparams[[outcome]]$min_child_weight,
+        subsample = final_bestparams[[outcome]]$subsample,
+        colsample_bytree = final_bestparams[[outcome]]$colsample_bytree
       )
       
-      print("Training...")
-      
-      xgb_model <- xgb.train(
-        params = params,
-        data = train_matrix,
-        nrounds = cdi_tox_final_bestparams[[outcome]]$best_nrounds
+      ###Training
+      print(glue("Training for {outcome}"))
+      xgb_abxmodel <- xgb.train(
+        params = abxparams,data = abxtrain_matrix,
+        nrounds = final_bestparams[[outcome]]$best_nrounds
       )
       
       metrics_litlist3 <- list()
@@ -1390,37 +1474,24 @@ for (outcome in colnames(abx_outcomes)) {
         if (sum(!is.na(abx_combined[[outcome]])) > 0) {
           
           abxTest2 <- abxTest %>% filter(age_grp==ages[age])
-          test_matrix2 <- xgb.DMatrix(data = as.matrix(abxTest2 %>% select(all_of(selected_columns))), 
-                                      label = abxTest2[[outcome]])
           
-          pred_prob_test <- predict(xgb_model, newdata = test_matrix2)
-          roc_result <- roc(abxTest2[[outcome]], pred_prob_test)
-          auc_value <- auc(roc_result)
-          print(paste("AUC-ROC:", auc_value))
-          pdf(glue("{outcome}_xg_roc.pdf"), width = 10, height = 10)
-          plot(roc_result, main = glue("{outcome} ROC Curve"), col = "blue")
-          dev.off()
+          ###Make xgboost test matrix
+          test_matrix2 <- abxTest2 %>% model_matrixmaker(abx_predictors,outcome)
           
-          pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
-          pred_test_class <- factor(pred_test_class,levels=c(1,0))
-          actual_test_class <- abxTest2[[outcome]]
-          actual_test_class <- factor(actual_test_class,levels=c(1,0))
+          ###Get predicted probability/class and actual class
+          test_matrix2 %>% probclassactual(xgb_abxmodel,abxTest2,outcome,'abx_predprobs',
+                                            'abx_predclass','abx_actualclass')
           
-          confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
-          accuracy <- confusion$overall['Accuracy']
-          precision <- confusion$byClass['Precision']
-          recall <- confusion$byClass['Recall']
-          f1_score <- 2 * (precision * recall) / (precision + recall)
+          ###Performance metrics
+          abx_predact_df <- data.frame(act_val = abx_actualclass, pred_class = abx_predclass,pred_probs = abx_predprobs)
+          abx_metrics3 <- abx_perf_mets(abx_predact_df,NULL,bootstr = F)
+          charlist <- list(glue("age{ages[[age]]}"))
+          names(charlist) <- "Characteristic"
+          testsup <- list(nrow(abxTest2))
+          names(testsup) <- "Test_support"
+          abx_metrics3 <- c(charlist,abx_metrics3,testsup)
           
-          metrics_list3[[outcome]] <- list(
-            Characteristic = glue("age{ages[[age]]}"),
-            AUC = auc_value,
-            Accuracy = accuracy,
-            Precision = precision,
-            Recall = recall,
-            F1_Score = f1_score,
-            Test_support = nrow(abxTest2)
-          )
+          metrics_list3[[outcome]] <- ur_metrics3
           
           metrics_litlist3[[age]] <- metrics_list3
           
@@ -1448,84 +1519,22 @@ for (outcome in colnames(abx_outcomes)) {
   metrics_biglist3[[outcome]] <- metrics_medlist3
   
 }
-metrics_df3 <- data.frame(matrix(nrow=0,ncol=9))
-for (key in 1:length(names(metrics_biglist3))) {
-  for (i in 1:length(metrics_biglist3[[key]])) {
-    
-    for (j in 1:length(metrics_biglist3[[key]][[i]])) {
-      
-      for (k in 1:length(metrics_biglist3[[key]][[i]][[j]])) {
-        
-        print(metrics_biglist3[[key]][[i]][[j]][[k]])
-        
-        results <- data.frame(
-          Antimicrobial = names(metrics_biglist3)[key],
-          Iteration = i,
-          Characteristic = metrics_biglist3[[key]][[i]][[j]][[k]]$Characteristic,
-          AUC = metrics_biglist3[[key]][[i]][[j]][[k]]$AUC,
-          Accuracy = metrics_biglist3[[key]][[i]][[j]][[k]]$Accuracy,
-          Precision = metrics_biglist3[[key]][[i]][[j]][[k]]$Precision,
-          Recall = metrics_biglist3[[key]][[i]][[j]][[k]]$Recall,
-          F1_score = metrics_biglist3[[key]][[i]][[j]][[k]]$F1_Score,
-          Test_support = metrics_biglist3[[key]][[i]][[j]][[k]]$Test_support)
-        
-        colnames(metrics_df3) <- colnames(results)
-        
-        metrics_df3 <- data.frame(
-          rbind(
-            metrics_df3,results
-          )
-        )
-        
-      }
-    }
-  }
-}
-rownames(metrics_df3) <- NULL
 
-###Write fairness metrics to CSV (CDI tox)
-metrics_protchar_df <- data.frame(rbind(metrics_df2,metrics_df3))
-metrics_protchar_df <- metrics_protchar_df %>% mutate(Category = case_when(
-  grepl("MALE",Characteristic)~"Gender",
-  grepl("marital",Characteristic)~"Marital status",
-  grepl("language",Characteristic)~"Language spoken",
-  grepl("race",Characteristic)~"Race",
-  grepl("^age",Characteristic)~"Age group"
-),
-Characteristic=case_when(
-  grepl("NONMARRIED",Characteristic)~"Non-married",
-  grepl("^marital_status_MARRIED$",Characteristic)~"Married",
-  grepl("WHITE",Characteristic)~"White",
-  grepl("BLACK",Characteristic)~"Black",
-  grepl("HISPANIC",Characteristic)~"Hispanic",
-  grepl("ASIAN",Characteristic)~"Asian",
-  grepl("OTHER",Characteristic)~"Other",
-  grepl("MALEFALSE",Characteristic)~"Female",
-  grepl("MALETRUE",Characteristic)~"Male",
-  grepl("ENGLISH",Characteristic)~"English",
-  grepl("NONENG",Characteristic)~"Non-English",
-  grepl("18",Characteristic)~"18-29",
-  grepl("30",Characteristic)~"30-39",
-  grepl("40",Characteristic)~"40-49",
-  grepl("50",Characteristic)~"50-59",
-  grepl("60",Characteristic)~"60-69",
-  grepl("70",Characteristic)~"70-79",
-  grepl("80",Characteristic)~"80-89",
-  grepl("90",Characteristic)~"≥ 90",
-)) %>% relocate(Category,.before = "Characteristic")
-metrics_protchar_df <- metrics_protchar_df %>% arrange(Antimicrobial, Iteration, Category, Characteristic)
+###Write fairness metrics to df, then to CSV
+metrics_protchar_df <- metrics_biglist3 %>% 
+  agefairmettodf(metrics_df2)
 write_csv(metrics_protchar_df,"cdi_tox_fairness_metrics.csv")
 
-##Time sensitivity analysis (CDI tox)
+##Time sensitivity analysis (abx outcomes)
 patkey <- pats %>% select(subject_id,anchor_year_group)
 urines_ref <- urines_ref %>% left_join(patkey)
-ind2008 <- which(urines_ref$anchor_year_group=="2008 - 2010")
-ind2011 <- which(urines_ref$anchor_year_group=="2011 - 2013")
-ind2014 <- which(urines_ref$anchor_year_group=="2014 - 2016")
-ind2017 <- which(urines_ref$anchor_year_group=="2017 - 2019")
 
 time_seq <- c("2008 - 2010","2011 - 2013","2014 - 2016","2017 - 2019")
+
+###Empty metrics list
 metrics_biglist4 <- list()
+
+###Iterate over abx outcomes
 for (outcome in colnames(abx_outcomes)) {
   
   if (sum(!is.na(abx_combined[[outcome]])) > 0) {
@@ -1566,59 +1575,40 @@ for (outcome in colnames(abx_outcomes)) {
             
           }
           
-          predictor_columns <- colnames(abx_predictors)
-          selected_columns <- intersect(predictor_columns, colnames(abxTrain))
-          train_matrix <- xgb.DMatrix(data = as.matrix(abxTrain %>% select(all_of(selected_columns))), 
-                                      label = abxTrain[[outcome]])
-          test_matrix <- xgb.DMatrix(data = as.matrix(abxTest %>% select(all_of(selected_columns))), 
-                                     label = abxTest[[outcome]])
+          predictor_columns <- colnames(urines5_predictors)
+          selected_columns <- intersect(predictor_columns, colnames(urines5Train))
           
-          params <- list(
+          urtrain_matrix <- urines5Train %>% model_matrixmaker(urines5_predictors,outcome)
+          urtest_matrix <- urines5Test %>% model_matrixmaker(urines5_predictors,outcome)
+          
+          ###Set parameters
+          urparams <- list(
             objective = "binary:logistic",
             eval_metric = "auc",
-            eta = cdi_tox_final_bestparams[[outcome]]$eta,
-            max_depth = cdi_tox_final_bestparams[[outcome]]$max_depth,
-            min_child_weight = cdi_tox_final_bestparams[[outcome]]$min_child_weight,
-            subsample = cdi_tox_final_bestparams[[outcome]]$subsample,
-            colsample_bytree = cdi_tox_final_bestparams[[outcome]]$colsample_bytree
+            eta = final_bestparams[[outcome]]$eta,
+            max_depth = final_bestparams[[outcome]]$max_depth,
+            min_child_weight = final_bestparams[[outcome]]$min_child_weight,
+            subsample = final_bestparams[[outcome]]$subsample,
+            colsample_bytree = final_bestparams[[outcome]]$colsample_bytree
           )
           
-          print("Training...")
-          
-          xgb_model <- xgb.train(
-            params = params,
-            data = train_matrix,
-            nrounds = cdi_tox_final_bestparams[[outcome]]$best_nrounds
+          ###Training
+          print(glue("Training for {outcome}"))
+          xgb_urinemodel <- xgb.train(
+            params = urparams,data = urtrain_matrix,
+            nrounds = final_bestparams[[outcome]]$best_nrounds
           )
           
-          pred_prob_test <- predict(xgb_model, newdata = test_matrix)
-          roc_result <- roc(abxTest[[outcome]], pred_prob_test)
-          auc_value <- auc(roc_result)
-          print(paste("AUC-ROC:", auc_value))
-          pdf(glue("{outcome}_xg_roc.pdf"), width = 10, height = 10)
-          plot(roc_result, main = glue("{outcome} ROC Curve"), col = "blue")
-          dev.off()
+          ###Performance metrics
+          ur_predact_df <- data.frame(act_val = ur_actualclass, pred_class = ur_predclass,pred_probs = ur_predprobs)
+          ur_metrics4<- ur_perf_mets(ur_predact_df,NULL,bootstr = F)
+          trainsup <- list(nrow(urines5Train))
+          names(trainsup) <- "Train_support"
+          testsup <- list(nrow(urines5Test))
+          names(testsup) <- "Test_support"
+          ur_metrics4 <- c(ur_metrics4,trainsup,testsup)
           
-          pred_test_class <- ifelse(pred_prob_test > 0.5, 1, 0)
-          pred_test_class <- factor(pred_test_class,levels=c(1,0))
-          actual_test_class <- abxTest[[outcome]]
-          actual_test_class <- factor(actual_test_class,levels=c(1,0))
-          
-          confusion <- confusionMatrix(factor(pred_test_class), factor(actual_test_class))
-          accuracy <- confusion$overall['Accuracy']
-          precision <- confusion$byClass['Precision']
-          recall <- confusion$byClass['Recall']
-          f1_score <- 2 * (precision * recall) / (precision + recall)
-          
-          metrics_list4[[outcome]] <- list(
-            AUC = auc_value,
-            Accuracy = accuracy,
-            Precision = precision,
-            Recall = recall,
-            F1_Score = f1_score,
-            Train_support = nrow(abxTrain),
-            Test_support = nrow(abxTest)
-          )
+          metrics_list4[[outcome]] <- ur_metrics4
           
           metrics_litlist4[[tim2]] <- metrics_list4
           names(metrics_litlist4[[tim2]]) <- time_seq[tim2]
@@ -1639,43 +1629,12 @@ for (outcome in colnames(abx_outcomes)) {
   metrics_biglist4[[outcome]] <- metrics_medlist4
   
 }
-metrics_df4 <- data.frame(matrix(nrow=0,ncol=11))
-for (key in 1:length(names(metrics_biglist4))) {
-  for (i in 1:length(metrics_biglist4[[key]])) {
-    
-    for (j in 1:length(metrics_biglist4[[key]][[i]])) {
-      
-      for (k in 1:length(metrics_biglist4[[key]][[i]][[j]])) {
-        
-        for (l in 1:length(metrics_biglist4[[key]][[i]][[j]][[k]])) {
-          
-          results <- data.frame(
-            Antimicrobial = names(metrics_biglist4)[key],
-            Iteration = i,
-            Train_year = names(metrics_biglist4[[key]][[i]][[j]][1]),
-            Test_year = names(metrics_biglist4[[key]][[i]][[j]][[k]]),
-            AUC = metrics_biglist4[[key]][[i]][[j]][[k]][[l]]$AUC,
-            Accuracy = metrics_biglist4[[key]][[i]][[j]][[k]][[l]]$Accuracy,
-            Precision = metrics_biglist4[[key]][[i]][[j]][[k]][[l]]$Precision,
-            Recall = metrics_biglist4[[key]][[i]][[j]][[k]][[l]]$Recall,
-            F1_score = metrics_biglist4[[key]][[i]][[j]][[k]][[l]]$F1_Score,
-            Train_support = metrics_biglist4[[key]][[i]][[j]][[k]][[l]]$Train_support,
-            Test_support = metrics_biglist4[[key]][[i]][[j]][[k]][[l]]$Test_support)
-          
-          colnames(metrics_df4) <- colnames(results)
-          
-          metrics_df4 <- data.frame(
-            rbind(
-              metrics_df4,results
-            )
-          )
-        }
-      }
-    }
-  }
-}
-rownames(metrics_df4) <- NULL
+
+###Write time sens metrics to df then csv
+metrics_df4 <- metrics_biglist4 %>% timesenstodf()
 write_csv(metrics_df4,"cdi_tox_time_sens_metrics.csv")
+
+##Join dataframes together
 
 metrics_dfA <- read_csv("stability_metrics.csv")
 metrics_df<- data.frame(rbind(metrics_dfA,metrics_df))
@@ -1782,13 +1741,7 @@ hyp_tab <- tibble(AMP=final_bestparams$AMP %>% unlist(),
        Toxicity=cdi_tox_final_bestparams$overall_tox %>% unlist()) %>% 
   dplyr::slice(-c(1:2))
 
-replace_values <- function(column, map) {
-  flipped_map <- setNames(names(map), map)
-  column %>%
-    as.character() %>%
-    sapply(function(x) if (x %in% names(flipped_map)) flipped_map[[x]] else x)
-}
-colnames(hyp_tab) <- replace_values(colnames(hyp_tab),combined_antimicrobial_map) %>% 
+colnames(hyp_tab) <- abcombo_replace(colnames(hyp_tab),combined_antimicrobial_map) %>% 
   str_replace_all("_"," & ") %>% str_replace_all("-","/")
   
 hyp_tab <- hyp_tab %>% mutate(Hyperparameter=hyp_names) %>% 
@@ -1802,8 +1755,8 @@ hyp_tab <- hyp_tab %>% tibble()
 write_csv(hyp_tab,"hyp_tab.csv")
 hyp_abs <- c(c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
              "MEM","CIP","GEN","SXT","NIT","VAN") %>% ab_name(),"CDI","Toxicity")
-hyp_tab_singles <- hyp_tab %>% filter(Model %in% hyp_abs)
-write_csv(hyp_tab_singles,"hyp_tab_singles.csv")
+hyp_tall_singles <- hyp_tab %>% filter(Model %in% hyp_abs)
+write_csv(hyp_tall_singles,"hyp_tall_singles.csv")
 
 ##Values for results
 
@@ -1839,22 +1792,6 @@ timemets %>% group_by(Model,Train_year,Test_year) %>%
 
 ###Fairness analysis
 fairmets <- read_csv("overall_fairness_metrics.csv")
-fairnessprinter1 <- function(cat) {
-max_fairmets <- fairmets %>% filter(Category==cat) %>% group_by(Model,Characteristic) %>%
-  summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% 
-  summarise(maxAUC_meandif=max(mean_AUC)-min(mean_AUC),
-            max_sd=max(sd_AUC)) %>% ungroup()
-max_fairmets %>% arrange(desc(maxAUC_meandif)) %>% print()
-max_fairmets %>% arrange(desc(max_sd)) %>% print()
-}
-fairnessprinter2 <- function(cat,cat1,cat2) {
-fairmets %>% filter(Category==cat) %>% group_by(Model,Characteristic) %>% 
-  summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% filter(Model==cat1) %>% 
-  arrange(desc(mean_AUC)) %>% print()
-fairmets %>% filter(Category==cat) %>% group_by(Model,Characteristic) %>%
-  summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% filter(Model==cat2) %>% 
-  arrange(desc(sd_AUC)) %>% print()
-}
 fairnessprinter1("Age group")
 fairnessprinter2("Age group","TZP","TZP")
 fairnessprinter1("Race")
