@@ -1,4 +1,4 @@
-###COVERAGE MODEL HYPERPARAMETER TUNING - STAGE 1
+###URINE SUSCEPTIBILITY MODEL HYPERPARAMETER TUNING
 
 set.seed(123)
 
@@ -96,7 +96,7 @@ abcombo_reverse <- function(abtarget, map) {
   
 }
 
-###Preprocessing of model and microsimulation dataframes
+###Preprocessing of urine model and microsimulation dataframes
 ur_datpreproc <- function(ur_df,ur_outcomename,ur_predictorname,ur_comboname,
                           microsim_df,microsim_outcomename,microsim_predictorname,
                           microsim_comboname) {
@@ -131,9 +131,13 @@ ur_datpreproc <- function(ur_df,ur_outcomename,ur_predictorname,ur_comboname,
   microsim_df_outcomes <- microsim_df %>% mutmar() %>% binariseast()
   
   #make predictor dataframes
-  ur_df_predictors <- ur_df %>% select(!all_of(fullmap)) %>% dummyer()
+  ur_df_predictors <- ur_df %>% select(!all_of(fullmap))
   microsim_df_predictors <- microsim_df %>%
-    select(any_of(colnames(ur_df_predictors))) %>% dummyer()
+    select(any_of(colnames(ur_df_predictors)))
+  
+  #make dummy variables
+  ur_df_predictors <- ur_df_predictors %>% dummyer()
+  microsim_df_predictors <- microsim_df_predictors %>% dummyer()
   
   #make combined dataframes
   ur_df_combined <- as.data.frame(cbind(ur_df_outcomes, ur_df_predictors))
@@ -171,10 +175,10 @@ paramgrid_lhs <- function(n_samples,hypname_1,ranglow_1,rangup_1,
 }
 
 ###Train-test splitting
-TTsplitter <- function(dataset,outc,trainprop){
+TTsplitter <- function(dataset,outc,trainprop,chosnametrain,chosnametest){
   
   #get partition index based on specified proportion
-  trainindex <- createDataPartition(dataset[[outcome]], p = trainprop, list = FALSE, times = 1)
+  trainindex <- createDataPartition(dataset[[outc]], p = trainprop, list = FALSE, times = 1)
   
   #index training dataset
   urdftrain <- dataset[trainindex, ]
@@ -183,9 +187,9 @@ TTsplitter <- function(dataset,outc,trainprop){
   urdftest <- dataset[-trainindex, ]
   
   #assign to objects with 'Train' and 'Test' suffixes replacing '_combined' suffix
-  assign(glue("{deparse(substitute(urines5_combined)) %>% str_remove('_combined')}Train"),
+  assign(chosnametrain,
          urdftrain,.GlobalEnv)
-  assign(glue("{deparse(substitute(urines5_combined)) %>% str_remove('_combined')}Test"),
+  assign(chosnametest,
          urdftest,.GlobalEnv)
   
 }
@@ -235,7 +239,7 @@ hypparam_tuner <- function(traindat,et,md,mcw,ss,csb,hypparam_1,hypparam_2,
   
   #run 5-fold cross-validation with 50 rounds
   cv_model <- xgb.cv(
-    params = params,
+    params = hypparamlist,
     data = traindat,
     nrounds = roundstorun,
     nfold = 5,
@@ -252,7 +256,7 @@ hypparam_tuner <- function(traindat,et,md,mcw,ss,csb,hypparam_1,hypparam_2,
   #if auc better than previous round, update values
   if (best_iteration_auc > best_auc) {
     best_auc <- best_iteration_auc
-    best_params <- params
+    best_params <- hypparamlist
     best_nrounds <- best_iteration_index
   }
   
@@ -311,16 +315,11 @@ hypparamreader <- function(namestring,namesmap) {
   
 }
 
-###Final preprocessing
-
 ##Read-in
 
 train_abx <- read_csv("train_abx.csv")
-test_abx <- read_csv("test_abx.csv")
 urines5 <- read_csv("urines5.csv")
 ur_xg <- read_csv("interim_ur_util.csv")
-hadm <- read_csv("admissions.csv")
-pats <- read_csv("patients.csv")
 
 ##Antimicrobial mapping lists
 
@@ -349,6 +348,11 @@ abcombo_variants(combined_antimicrobial_map,
 ur_datpreproc(urines5,"urines5_outcomes","urines5_predictors","urines5_combined",
               ur_xg,"ur_xg_outcomes","ur_xg_predictors","ur_xg_combined")
 
+##Write CSVs for later training/validation
+
+write_csv(urines5_combined,"urines5_combined.csv")
+write_csv(ur_xg_combined,"ur_xg_combined.csv")
+
 ##Hyperparameter tuning 1/3 (max depth and min child weight)
 
 ###Latin hypercube hyperparameter grid for max depth and min child weight
@@ -370,7 +374,7 @@ for (outcome in colnames(urines5_outcomes)) {
     set.seed(123)
     
     #split df to train and test
-    urines5_combined %>% TTsplitter(outcome,0.8)
+    urines5_combined %>% TTsplitter(outcome,0.8,"urines5Train","urines5Test")
     
     #make xgboost training matrix
     urtrain_matrix <- urines5Train %>% model_matrixmaker(urines5_predictors,outcome)
@@ -421,7 +425,7 @@ for (outcome in colnames(urines5_outcomes)) {
     set.seed(123)
     
     #train-test split
-    urines5_combined %>% TTsplitter(outcome,0.8)
+    urines5_combined %>% TTsplitter(outcome,0.8,"urines5Train","urines5Test")
     
     #xgboost training matrix
     urtrain_matrix <- urines5Train %>% model_matrixmaker(urines5_predictors,outcome)
@@ -470,7 +474,7 @@ for (outcome in colnames(urines5_outcomes)) {
     set.seed(123)
     
     #train-test split
-    urines5_combined %>% TTsplitter(outcome,0.8)
+    urines5_combined %>% TTsplitter(outcome,0.8,"urines5Train","urines5Test")
     
     #xgboost training matrix
     urtrain_matrix <- urines5Train %>% model_matrixmaker(urines5_predictors,outcome)
@@ -516,14 +520,14 @@ for (outcome in colnames(urines5_outcomes)) {
       i <- i+1
       
       #if learning rate goes beyond 0.3, fix max tree depth at 0.6 and try again
-      if(parameter_val==0.4 & md_val!=0.6) {
+      if(parameter_val==0.4 & md_val!=6) {
         
-        md_val <- 0.6
+        md_val <- 6
         
         parameter_val <- 0.3
         
         #if that doesn't work, abort
-      } else if (parameter_val==0.4 & md_val==0.6) {
+      } else if (parameter_val==0.4 & md_val==6) {
         
         break
         
@@ -550,5 +554,3 @@ save_hypparams(final_bestparams,"final_params_",
 ###Read final hyperparameter set back in to list to check save
 final_bestparams <- hypparamreader("final_params_",combined_antimicrobial_map)
 
-##Saving interim CSV
-write_csv(urines5_combined,"urines5_combined.csv")
