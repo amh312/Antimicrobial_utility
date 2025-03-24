@@ -203,6 +203,7 @@ shapper <- function(trainmat,model,outc) {
 ###Feature selection using SHAP
 mat_feat_selector <- function(dataset,shapsum,outc) {
   
+  #select only non-zero features left in the shap dataframe
   xgb.DMatrix(data = as.matrix(dataset %>% select(shapsum %>% pull(Feature))), 
               label = dataset[[outc]])
   
@@ -212,12 +213,22 @@ mat_feat_selector <- function(dataset,shapsum,outc) {
 probclassactual <- function(testdf,testmat,outc,
                             probnam,classnam,actnam) {
   
+  #get predicted probabilities
   ur_predprobs <- predict(xgb_urinemodel, newdata = urtest_matrix)
+  
+  #get predicted classes (S >0.5, 5 ≤0.5)
   ur_predclass <- ifelse(ur_predprobs > 0.5, 1, 0)
+  
+  #set 1 as positive
   ur_predclass <- relevel(factor(ur_predclass), ref = "1")
+  
+  #get actual class
   ur_actclass <- urines5Test[[outc]]
+  
+  #set 1 as positive
   ur_actclass <- relevel(factor(ur_actclass), ref = "1")
   
+  #assign to global environment
   assign(probnam,ur_predprobs,.GlobalEnv)
   assign(classnam,ur_predclass,.GlobalEnv)
   assign(actnam,ur_actclass,.GlobalEnv)
@@ -228,21 +239,36 @@ probclassactual <- function(testdf,testmat,outc,
 roc_maker <- function(actclass,predpr,outc,aurocnam,
                       abmap){
   
+  #ger roc curve
   urroc <- roc(actclass, predpr,levels=c(0,1))
+  
+  #get auroc
   ur_auroc_value <- auc(urroc)
+  
+  #update message
   print(glue("Validation AUROC for {outc} = {round(ur_auroc_value,2)}"))
+  
+  #assign to global env
   assign(aurocnam,ur_auroc_value,.GlobalEnv)
   
+  #plot roc curve
   ggroc(urroc,color = "blue3") + 
+    
+    #titles
     ggtitle(glue("{abcombo_replace(outc,abmap)}\nROC curve"))+
-    theme_minimal()+
     labs(x = "False positive rate", y = "True positive rate")+
+    
+    #zero effect line
     geom_segment(aes(x = 1, y = 0, xend = 0, yend = 1),
                  color = "grey", linetype = "dashed")+
+    
+    #auc annotation
     geom_rect(aes(xmin = 0.1, xmax = 0.4, ymin = 0.1, ymax = 0.2), 
               fill = "white", alpha = 0.2, color = "grey9") +
     annotate("text", x = 0.25, y = 0.15, label = glue("AUC: {round(ur_auroc_value,2)}"),
              size = 10, color = "grey9") +
+    
+    #theme, text and ticks
     theme_minimal()+
     theme(
       plot.title = element_text(hjust = 0.5,size=30),
@@ -258,30 +284,44 @@ roc_maker <- function(actclass,predpr,outc,aurocnam,
 ###Calibration curve and slope value
 calibmaker <- function(actc,predp,outc){
   
+  #predicted probs and actual class into dataframe
   ur_calib_df <- data.frame(
     pred_probs = predp,
     act_probs = as.numeric(as.character(actc))
   ) %>% 
+    
+    #put predicted probs into 10 bins
     mutate(probs_bin=cut(pred_probs,
                          breaks=quantile(pred_probs,
-                                         probs=seq(0,1,by=0.1),
+                                         probs=seq(0.1,1,by=0.1),
                                          na.rm=T),
                          labels=F)) %>% 
+    
+    #get means and n samples
     group_by(probs_bin) %>%
     summarise(meanpp = mean(pred_probs),
-              act_prop = mean(act_probs)) %>% 
+              act_prop = mean(act_probs),
+              nsamp=n()) %>% 
     ungroup()
   
+  #loess smoothed values for actual probabilities
   loesspreds <- predict(loess(ur_calib_df$act_prop~ur_calib_df$meanpp),
-                        span=1,se=T)
-  
+                      span=1,se=T)
   ur_calib_df$sm_act <- loesspreds$fit
+  
+  #smoothing 95% confidence intervals
   ur_calib_df$upperci <- loesspreds$fit+1.96*loesspreds$se.fit
   ur_calib_df$lowerci <- loesspreds$fit-1.96*loesspreds$se.fit
   
+  #actual means 95% confidence intervals
+  ur_calib_df$grupci <- ur_calib_df$act_prop+(sqrt((ur_calib_df$act_prop*1-ur_calib_df$act_prop)/ur_calib_df$nsamp)*1.96)
+  ur_calib_df$grloci <- ur_calib_df$act_prop-((sqrt(ur_calib_df$act_prop*1-ur_calib_df$act_prop)/ur_calib_df$nsamp)*1.96)
+  
+  #slope from linear model
   urcalib_model <- lm(ur_calib_df$act_prop~ur_calib_df$meanpp)
   ur_calslope <- coef(urcalib_model)[2]
   
+  #values for annotation box
   xrange <- range(ur_calib_df$meanpp)
   xrangesize <- xrange[2]-xrange[1]
   yrange <- range(ur_calib_df$act_prop)
@@ -293,19 +333,37 @@ calibmaker <- function(actc,predp,outc){
   max_y <- yrange[1]+yrangesize*0.12
   y_text <- mean(c(min_y,max_y))
   
+  #calibration plot
   ggplot(ur_calib_df, aes(x = meanpp, y = sm_act)) +
-    geom_line(color = "green4", linetype = "solid") +
+    
+    #loess smoothed line
+    geom_line(color = "#00BFC4", linetype = "solid") +
+    
+    #ideal line
     geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "grey20") +
-    geom_ribbon(data = ur_calib_df, aes(x = meanpp, ymin = lowerci, ymax = upperci), fill = "green4", alpha = 0.2)+
-    geom_point(data=ur_calib_df,aes(x=meanpp,y=act_prop),col="green4",size=3)+
+    
+    #loess confidence intervals
+    geom_ribbon(data = ur_calib_df, aes(x = meanpp, ymin = lowerci, ymax = upperci), fill = "#00BFC4", alpha = 0.2)+
+    
+    #actual means
+    geom_point(data=ur_calib_df,aes(x=meanpp,y=act_prop),col="#F8766D",size=3)+
+    
+    #confidence intervals of means
+    geom_errorbar(data=ur_calib_df,aes(ymin=grloci,ymax=grupci),col="#F8766D",width=0.005)+
+    
+    #theme and titles
     theme_minimal() +
     labs(x = "Mean predicted probability", y = "Actual proportion of positives",
          title = glue("{abcombo_replace(outc,combined_antimicrobial_map)}\ncalibration curve")) +
     theme(plot.title = element_text(hjust = 0.5,size = 30),
           axis.title.x = element_text(size = 20),
           axis.title.y = element_text(size = 20))+
+    
+    #x and y limits
     ylim(min(ur_calib_df$lowerci),max(ur_calib_df$upperci))+
     xlim(min(ur_calib_df$meanpp),max(ur_calib_df$meanpp))+
+    
+    #annotation with slope
     geom_rect(aes(xmin = min_xbox, xmax = max_xbox, ymin = min_y, ymax = max_y), 
               fill = "white", alpha = 0.2, color = "grey9") +
     annotate("text", x = x_text, y = y_text, label = glue("Slope: {round(ur_calslope,2)}"),
@@ -317,34 +375,62 @@ calibmaker <- function(actc,predp,outc){
 ###Classification report
 ur_perf_mets <- function(df, indexrows,bootstr=T) {
   
+  #if bootstrapping
   if (bootstr==T) {
     
+    #subset by selected indices
     ur_act <- df$act_val[indexrows]
     ur_probs <- df$pred_probs[indexrows]
     ur_class <- df$pred_class[indexrows]
     
+    #confusion matrix
     ur_confmat <- confusionMatrix(factor(ur_class), factor(ur_act))
+    
+    #accuracy
     acc <- ur_confmat$overall['Accuracy']
+    
+    #precision
     prec <- ur_confmat$byClass['Precision']
+    
+    #recall
     rec <- ur_confmat$byClass['Recall']
+    
+    #f1 score
     f1 <- 2 * (prec * rec) / (prec + rec)
+    
+    #auroc
     auroc <- auc(roc(ur_act, ur_probs,levels=c(0,1)))
     
+    #return vector
     c(auroc = auroc, precision = prec, recall = rec, accuracy = acc, f1 = f1)
     
+    #if not bootstrapping
   } else {
     
+    #use whole vectors
     ur_act <- df$act_val
     ur_probs <- df$pred_probs
     ur_class <- df$pred_class
     
+    #confusion matrix
     ur_confmat <- confusionMatrix(factor(ur_class), factor(ur_act))
+    
+    #accuracy
     acc <- ur_confmat$overall['Accuracy']
+    
+    #precision
     prec <- ur_confmat$byClass['Precision']
+    
+    #recall
     rec <- ur_confmat$byClass['Recall']
+    
+    #f1 score
     f1 <- 2 * (prec * rec) / (prec + rec)
+    
+    #auroc
     auroc <- auc(roc(ur_act, ur_probs,levels=c(0,1)))
     
+    #return list
     list(
       AUC = auroc,
       Accuracy = acc,
@@ -360,13 +446,23 @@ ur_perf_mets <- function(df, indexrows,bootstr=T) {
 ###Bootstrapping of performance metrics for CIs
 bootstrap_perfmets <- function(pred_df,classrep_func,n_samps,outc) {
   
+  #update message
   print(glue("Bootstrapping for {outc}"))
   
+  #set seed
   set.seed(123)
+  
+  #get classification reports on 1000 bootstrapped samples
   ur_bootmetrics <- boot(data = pred_df, statistic = classrep_func, R = n_samps)
+  
+  #replace any NAs with 0
   ur_bootmetrics[[1]][is.na(ur_bootmetrics[[1]])] <- 0
   ur_bootmetrics[[2]][is.na(ur_bootmetrics[[2]])] <- 0
+  
+  #get 95% confidence intervals for each metric
   ur_cis <- lapply(1:5, function(i) boot.ci(ur_bootmetrics, type = "perc", index = i))
+  
+  #name metrics in dataframe and return
   names(ur_cis) <- c("AUC", "Precision", "Recall", "Accuracy", "F1_Score")
   ur_cis
   
@@ -375,11 +471,11 @@ bootstrap_perfmets <- function(pred_df,classrep_func,n_samps,outc) {
 ###Writing feature importances to csv
 shapwriter <- function(shaptable,abmap) {
   
+  #iterate over shap tables list
   for (i in 1:length(shaptable)) {
     
-    #iterate over shap tables list
+    #make dataframe from list and add names
     shappy <- data.frame(shaptable[i])
-    
     colnames(shappy) <- c("Feature","Shapley value")
     
     shappy <- shappy %>% 
@@ -401,7 +497,7 @@ shapwriter <- function(shaptable,abmap) {
 ###Writing performance metrics to CSV
 metricwriter <- function(metlist,abmap) {
   
-  #iterate over abs
+  #iterate over antibiotics
   for (i in 1:length(metlist)) {
     
     #make df from list
