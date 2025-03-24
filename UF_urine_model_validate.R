@@ -1,4 +1,4 @@
-###SUSCEPTIBILITY PREDICTION MODEL FINAL TRAINING AND VALIDATION
+###URINE SUSCEPTIBILITY PREDICTION MODEL FINAL TRAINING AND VALIDATION
 
 set.seed(123)
 
@@ -130,9 +130,9 @@ TTsplitter <- function(dataset,outc,trainprop,chosnametrain,chosnametest){
   
   #assign to objects with 'Train' and 'Test' suffixes replacing '_combined' suffix
   assign(chosnametrain,
-         urdftrain,.GlobalEnv)
+         urdftrain,envir=.GlobalEnv)
   assign(chosnametest,
-         urdftest,.GlobalEnv)
+         urdftest,envir=.GlobalEnv)
   
 }
 
@@ -178,7 +178,7 @@ shapper <- function(trainmat,model,outc) {
   print(glue("Checking feature importances for {outc}"))
   
   #get shap values
-  ur_shapvals <- predict(xgb_urinemodel, newdata = urtrain_matrix, predcontrib = TRUE)
+  ur_shapvals <- predict(xgb_urinemodel, newdata = trainmat, predcontrib = TRUE)
   
   #make dataframe from shap list
   shap_df <- as.data.frame(ur_shapvals)
@@ -223,15 +223,15 @@ probclassactual <- function(testdf,testmat,outc,
   ur_predclass <- relevel(factor(ur_predclass), ref = "1")
   
   #get actual class
-  ur_actclass <- urines5Test[[outc]]
+  ur_actclass <- testdf[[outc]]
   
   #set 1 as positive
   ur_actclass <- relevel(factor(ur_actclass), ref = "1")
   
   #assign to global environment
-  assign(probnam,ur_predprobs,.GlobalEnv)
-  assign(classnam,ur_predclass,.GlobalEnv)
-  assign(actnam,ur_actclass,.GlobalEnv)
+  assign(probnam,ur_predprobs,envir=.GlobalEnv)
+  assign(classnam,ur_predclass,envir=.GlobalEnv)
+  assign(actnam,ur_actclass,envir=.GlobalEnv)
   
 }
 
@@ -249,7 +249,7 @@ roc_maker <- function(actclass,predpr,outc,aurocnam,
   print(glue("Validation AUROC for {outc} = {round(ur_auroc_value,2)}"))
   
   #assign to global env
-  assign(aurocnam,ur_auroc_value,.GlobalEnv)
+  assign(aurocnam,ur_auroc_value,envir=.GlobalEnv)
   
   #plot roc curve
   ggroc(urroc,color = "blue3") + 
@@ -704,11 +704,6 @@ for (outcome in colnames(urines5_outcomes)) {
     ggsave(filename = glue("{outcome}_xg_roc.pdf"), plot = roc_plot_ur,
            width = 10, height = 10)
     ggsave(filename = glue("{outcome}_calib_plot.pdf"), plot = ur_calibplot, width = 10, height = 10)
-    
-    ur_predclass <- ifelse(ur_predprobs > 0.5, 1, 0)
-    ur_predclass <- relevel(factor(ur_predclass), ref = "1")
-    ur_actualclass <- urines5Test[[outcome]]
-    ur_actualclass <- relevel(factor(ur_actualclass), ref = "1")
     
     ###Other performance metrics
     ur_predact_df <- data.frame(act_val = ur_actualclass, pred_class = ur_predclass,pred_probs = ur_predprobs)
