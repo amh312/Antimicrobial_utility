@@ -151,6 +151,8 @@ lineup_features <- function(microsim_df,pred_df,train_df){
   #fill missing microsim df columns with 0
   microsim_df[missing_cols] <- 0
   
+  assign("selected_columns",selected_columns,envir=.GlobalEnv)
+  
   microsim_df
   
 }
@@ -178,7 +180,7 @@ shapper <- function(trainmat,model,outc) {
   print(glue("Checking feature importances for {outc}"))
   
   #get shap values
-  ur_shapvals <- predict(xgb_urinemodel, newdata = trainmat, predcontrib = TRUE)
+  ur_shapvals <- predict(model, newdata = trainmat, predcontrib = TRUE)
   
   #make dataframe from shap list
   shap_df <- as.data.frame(ur_shapvals)
@@ -210,11 +212,11 @@ mat_feat_selector <- function(dataset,shapsum,outc) {
 }
 
 ###Retrieving predicted probabilities/classes and actual class
-probclassactual <- function(testdf,testmat,outc,
+probclassactual <- function(testdf,model,testmat,outc,
                             probnam,classnam,actnam) {
   
   #get predicted probabilities
-  ur_predprobs <- predict(xgb_urinemodel, newdata = urtest_matrix)
+  ur_predprobs <- predict(model, newdata = testmat)
   
   #get predicted classes (S >0.5, 5 ≤0.5)
   ur_predclass <- ifelse(ur_predprobs > 0.5, 1, 0)
@@ -349,7 +351,7 @@ calibmaker <- function(actc,predp,outc){
     geom_point(data=ur_calib_df,aes(x=meanpp,y=act_prop),col="#F8766D",size=3)+
     
     #confidence intervals of means
-    geom_errorbar(data=ur_calib_df,aes(ymin=grloci,ymax=grupci),col="#F8766D",width=0.005)+
+    geom_errorbar(data=ur_calib_df,aes(ymin=grloci,ymax=grupci),col="#F8766D",width=0)+
     
     #theme and titles
     theme_minimal() +
@@ -587,6 +589,33 @@ prob_dfer <- function(probs_df,microsim_df,filename){
   
 }
 
+###Reading in hyperparameters back to list from csvs
+hypparamreader <- function(namestring,namesmap) {
+  
+  #write file nanmes
+  file_names <- glue("{namestring}{namesmap}.csv")
+  
+  #apply read_csv across name list
+  hypparlist <- lapply(file_names, function(file) {
+    read_csv(file)
+  })
+  
+  #add names
+  namelist <- c("eta","max_depth","min_child_weight","subsample","colsample_bytree",
+                "best_nrounds")
+  
+  #iteratively add names to sublists
+  for (i in 1:length(hypparlist)) {
+    names(hypparlist[[i]])[3:8] <- namelist
+  }
+  
+  #add model names to list top level
+  names(hypparlist) <- namesmap
+  
+  hypparlist
+  
+}
+
 ##Read-in
 
 train_abx <- read_csv("train_abx.csv")
@@ -690,8 +719,8 @@ for (outcome in colnames(urines5_outcomes)) {
     ##Model validation
     
     ###Get predicted probability/class and actual class
-    urtestmatrix %>% probclassactual(urines5Test,outcome,'ur_predprobs',
-                                     'ur_predclass','ur_actualclass')
+    urines5Test %>% probclassactual(xgb_urinemodel,urtest_matrix,outcome,'ur_predprobs',
+                                    'ur_predclass','ur_actualclass')
     
     ###ROC curve and AUROC
     roc_plot_ur <- roc_maker(ur_actualclass,ur_predprobs,outcome,
@@ -742,5 +771,5 @@ ur_metrics_list %>% metricwriter(combined_antimicrobial_map)
 confidence_biglist %>% ci_writer(urines5_outcomes,"interim_ci_df.csv")
 
 ###Probability predictions dataframe for microsimulation study to csv
-micro_probs_df %>% prob_dfer(ur_xg,"probs_df_overall.csv")
+micro_probs_df %>% prob_dfer(ur_xg,"probs_df_overall_postur.csv")
 
