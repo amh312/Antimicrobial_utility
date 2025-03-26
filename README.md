@@ -8,8 +8,8 @@ The electronic healthcare record source data can be obtained from PhysioNet at h
 
 The discrete choice experiment source data is found within this repository:
 
-1. "ADAPT-AST Factors influencing Antimicrobial Prescribing for Urinary Tract Infection.csv" for the main analysis
-2. "labelled_ADAPT-AST Factors influencing Antimicrobial Prescribing for Urinary Tract Infection.csv" for the specialty sub-analyses
+1. "DCE_results.csv" for the main analysis
+2. "labelled_DCE_results.csv" for the specialty sub-analyses
 
 PhysioNet MIMIC-IV citations:
 
