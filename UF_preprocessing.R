@@ -2064,6 +2064,8 @@ bltestvec <- c("Alanine Aminotransferase","Albumin","Alkaline Phosphatase",
              "Sodium","Hematocrit","Hemoglobin","Lymphocytes","Monocytes",
              "Neutrophils","Platelet Count","^RDW$","Red Blood Cells",
              "White Blood Cells","^Lactate$","Lactate Dehydrogenase")
+bltestnam <- gsub("[[:punct:]]+","",bltestvec) %>% str_replace("n T","n, T")
+
 pos_urines <- reduce(seq_along(bltestvec),
                      function(df,i){
                        
@@ -2073,13 +2075,10 @@ pos_urines <- reduce(seq_along(bltestvec),
                        #match labevents to that label
                        labev_bltest <- labevents_urine %>% semi_join(bltest,by="itemid")
                        
-                       #remove grepl search punctuation from names to get colnames
-                       bltestnam <- gsub("[[:punct:]]+","",bltestvec)
-                       
                        df %>% 
                          
                          #bind and check for tests in urine dataframe
-                         blood_binder(labev_bltest,!!sym(bltestvec[i])) %>% 
+                         blood_binder(labev_bltest,!!sym(bltestnam[i])) %>% 
                          
                          #if test is na then impute the mean
                          mutate(
@@ -2828,5 +2827,3 @@ test_abx <- abx %>% semi_join(test_ids,by="subject_id")
 
 write_csv(train_abx,"train_abx.csv")
 write_csv(test_abx,"test_abx.csv")
-
-
