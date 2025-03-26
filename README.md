@@ -30,19 +30,14 @@ To reproduce the study, all csv files above must be stored in the working direct
    1. **UF_packages&setup.R***
    2. **UF_cleaning.R**
    3. **UF_preprocessing.R**
-   4. **UF_S_model_tuning_1.R**
-   5. **UF_S_model_tuning_2.R**
-   6. **UF_S_model_tuning_3.R**
-   7. **UF_S_model_train_valid.R**
-   8. **UF_CDI_tox_model_tuning_1.R**
-   9. **UF_CDI_tox_model_tuning_2.R**
-   10. **UF_CDI_tox_model_tuning_3.R**
-   11. **UF_CDI_model_train_valid.R**
-   12. **UF_tox_model_train_valid.R**
-   13. **UF_model_testing.R**  
-   14. **UF_discrete_choice_exp.R**
-   15. **UF_spec_analysis.R**
-   16. **UF_microsimulation.R**
-   17. **UF_descriptive.R**
+   4. **UF_urine_model_tuning.R**
+   5. **UF_urine_model_validate.R**
+   6. **UF_prescription_model_tuning.R**
+   7. **UF_prescription_model_validate.R**
+   8. **UF_model_testing.R**  
+   9. **UF_discrete_choice_exp.R**
+   10. **UF_spec_analysis.R**
+   11. **UF_microsimulation.R**
+   12. **UF_descriptive.R**
 
-Rendering **UF.qmd** and **UF_supplement.qmd** will then produce the manuscript and supplementary material respectively. The code in its entirety typically takes approximately 72-96 hours to run. Please note that the code also includes additional analyses that are not included in the paper for the purpose of brevity, that pertain to combination treatment and additional sensitivity analyses.
+Rendering **UF.qmd** and **UF_supplement.qmd** will then produce the manuscript and supplementary material respectively. The code in its entirety typically takes approximately 72-96 hours to run. Please note that the code also includes additional analyses that are not included in the paper for the purpose of brevity, that pertain to combination treatment. To skip the model tuning steps (the most time-consuming parts of the analysis), the csv files in the **hyperparameters** folder can be downloaded to provide the hyperparameters, and all scripts except 4 and 6 run.
