@@ -8,7 +8,7 @@ The electronic healthcare record source data can be obtained from PhysioNet at h
 
 The discrete choice experiment source data is found within this repository:
 
-1. *"DCE_results.csv"* and *DCE_characteristics.csv* for the main analysis
+1. *"DCE_results.csv"* and *"DCE_characteristics.csv"* for the main analysis
 2. "labelled_DCE_results.csv" for the specialty sub-analyses
 
 PhysioNet MIMIC-IV citations:
