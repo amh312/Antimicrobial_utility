@@ -4,7 +4,7 @@ If you use this code please cite this repository.
 
 ***Instructions for use:***
 
-The electronic healthcare record source data can be obtained from PhysioNet at https://physionet.org/content/mimiciv/2.2/ and https://physionet.org/content/mimic-iv-ed/2.2/ once the terms of access are met. The csv filenames used in this code match the following default filenames that can be downloaded from the *hosp* folder at the bottom of the page: *"prescriptions.csv", "d_icd_diagnoses.csv", "diagnoses_icd.csv", "d_icd_procedures.csv", "procedures_icd.csv", "labevents.csv", "d_labitems.csv", "microbiologyevents.csv", "poe_detail.csv", "poe.csv", "omr.csv", "admissions.csv", "patients.csv"*, *"services.csv"*, *"edstays.csv"*, *"triage.csv"*, *"pyxis.csv"*, *"medrecon.csv", and *"vitalsign.csv"*.
+The electronic healthcare record source data can be obtained from PhysioNet at https://physionet.org/content/mimiciv/2.2/ and https://physionet.org/content/mimic-iv-ed/2.2/ once the terms of access are met. The csv filenames used in this code match the following default filenames that can be downloaded from the *hosp* folder at the bottom of the page: *"prescriptions.csv", "d_icd_diagnoses.csv", "diagnoses_icd.csv", "d_icd_procedures.csv", "procedures_icd.csv", "labevents.csv", "d_labitems.csv", "microbiologyevents.csv", "poe_detail.csv", "poe.csv", "omr.csv", "admissions.csv", "patients.csv"*, *"services.csv"*, *"edstays.csv"*, *"triage.csv"*, *"pyxis.csv"*, *"medrecon.csv"*, and *"vitalsign.csv"*.
 
 The discrete choice experiment source data is found within this repository:
 
