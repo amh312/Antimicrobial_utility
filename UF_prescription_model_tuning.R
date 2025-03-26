@@ -252,7 +252,7 @@ hypparamreader <- function(namestring,namesmap) {
 
 ##Read-in
 
-probs_df_overall <- read_csv("probs_df_overall.csv")
+probs_df_overall <- read_csv("probs_df_overall_postur.csv")
 pats <- read_csv("patients.csv")
 ur_xg <- read_csv("interim_ur_util.csv")
 hadm <- read_csv("admissions.csv")
@@ -271,7 +271,6 @@ abx_ur_datpreproc(abx,"abx_predictors","abx_outcomes","abx_combined",
                   probs_df_overall)
 
 #Write CSVs for later training/validation
-
 write_csv(abx_combined,"abx_combined.csv")
 write_csv(ur_abx_combined,"ur_abx_combined.csv")
 
@@ -294,10 +293,10 @@ for (outcome in colnames(abx_outcomes)) {
     set.seed(123)
     
     #split df to train and test
-    abx_combined %>% TTsplitter('CDI',0.8,"abxTrain","abxTest")
+    abx_combined %>% TTsplitter(outcome,0.8,"abxTrain","abxTest")
     
     #make xgboost training matrix
-    abxtrain_matrix <- abxTrain %>% model_matrixmaker(abx_predictors,'CDI')
+    abxtrain_matrix <- abxTrain %>% model_matrixmaker(abx_predictors,outcome)
     
     #iterate over lhs-selected hyperparameter pairs
     for (i in 1:nrow(depchild_lhsgrid)) {
@@ -306,7 +305,7 @@ for (outcome in colnames(abx_outcomes)) {
       cv_model <- abxtrain_matrix %>%
         hypparam_tuner(et=0.05,md=1,mcw=1,ss=0.8,csb=0.8,
                        "max_depth","min_child_weight",depchild_lhsgrid,
-                       i,'CDI',"best_auc","best_params","best_nrounds",TRUE,
+                       i,outcome,"best_auc","best_params","best_nrounds",TRUE,
                        50)
       
     }
@@ -316,6 +315,8 @@ for (outcome in colnames(abx_outcomes)) {
     
   }
 }
+
+cdi_tox_max_child_bestparams[['overall_tox']] %>% view()
 
 ###Save first set of tuned hyperparameters to csvs
 save_hypparams(cdi_tox_max_child_bestparams,"max_child_",
@@ -446,15 +447,19 @@ for (outcome in colnames(abx_outcomes)) {
         
         parameter_val <- 0.3
         
+        #if still not converging, lower tree depth further
+      } else if (parameter_val==0.4 & md_val>3) {
+        
+        md_val <- md_val-1
+        
         #if that doesn't work, abort
-      } else if (parameter_val==0.4 & md_val==6) {
-        
-        break
-        
-        print("Aborting. Review model parameters")
-        
-      }
+      } else if (parameter_val==0.4 & md_val==3) {
       
+        break
+      
+        print("Aborting. Review model parameters")
+      
+      }
       
     }
     
@@ -473,4 +478,3 @@ save_hypparams(cdi_tox_final_bestparams,"cdi_tox_final_params_",
 
 ###Read final hyperparameter set back in to list to check save
 cdi_tox_final_bestparams <- hypparamreader("cdi_tox_final_params_",colnames(abx_outcomes))
-
