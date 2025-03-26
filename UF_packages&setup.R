@@ -57,5 +57,5 @@ library(ggpubr)
 
 ##SETUP
 options(error=NULL)
-setwd("#FILEPATH#/")
-path_to_data <- "#FILEPATH#/"
+setwd("/Users/alexhoward/Documents/Projects/UDAST_code/")
+path_to_data <- "/Users/alexhoward/Documents/Projects/UDAST_code/"
