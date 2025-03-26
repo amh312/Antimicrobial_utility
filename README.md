@@ -40,4 +40,6 @@ To reproduce the study, all csv files above must be stored in the working direct
    11. **UF_microsimulation.R**
    12. **UF_descriptive.R**
 
-Rendering **UF.qmd** and **UF_supplement.qmd** will then produce the manuscript and supplementary material respectively. The code in its entirety typically takes approximately 72-96 hours to run. Please note that the code also includes additional analyses that are not included in the paper for the purpose of brevity, that pertain to combination treatment. To skip the model tuning steps (the most time-consuming parts of the analysis), the csv files in the **hyperparameters** folder can be downloaded to provide the hyperparameters, and all scripts except 4 and 6 run.
+The code in its entirety typically takes approximately 72-96 hours to run. Please note that the code also includes additional analyses that are not included in the paper for the purpose of brevity, that pertain to combination treatment.
+
+Scripts 4 and 6 (hyperparameter tuning) are the most computationally time-consuming and may need to be run in chunks, depending on RAM. To skip these tuning steps, the csv files in the **hyperparameters** folder can be downloaded to provide the hyperparameters, and all scripts except 4 and 6 run.
