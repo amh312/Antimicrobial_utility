@@ -227,15 +227,15 @@ set.seed(123)
   metric_cleaner <- function(metric){
     
     #empty df
-    metricdf <- data.frame(matrix(nrow=length(metrics_ablist),ncol=0))
+    metricdf <- data.frame(matrix(nrow=length(overall_map),ncol=0))
     
     #add antibiotics
-    metricdf$Antimicrobial <- metrics_ablist
+    metricdf$Antimicrobial <- overall_map
     
     #read in metrics csvs into df
-    for (i in 1:length(metrics_ablist)) {
+    for (i in 1:length(overall_map)) {
       
-      metricdf[i,2] <- read_csv(glue("metrics_{metrics_ablist[i]}.csv")) %>% select(contains(metric))
+      metricdf[i,2] <- read_csv(glue("metrics_{overall_map[i]}.csv")) %>% select(contains(metric))
       
     }
     
@@ -2185,7 +2185,7 @@ write_csv(hyp_tab,"hyp_tab.csv")
 hyp_abs <- c(names(antimicrobial_map),"CDI","Toxicity")
 hyp_tall_singles <- hyp_tab %>% filter(Model %in% hyp_abs)
 write_csv(hyp_tall_singles,"hyp_tall_singles.csv")
-
+hyp_tall_singles %>% view()
 ##Values for results
 
 ###Stability analysis
