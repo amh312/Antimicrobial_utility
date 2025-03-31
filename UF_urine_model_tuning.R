@@ -213,7 +213,7 @@ model_matrixmaker <- function(dataset,predictors,outc) {
 ###Hyperparameter pair tuner
 hypparam_tuner <- function(traindat,et,md,mcw,ss,csb,hypparam_1,hypparam_2,
                            lhsgrid,itera,outc,aucname,paramname,nroundname,lhcpairs,
-                           roundstorun){
+                           roundstorun,eta_tune=FALSE,earlystop=50){
   
   #update message
   print(glue("Running CV {itera} for {outc}..."))
@@ -243,7 +243,7 @@ hypparam_tuner <- function(traindat,et,md,mcw,ss,csb,hypparam_1,hypparam_2,
     data = traindat,
     nrounds = roundstorun,
     nfold = 5,
-    early_stopping_rounds = 50,
+    early_stopping_rounds = earlystop,
     verbose = 1,
   )
   
@@ -254,10 +254,13 @@ hypparam_tuner <- function(traindat,et,md,mcw,ss,csb,hypparam_1,hypparam_2,
   best_iteration_auc <- cv_model$evaluation_log$test_auc_mean[best_iteration_index]
   
   #if auc better than previous round, update values
-  if (best_iteration_auc > best_auc) {
+  if ((best_iteration_auc > best_auc & eta_tune==FALSE)|
+      eta_tune==TRUE){
+    
     best_auc <- best_iteration_auc
     best_params <- hypparamlist
     best_nrounds <- best_iteration_index
+    
   }
   
   #get number of rounds run (for learning rate tuning)
@@ -482,7 +485,7 @@ for (outcome in colnames(urines5_outcomes)) {
     #starting point for n rounds run
     n_rounds_run <- 0
     
-    #starting opoint for learning rate
+    #starting point for learning rate
     parameter_val <- 0.1
     
     #starting point for iteration number
@@ -491,8 +494,14 @@ for (outcome in colnames(urines5_outcomes)) {
     #set max tree depth outside of while loop so it can be reassigned if required
     md_val <- max_child_bestparams[[outcome]]$max_depth
     
+    #set round limit
+    roundlimit <- 1000
+    
+    #reduce number of stopping rounds
+    stoprounds <- 50
+    
     #run until nrounds is between 200 and 1,000
-    while(n_rounds_run<200|n_rounds_run==1000) {
+    while(n_rounds_run<300|n_rounds_run==roundlimit) {
       
       #run cross-validation and extract best values
       urtrain_matrix %>%
@@ -502,15 +511,15 @@ for (outcome in colnames(urines5_outcomes)) {
                        csb=col_sub_bestparams[[outcome]]$colsample_bytree,
                        hypparam_1="",hypparam_2="",lhsgrid=NULL,
                        i,outcome,"best_auc","best_params","best_nrounds",FALSE,
-                       1000)
+                       roundlimit,TRUE,earlystop = stoprounds)
       
       #if <200 rounds, halve learning rate
-      if(n_rounds_run<200) {
+      if(n_rounds_run<300) {
         
         parameter_val <- parameter_val/2
         
         #if > 1,000 rounds, add 0.1 to learning rate
-      } else if (n_rounds_run==1000) {
+      } else if (n_rounds_run==roundlimit) {
         
         parameter_val <- parameter_val+0.1
         
@@ -519,22 +528,30 @@ for (outcome in colnames(urines5_outcomes)) {
       #next iteration
       i <- i+1
       
-      #if learning rate goes beyond 0.3, fix max tree depth at 0.6 and try again
-      if(parameter_val==0.4 & md_val!=6) {
+      #if learning rate goes beyond 0.3, fix max tree depth at 6, increase max rounds and reduce stopping rounds
+      if(parameter_val==0.4 & md_val>6) {
         
         md_val <- 6
         
+        stoprounds <- 10
+        
+        roundlimit <- 2000
+        
         parameter_val <- 0.3
         
-        #if that doesn't work, abort
-      } else if (parameter_val==0.4 & md_val==6) {
+        #if still not converging, lower tree depth further
+      } else if (parameter_val==0.4 & md_val>=4 & md_val<=6) {
         
-        break
+        md_val <- md_val-1
         
-        print("Aborting. Review model parameters")
+        parameter_val <- 0.3
+        
+        #if that doesn't work when the tree depth hits 3, abort
+      } else if (parameter_val==0.4 & md_val==3) {
+        
+        stop("Model not converging. Review hyperparameters")
         
       }
-    
       
     }
     
