@@ -21,17 +21,15 @@ set.seed(123)
     
     df <- df %>% 
       
-      #filter to nas
+      #filter to non-nas
       filter(!is.na(!!metric)) %>% 
       
       #clean prescription model names
-      mutate(Model=case_when(Model=="overall_tox"~"Toxicity",
-                                        Model=="CDI"~"CDI",
-                                        TRUE~ab_name(Model)))
+      mutate(Model=abcombo_replace(Model,overall_map))
     
     #clean and add missing names
     df <- df %>% rename(`Training dataset size`="Training_size")
-    model_levels <- ab_name(all_singles) %>% append(c("Vancomycin","CDI","Toxicity")) %>% rev()
+    model_levels <- names(overall_map) %>% rev()
     
     #factorise and characterise
     df$Model <- factor(df$Model,levels=model_levels)
@@ -75,10 +73,8 @@ set.seed(123)
       filter(!is.na(!!metric)) %>%
       
       #clean and add names
-      mutate(Model=case_when(Model=="overall_tox"~"Toxicity",
-                             Model=="CDI"~"CDI",
-                             TRUE~ab_name(Model)))
-    model_levels <- ab_name(all_singles) %>% append(c("Vancomycin","CDI","Toxicity")) %>% rev()
+      mutate(Model=abcombo_replace(Model,overall_map))
+      model_levels <- names(overall_map) %>% rev()
     
     #factors/characters
     df$Model <- factor(df$Model,levels=model_levels)
@@ -118,10 +114,8 @@ set.seed(123)
     #filter to training years, remove nas, clean and add names
     df <- df %>% filter(grepl(tr_yr,Train_year)) %>% 
       filter(!is.na(!!metric)) %>%
-      mutate(Model=case_when(Model=="overall_tox"~"Toxicity",
-                             Model=="CDI"~"CDI",
-                             TRUE~ab_name(Model)))
-    model_levels <- ab_name(all_singles) %>% append(c("Vancomycin","CDI","Toxicity")) %>% rev()
+      mutate(Model=abcombo_replace(Model,overall_map))
+      model_levels <- names(overall_map) %>% rev()
     
     #characters and factors
     df$Model <- factor(df$Model,levels=model_levels)
@@ -197,6 +191,35 @@ set.seed(123)
     assign(fullname,fullmap,envir = .GlobalEnv)
     assign(mainname,abmap2,envir = .GlobalEnv)
     assign(shortname,shortmap,envir = .GlobalEnv)
+    
+  }
+  
+  ###Replace antimicrobial short name with long name including for combinations
+  abcombo_replace <- function(abtarget, map) {
+    
+    #switch names of combined ab list with the list elements themselves
+    flip_abmap <- setNames(names(map), map)
+    
+    abtarget %>%
+      
+      #convert column to character format
+      as.character() %>%
+      
+      #if target value is in names of flipped map, return the element
+      sapply(function(x) if (x %in% names(flip_abmap)) flip_abmap[[x]] else x)
+    
+  }
+  
+  ###Replace antimicrobial short name with long name including for combinations
+  abcombo_reverse <- function(abtarget, map) {
+    
+    abtarget %>%
+      
+      #convert to character
+      as.character() %>%
+      
+      #if target ab is in the map elements, return that name
+      sapply(function(x) if (x %in% map) names(map)[map == x] else x)
     
   }
   
@@ -761,12 +784,12 @@ set.seed(123)
       }
     }
     rownames(metdf4) <- NULL
-    metdf
+    metdf4
     
   }
   
   ###Prescription data preprocessing
-  modeltest_preproc <- function(df){
+  modeltest_preproc <- function(df,outcnam,prednam,combnam){
     
     #set seed
     set.seed(123)
@@ -812,35 +835,9 @@ set.seed(123)
     df_combined <- as.data.frame(cbind(df_outcomes, df_predictors))
     
     assign(outcnam,df_outcomes,envir = .GlobalEnv)
-    assign(outcnam,df_predictors,envir = .GlobalEnv)
-    assign(outcnam,df_combined,envir = .GlobalEnv)
+    assign(prednam,df_predictors,envir = .GlobalEnv)
+    assign(combnam,df_combined,envir = .GlobalEnv)
     
-  }
-  
-  ###Printing fairness metrics
-  fairnessprinter1 <- function(cat) {
-    
-    #maximum mean and sd differences between demographics
-    max_fairmets <- fairmets %>% filter(Category==cat) %>% group_by(Model,Characteristic) %>%
-      summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% 
-      summarise(maxAUC_meandif=max(mean_AUC)-min(mean_AUC),
-                max_sd=max(sd_AUC)) %>% ungroup()
-    
-    #print maximum AUC mean differences and sd
-    max_fairmets %>% arrange(desc(maxAUC_meandif)) %>% print()
-    max_fairmets %>% arrange(desc(max_sd)) %>% print()
-  }
-  fairnessprinter2 <- function(cat,cat1,cat2) {
-    
-    #find which demographics had the largest mean difference
-    fairmets %>% filter(Category==cat) %>% group_by(Model,Characteristic) %>% 
-      summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% filter(Model==cat1) %>% 
-      arrange(desc(mean_AUC)) %>% print()
-    
-    #find which demographics had the largest sd
-    fairmets %>% filter(Category==cat) %>% group_by(Model,Characteristic) %>%
-      summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% filter(Model==cat2) %>% 
-      arrange(desc(sd_AUC)) %>% print()
   }
   
   ###Compiling hyperparameter dataframe
@@ -880,78 +877,6 @@ set.seed(123)
       dplyr::slice(-1) %>% tibble()
     
   }
-  
-  ###Stability metric values
-  maxstmetrics <- function(df,chmetric="mean"){
-    
-    #maximum mean auc differences and sds
-    max_stabdifs <- df %>% group_by(Model,Training_size) %>%
-      summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% 
-      summarise(maxAUC_meandif=max(mean_AUC)-min(mean_AUC),
-                max_sd=max(sd_AUC)) %>% ungroup()
-    
-    if (chmetric=="mean"){
-      
-      #print max mean difference
-      print(max_stabdifs %>% arrange(desc(maxAUC_meandif)))
-      
-      #print which groups this affected
-      df %>% group_by(Model,Training_size) %>% 
-        summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% 
-        filter(Model==max_stabdifs %>% arrange(desc(maxAUC_meandif)) %>%
-                 dplyr::slice(1) %>% unlist()) %>% arrange(desc(mean_AUC)) %>% 
-        print()
-      
-    } else {
-      
-      #print max sd
-      print(max_stabdifs %>% arrange(desc(max_sd)))
-      
-      #print which groups this afected
-      df %>% group_by(Model,Training_size) %>% 
-        summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% 
-        filter(Model==max_stabdifs %>% arrange(desc(max_sd)) %>% 
-                 dplyr::slice(1) %>% unlist()) %>% arrange(desc(sd_AUC)) %>% 
-        print()
-      
-    }
-    
-  }
-  
-  ###Time metric values
-  maxtime <- function(df,chmetric="mean"){
-    
-    #maximum mean auc differences and sds
-    max_timemets <- df %>% group_by(Model,Train_year,Test_year) %>%
-      summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% group_by(Model) %>%  
-      summarise(maxAUC_meandif=max(mean_AUC)-min(mean_AUC),
-                max_sd=max(sd_AUC)) %>% ungroup()
-    
-    if(chmetric=="mean"){
-      
-      #print max mean auc difference
-      max_timemets %>% arrange(desc(maxAUC_meandif)) %>% print()
-      
-      #affected groups
-      df %>% group_by(Model,Train_year,Test_year) %>% 
-        summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% 
-        filter(Model==max_timemets %>% arrange(desc(maxAUC_meandif)) %>% dplyr::slice(1) %>% select(Model) %>% unlist()) %>% 
-        arrange(desc(mean_AUC)) %>% print()
-      
-    } else {
-      
-      #print max auc sd
-      max_timemets %>% arrange(desc(max_sd)) %>% print()
-      
-      #print affected groups
-      df %>% group_by(Model,Train_year,Test_year) %>% 
-        summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% 
-        filter(Model==max_timemets %>% arrange(desc(max_sd)) %>% dplyr::slice(1) %>% select(Model) %>% unlist()) %>% 
-        arrange(desc(sd_AUC)) %>% print()
-      
-    }
-    
-  }
 
   ###Retrieving predicted probabilities/classes and actual class
   probclassactual <- function(testdf,model,testmat,outc,
@@ -976,6 +901,131 @@ set.seed(123)
     assign(probnam,ur_predprobs,envir=.GlobalEnv)
     assign(classnam,ur_predclass,envir=.GlobalEnv)
     assign(actnam,ur_actclass,envir=.GlobalEnv)
+    
+  }
+  
+  ###Getting maximum mean and SDs of AUCs in fairness analysis
+  fairmetfilter <- function(df,cat){
+    
+    fairmets %>% filter(Category==cat) %>% group_by(Model,Characteristic) %>%
+      summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% 
+      summarise(maxAUC_meandif=max(mean_AUC)-min(mean_AUC),
+                max_sd=max(sd_AUC)) %>% ungroup()
+    
+  }
+  
+  ###Putting together fairness metrics
+  fair_subfunc <- function(df,char){
+    
+    top_charac_amd <- max_characdifs %>% arrange(desc(maxAUC_meandif)) %>% dplyr::slice(1)
+    top_charac_amdmod <- top_charac_amd %>% select(Model) %>% abcombo_replace(overall_map) %>% tolower()
+    top_charac_amdcase <- fairmets %>% filter(Model==names(top_charac_amdmod)&Category==char) %>% arrange(desc(AUC))
+    top_charac_amdtop <- top_charac_amdcase %>% dplyr::slice(1) %>% select(AUC) %>% round(3) %>% unlist()
+    top_charac_amdtoplab <- top_charac_amdcase %>% dplyr::slice(1) %>% select(Characteristic) %>% unlist()
+    top_charac_amdbot <- top_charac_amdcase %>% dplyr::slice(nrow(top_charac_amdcase)) %>% select(AUC) %>% round(3) %>% unlist()
+    top_charac_amdbotlab <- top_charac_amdcase %>% dplyr::slice(nrow(top_charac_amdcase)) %>% select(Characteristic) %>% unlist()
+    
+    top_charac_asd <- max_characdifs %>% arrange(desc(max_sd)) %>% dplyr::slice(1)
+    top_charac_asdmod <- top_charac_asd %>% select(Model) %>% abcombo_replace(overall_map) %>% tolower()
+    top_charac_asdval <- top_charac_asd %>% select(max_sd) %>% round(3) %>% unlist()
+    top_charac_asdlab <- fairmets %>% filter(Category==char) %>% group_by(Model,Characteristic) %>%
+      summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% ungroup() %>% arrange(desc(sd_AUC)) %>% 
+      select(Characteristic) %>% dplyr::slice(1) %>% unlist()
+    
+    data.frame(char=char %>% tolower(),top_aucmodel=top_charac_amdmod,top_auclab=top_charac_amdtoplab,top_auc=top_charac_amdtop,
+               bot_auclab=top_charac_amdbotlab,bot_auc=top_charac_amdbot,top_sdmodel=top_charac_asdmod,
+               top_sdlab=top_charac_asdlab,top_sd=top_charac_asdval) %>% remove_rownames()
+    
+  }
+  
+  ###Manuscript stability metrics into table
+  stabmetter <- function(df) {
+    
+    max_stabdifs <- df %>% group_by(Model,Training_size) %>%
+      summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% 
+      summarise(maxAUC_meandif=max(mean_AUC)-min(mean_AUC),
+                max_sd=max(sd_AUC)) %>% ungroup()
+    
+    top_stab_amd <- max_stabdifs %>% arrange(desc(maxAUC_meandif)) %>% dplyr::slice(1)
+    top_stab_amdmod <- top_stab_amd %>% select(Model) %>% abcombo_replace(overall_map) %>% unlist()
+    top_stab_amdcase <- df %>% filter(Model==names(top_stab_amdmod)) %>% group_by(Training_size) %>% 
+      mutate(meanauc=mean(AUC)) %>% ungroup() %>% arrange(desc(meanauc))
+    top_stab_amdtop <- top_stab_amdcase %>% dplyr::slice(1) %>% select(meanauc) %>% round(3) %>% unlist()
+    top_stab_amdtoplab <- top_stab_amdcase %>% dplyr::slice(1) %>% select(Training_size) %>% unlist()
+    top_stab_amdbot <- top_stab_amdcase %>% dplyr::slice(nrow(top_stab_amdcase)) %>% select(meanauc) %>% round(3) %>% unlist()
+    top_stab_amdbotlab <- top_stab_amdcase %>% dplyr::slice(nrow(top_stab_amdcase)) %>% select(Training_size) %>% unlist()
+    
+    top_stab_asd <- max_stabdifs %>% arrange(desc(max_sd)) %>% dplyr::slice(1)
+    top_stab_asdmod <- top_stab_asd %>% select(Model) %>% abcombo_replace(overall_map) %>% tolower()
+    top_stab_asdval <- top_stab_asd %>% select(max_sd) %>% round(3) %>% unlist()
+    top_stab_asdcase <- df %>% filter(Model==names(top_stab_asdmod)) %>% group_by(Training_size) %>% 
+      mutate(sdauc=sd(AUC)) %>% ungroup() %>% arrange(desc(sdauc)) %>% dplyr::slice(1) %>% 
+      select(Training_size) %>% unlist()
+    
+    data.frame(top_stab_amdmod,top_stab_amdtoplab,top_stab_amdtop,
+               top_stab_amdbotlab,top_stab_amdbot,top_stab_asdmod,
+               top_stab_asdcase,top_stab_asdval)
+    
+  }
+  
+  ###Manuscript time metrics into table
+  timemetter <- function(df) {
+    
+    max_timemets <- df %>% group_by(Model,Train_year,Test_year) %>%
+      summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% group_by(Model) %>%  
+      summarise(maxAUC_meandif=max(mean_AUC)-min(mean_AUC),
+                max_sd=max(sd_AUC)) %>% ungroup()
+    
+    top_time_amd <- max_timemets %>% arrange(desc(maxAUC_meandif)) %>% dplyr::slice(1)
+    top_time_amdmod <- top_time_amd %>% select(Model) %>% abcombo_replace(overall_map)
+    top_time_amdcase <- df %>% filter(Model==names(top_time_amdmod)) %>%
+      group_by(Train_year,Test_year) %>% mutate(meanauc=mean(AUC)) %>% ungroup() %>% arrange(desc(meanauc))
+    
+    top_time_amdtop <- top_time_amdcase %>% dplyr::slice(1) %>% select(meanauc) %>% round(3) %>% unlist()
+    top_time_amdtoptrain <- top_time_amdcase %>% dplyr::slice(1) %>% select(Train_year) %>% unlist()
+    top_time_amdtoptest <- top_time_amdcase %>% dplyr::slice(1) %>% select(Test_year) %>% unlist()
+    top_time_amdbot <- top_time_amdcase %>% dplyr::slice(nrow(top_time_amdcase)) %>% select(meanauc) %>% round(3) %>% unlist()
+    top_time_amdbottrain <- top_time_amdcase %>% dplyr::slice(nrow(top_time_amdcase)) %>% select(Train_year) %>% unlist()
+    top_time_amdbottest <- top_time_amdcase %>% dplyr::slice(nrow(top_time_amdcase)) %>% select(Test_year) %>% unlist()
+    
+    top_time_asd <- max_timemets %>% arrange(desc(max_sd)) %>% dplyr::slice(1)
+    top_time_asdmod <- top_time_asd %>% select(Model) %>% abcombo_replace(overall_map)
+    top_time_asdval <- top_time_asd %>% select(max_sd) %>% round(3) %>% unlist()
+    top_time_asdlabs <- df %>% filter(Model==names(top_time_asdmod)) %>% group_by(Train_year,Test_year) %>%
+      summarise(mean_AUC=mean(AUC),sd_AUC=sd(AUC)) %>% ungroup() %>% arrange(desc(sd_AUC)) %>% 
+      select(Train_year,Test_year) %>% dplyr::slice(1)
+    top_time_sdtrainlab <- top_time_asdlabs %>% select(1) %>% unlist()
+    top_time_sdtestlab <- top_time_asdlabs %>% select(2) %>% unlist()
+    
+    data.frame(top_time_amdmod,top_time_amdtoptrain,top_time_amdtoptest,
+               top_time_amdtop,top_time_amdbottrain,top_time_amdbottest,
+               top_time_amdbot,top_time_asdmod,top_time_sdtrainlab,
+               top_time_sdtestlab,top_time_asdval)
+    
+  }
+  
+  ###Fairness metrics into table
+  fair_subfunc <- function(df1,df2,char){
+    
+    top_charac_amd <- df2 %>% arrange(desc(maxAUC_meandif)) %>% dplyr::slice(1)
+    top_charac_amdmod <- top_charac_amd %>% select(Model) %>% abcombo_replace(overall_map) %>% tolower()
+    top_charac_amdcase <- df1 %>% filter(Model==names(top_charac_amdmod)&Category==char) %>% group_by(Characteristic) %>% 
+      mutate(meanauc=mean(AUC)) %>% ungroup() %>% arrange(desc(meanauc))
+    top_charac_amdtop <- top_charac_amdcase %>% dplyr::slice(1) %>% select(meanauc) %>% round(3) %>% unlist()
+    top_charac_amdtoplab <- top_charac_amdcase %>% dplyr::slice(1) %>% select(Characteristic) %>% unlist()
+    top_charac_amdbot <- top_charac_amdcase %>% dplyr::slice(nrow(top_charac_amdcase)) %>% select(meanauc) %>% round(3) %>% unlist()
+    top_charac_amdbotlab <- top_charac_amdcase %>% dplyr::slice(nrow(top_charac_amdcase)) %>% select(Characteristic) %>% unlist()
+    
+    top_charac_asd <- df2 %>% arrange(desc(max_sd)) %>% dplyr::slice(1)
+    top_charac_asdmod <- top_charac_asd %>% select(Model) %>% abcombo_replace(overall_map) %>% tolower()
+    top_charac_asdval <- top_charac_asd %>% select(max_sd) %>% round(3) %>% unlist()
+    top_charac_asdlab <- df1 %>% filter(Model==names(top_charac_asdmod)&Category==char) %>% group_by(Characteristic) %>%
+      mutate(sd_AUC=sd(AUC)) %>% ungroup() %>% arrange(desc(sd_AUC)) %>% 
+      select(Characteristic) %>% dplyr::slice(1) %>% unlist()
+    
+    data.frame(char=char %>% tolower(),top_aucmodel=top_charac_amdmod,top_auclab=top_charac_amdtoplab,top_auc=top_charac_amdtop,
+               bot_auclab=top_charac_amdbotlab,bot_auc=top_charac_amdbot,top_sdmodel=top_charac_asdmod,
+               top_sdlab=top_charac_asdlab,top_sd=top_charac_asdval) %>% remove_rownames()
     
   }
   
@@ -1523,6 +1573,10 @@ for (outcome in colnames(urines5_outcomes)[1:13]) {
             nrounds = final_bestparams[[outcome]]$best_nrounds
           )
           
+          ###Get predicted probability/class and actual class
+          urines5Test %>% probclassactual(xgb_urinemodel,urtest_matrix,outcome,'ur_predprobs',
+                                           'ur_predclass','ur_actualclass')
+          
           ###Performance metrics
           ur_predact_df <- data.frame(act_val = ur_actualclass, pred_class = ur_predclass,pred_probs = ur_predprobs)
           ur_metrics4<- ur_perf_mets(ur_predact_df,NULL,bootstr = F)
@@ -1627,18 +1681,18 @@ for (outcome in colnames(abx_outcomes)) {
         abxparams <- list(
           objective = "binary:logistic",
           eval_metric = "auc",
-          eta = final_bestparams[[outcome]]$eta,
-          max_depth = final_bestparams[[outcome]]$max_depth,
-          min_child_weight = final_bestparams[[outcome]]$min_child_weight,
-          subsample = final_bestparams[[outcome]]$subsample,
-          colsample_bytree = final_bestparams[[outcome]]$colsample_bytree
+          eta = cdi_tox_final_bestparams[[outcome]]$eta,
+          max_depth = cdi_tox_final_bestparams[[outcome]]$max_depth,
+          min_child_weight = cdi_tox_final_bestparams[[outcome]]$min_child_weight,
+          subsample = cdi_tox_final_bestparams[[outcome]]$subsample,
+          colsample_bytree = cdi_tox_final_bestparams[[outcome]]$colsample_bytree
         )
         
         ###Training
         print(glue("Training for {outcome}"))
         xgb_abxmodel <- xgb.train(
           params = abxparams,data = abxtrain_matrix,
-          nrounds = final_bestparams[[outcome]]$best_nrounds
+          nrounds = cdi_tox_final_bestparams[[outcome]]$best_nrounds
         )
         
         ###Get predicted probability/class and actual class
@@ -1677,7 +1731,7 @@ write_csv(metrics_df,"cdi_tox_stability_metrics.csv")
 ##Model fairness analysis (CDI tox)
 
 ###Protected characteristics excluding age list
-abx_prot <- abx_combined %>% protchar_assambler()
+abx_prot <- abx_combined %>% protchar_assembler()
 protchar_index <- which(grepl("(^marital_status_|^language|^MALE|^race_)",colnames(abx_prot))&
                           !grepl("(UNKNOWN|Other|\\?)",colnames(abx_prot)))
 protchars <- colnames(abx_prot)[protchar_index]
@@ -1706,30 +1760,30 @@ for (outcome in colnames(abx_outcomes)) {
       abxTest <- abxTest %>% protchar_assembler()
       
       ###Ensure features line up between dataframes
-      abx_xg_combined <- abx_xg_combined %>%
+      abx_combined <- abx_combined %>%
         lineup_features(abx_predictors,abxTrain)
       
       ###Make xgboost training matrices
       abxtrain_matrix <- abxTrain %>% model_matrixmaker(abx_predictors,outcome)
       abxtest_matrix <- abxTest %>% model_matrixmaker(abx_predictors,outcome)
-      abxmicro_matrix <- abx_xg_combined %>% model_matrixmaker(abx_predictors,outcome)
+      abxmicro_matrix <- abx_combined %>% model_matrixmaker(abx_predictors,outcome)
       
       ###Set parameters
       abxparams <- list(
         objective = "binary:logistic",
         eval_metric = "auc",
-        eta = final_bestparams[[outcome]]$eta,
-        max_depth = final_bestparams[[outcome]]$max_depth,
-        min_child_weight = final_bestparams[[outcome]]$min_child_weight,
-        subsample = final_bestparams[[outcome]]$subsample,
-        colsample_bytree = final_bestparams[[outcome]]$colsample_bytree
+        eta = cdi_tox_final_bestparams[[outcome]]$eta,
+        max_depth = cdi_tox_final_bestparams[[outcome]]$max_depth,
+        min_child_weight = cdi_tox_final_bestparams[[outcome]]$min_child_weight,
+        subsample = cdi_tox_final_bestparams[[outcome]]$subsample,
+        colsample_bytree = cdi_tox_final_bestparams[[outcome]]$colsample_bytree
       )
       
       ###Training
       print(glue("Training for {outcome}"))
       xgb_abxmodel <- xgb.train(
         params = abxparams,data = abxtrain_matrix,
-        nrounds = final_bestparams[[outcome]]$best_nrounds
+        nrounds = cdi_tox_final_bestparams[[outcome]]$best_nrounds
       )
       
       ###Empty level 2 list
@@ -1832,30 +1886,30 @@ for (outcome in colnames(abx_outcomes)) {
       abxTest <- abxTest %>% protchar_assembler()
       
       ###Ensure features line up between dataframes
-      abx_xg_combined <- abx_xg_combined %>%
+      abx_combined <- abx_combined %>%
         lineup_features(abx_predictors,abxTrain)
       
       ###Make xgboost training matrices
       abxtrain_matrix <- abxTrain %>% model_matrixmaker(abx_predictors,outcome)
       abxtest_matrix <- abxTest %>% model_matrixmaker(abx_predictors,outcome)
-      abxmicro_matrix <- abx_xg_combined %>% model_matrixmaker(abx_predictors,outcome)
+      abxmicro_matrix <- abx_combined %>% model_matrixmaker(abx_predictors,outcome)
       
       ###Set parameters
       abxparams <- list(
         objective = "binary:logistic",
         eval_metric = "auc",
-        eta = final_bestparams[[outcome]]$eta,
-        max_depth = final_bestparams[[outcome]]$max_depth,
-        min_child_weight = final_bestparams[[outcome]]$min_child_weight,
-        subsample = final_bestparams[[outcome]]$subsample,
-        colsample_bytree = final_bestparams[[outcome]]$colsample_bytree
+        eta = cdi_tox_final_bestparams[[outcome]]$eta,
+        max_depth = cdi_tox_final_bestparams[[outcome]]$max_depth,
+        min_child_weight = cdi_tox_final_bestparams[[outcome]]$min_child_weight,
+        subsample = cdi_tox_final_bestparams[[outcome]]$subsample,
+        colsample_bytree = cdi_tox_final_bestparams[[outcome]]$colsample_bytree
       )
       
       ###Training
       print(glue("Training for {outcome}"))
       xgb_abxmodel <- xgb.train(
         params = abxparams,data = abxtrain_matrix,
-        nrounds = final_bestparams[[outcome]]$best_nrounds
+        nrounds = cdi_tox_final_bestparams[[outcome]]$best_nrounds
       )
       
       ###Empty level 2 list
@@ -1885,7 +1939,7 @@ for (outcome in colnames(abx_outcomes)) {
           
           ###Performance metrics
           abx_predact_df <- data.frame(act_val = abx_actualclass, pred_class = abx_predclass,pred_probs = abx_predprobs)
-          abx_metrics3 <- abx_perf_mets(abx_predact_df,NULL,bootstr = F)
+          abx_metrics3 <- ur_perf_mets(abx_predact_df,NULL,bootstr = F)
           charlist <- list(glue("age{ages[[age]]}"))
           names(charlist) <- "Characteristic"
           testsup <- list(nrow(abxTest2))
@@ -1893,7 +1947,7 @@ for (outcome in colnames(abx_outcomes)) {
           abx_metrics3 <- c(charlist,abx_metrics3,testsup)
           
           ###Add metrics to level 1 list
-          metrics_list3[[outcome]] <- ur_metrics3
+          metrics_list3[[outcome]] <- abx_metrics3
           
           ###Add level 1 metrics list to level 2 age list
           metrics_litlist3[[age]] <- metrics_list3
@@ -1925,7 +1979,7 @@ for (outcome in colnames(abx_outcomes)) {
   ###Add level 3 seed list to top-level prescription model list
   metrics_biglist3[[outcome]] <- metrics_medlist3
 
-  }
+}
 
 ###Write fairness metrics to df, then to CSV
 metrics_protchar_df <- metrics_biglist3 %>% 
@@ -1995,42 +2049,46 @@ for (outcome in colnames(abx_outcomes)) {
               }
           
           ###Sync up predictor solumns
-          predictor_columns <- colnames(urines5_predictors)
-          selected_columns <- intersect(predictor_columns, colnames(urines5Train))
+          predictor_columns <- colnames(abx_predictors)
+          selected_columns <- intersect(predictor_columns, colnames(abxTrain))
           
           ###XGBoost matrices
-          urtrain_matrix <- urines5Train %>% model_matrixmaker(urines5_predictors,outcome)
-          urtest_matrix <- urines5Test %>% model_matrixmaker(urines5_predictors,outcome)
+          abxtrain_matrix <- abxTrain %>% model_matrixmaker(abx_predictors,outcome)
+          abxtest_matrix <- abxTest %>% model_matrixmaker(abx_predictors,outcome)
           
           ###Set parameters
-          urparams <- list(
+          abxparams <- list(
             objective = "binary:logistic",
             eval_metric = "auc",
-            eta = final_bestparams[[outcome]]$eta,
-            max_depth = final_bestparams[[outcome]]$max_depth,
-            min_child_weight = final_bestparams[[outcome]]$min_child_weight,
-            subsample = final_bestparams[[outcome]]$subsample,
-            colsample_bytree = final_bestparams[[outcome]]$colsample_bytree
+            eta = cdi_tox_final_bestparams[[outcome]]$eta,
+            max_depth = cdi_tox_final_bestparams[[outcome]]$max_depth,
+            min_child_weight = cdi_tox_final_bestparams[[outcome]]$min_child_weight,
+            subsample = cdi_tox_final_bestparams[[outcome]]$subsample,
+            colsample_bytree = cdi_tox_final_bestparams[[outcome]]$colsample_bytree
           )
           
           ###Training
           print(glue("Training for {outcome}"))
-          xgb_urinemodel <- xgb.train(
-            params = urparams,data = urtrain_matrix,
-            nrounds = final_bestparams[[outcome]]$best_nrounds
+          xgb_abxmodel <- xgb.train(
+            params = abxparams,data = abxtrain_matrix,
+            nrounds = cdi_tox_final_bestparams[[outcome]]$best_nrounds
           )
           
+          ###Get predicted probability/class and actual class
+          abxTest %>% probclassactual(xgb_abxmodel,abxtest_matrix,outcome,'abx_predprobs',
+                                       'abx_predclass','abx_actualclass')
+          
           ###Performance metrics
-          ur_predact_df <- data.frame(act_val = ur_actualclass, pred_class = ur_predclass,pred_probs = ur_predprobs)
-          ur_metrics4<- ur_perf_mets(ur_predact_df,NULL,bootstr = F)
-          trainsup <- list(nrow(urines5Train))
+          abx_predact_df <- data.frame(act_val = abx_actualclass, pred_class = abx_predclass,pred_probs = abx_predprobs)
+          abx_metrics4<- ur_perf_mets(abx_predact_df,NULL,bootstr = F)
+          trainsup <- list(nrow(abxTrain))
           names(trainsup) <- "Train_support"
-          testsup <- list(nrow(urines5Test))
+          testsup <- list(nrow(abxTest))
           names(testsup) <- "Test_support"
-          ur_metrics4 <- c(ur_metrics4,trainsup,testsup)
+          abx_metrics4 <- c(abx_metrics4,trainsup,testsup)
           
           ###Populate level 1 list with metrics
-          metrics_list4[[outcome]] <- ur_metrics4
+          metrics_list4[[outcome]] <- abx_metrics4
           
           ###Add level 1 metrics list to level 2 testing dataset list
           metrics_litlist4[[tim2]] <- metrics_list4
@@ -2055,6 +2113,7 @@ for (outcome in colnames(abx_outcomes)) {
   metrics_biglist4[[outcome]] <- metrics_medlist4
   
   }
+
 
 ###Write time sens metrics to df then csv
 metrics_df4 <- metrics_biglist4 %>% timesenstodf()
@@ -2091,6 +2150,8 @@ for (i in seq_along(allmetrics)) {
   stability_plot(metrics_df,!!sym(allmet_vars[i]),allmetrics[i])
   
   }
+
+
 
 ###Fairness analysis
 for (i in seq_along(allmetrics)){
@@ -2129,19 +2190,23 @@ write_csv(hyp_tall_singles,"hyp_tall_singles.csv")
 
 ###Stability analysis
 stabmets <- read_csv("overall_stability_metrics.csv")
-stabmets %>% maxstmetrics("mean")
-stabmets %>% maxstmetrics("sd")
+stabmet_df <- stabmetter(stabmets)
+write_csv(stabmet_df,"stabmet_df.csv")
 
 ###Year group cluster analysis
 timemets <- read_csv("overall_time_sens_metrics.csv")
-timemets %>% maxtime("mean")
-timemets %>% maxtime("sd")
+timemet_df <- timemetter(timemets)
+write_csv(timemet_df,"timemet_df.csv")
 
 ###Fairness analysis
 fairmets <- read_csv("overall_fairness_metrics.csv")
-fairnessprinter1("Age group")
-fairnessprinter2("Age group","TZP","TZP")
-fairnessprinter1("Race")
-fairnessprinter2("Race","TZP","TZP")
-fairnessprinter1("Gender")
-fairnessprinter2("Gender","TZP","TZP")
+max_racedifs <- fairmets %>% fairmetfilter("Race")
+max_agedifs <- fairmets %>% fairmetfilter("Age group")
+max_sexdifs <- fairmets %>% fairmetfilter("Gender")
+fairness_writedf <- rbind(
+fairmets %>% fair_subfunc(max_racedifs,"Race"),
+fairmets %>% fair_subfunc(max_agedifs,"Age group"),
+fairmets %>% fair_subfunc(max_sexdifs,"Gender"))
+write_csv(fairness_writedf,"fairness_writedf.csv")
+
+
