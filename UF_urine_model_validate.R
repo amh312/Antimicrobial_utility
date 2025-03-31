@@ -222,7 +222,7 @@ probclassactual <- function(testdf,model,testmat,outc,
   ur_predclass <- ifelse(ur_predprobs > 0.5, 1, 0)
   
   #set 1 as positive
-  ur_predclass <- relevel(factor(ur_predclass), ref = "1")
+  ur_predclass <- factor(ur_predclass,levels=c(0,1))
   
   #get actual class
   ur_actclass <- testdf[[outc]]
