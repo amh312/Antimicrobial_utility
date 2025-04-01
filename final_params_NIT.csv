@@ -1,0 +1,2 @@
+NIT.objective,NIT.eval_metric,NIT.eta,NIT.max_depth,NIT.min_child_weight,NIT.subsample,NIT.colsample_bytree,NIT.best_nrounds
+binary:logistic,auc,0.0125,5,1,0.74,0.64,364

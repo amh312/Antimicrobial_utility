@@ -1,0 +1,2 @@
+FEP_SXT.objective,FEP_SXT.eval_metric,eta,max_depth,min_child_weight,subsample,colsample_bytree,best_nrounds
+binary:logistic,auc,0.025,6,2,0.81,0.56,170

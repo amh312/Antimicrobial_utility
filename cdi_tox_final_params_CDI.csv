@@ -1,0 +1,2 @@
+CDI.objective,CDI.eval_metric,CDI.eta,CDI.max_depth,CDI.min_child_weight,CDI.subsample,CDI.colsample_bytree,CDI.best_nrounds
+binary:logistic,auc,0.3,6,9,0.84,0.53,743

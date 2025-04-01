@@ -1,0 +1,2 @@
+GEN.objective,GEN.eval_metric,GEN.eta,GEN.max_depth,GEN.min_child_weight,GEN.subsample,GEN.colsample_bytree,GEN.best_nrounds
+binary:logistic,auc,0.0125,6,8,0.86,0.68,382

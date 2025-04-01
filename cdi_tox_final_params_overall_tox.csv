@@ -1,0 +1,2 @@
+overall_tox.objective,overall_tox.eval_metric,overall_tox.eta,overall_tox.max_depth,overall_tox.min_child_weight,overall_tox.subsample,overall_tox.colsample_bytree,overall_tox.best_nrounds
+binary:logistic,auc,0.3,6,9,0.91,0.83,620

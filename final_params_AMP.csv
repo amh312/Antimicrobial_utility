@@ -1,0 +1,2 @@
+AMP.objective,AMP.eval_metric,AMP.eta,AMP.max_depth,AMP.min_child_weight,AMP.subsample,AMP.colsample_bytree,AMP.best_nrounds
+binary:logistic,auc,0.0125,7,9,0.55,0.7,285

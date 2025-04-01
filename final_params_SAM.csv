@@ -1,0 +1,2 @@
+SAM.objective,SAM.eval_metric,SAM.eta,SAM.max_depth,SAM.min_child_weight,SAM.subsample,SAM.colsample_bytree,SAM.best_nrounds
+binary:logistic,auc,0.0125,5,1,0.55,0.7,426

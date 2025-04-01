@@ -1,0 +1,2 @@
+SXT_VAN.objective,SXT_VAN.eval_metric,eta,max_depth,min_child_weight,subsample,colsample_bytree,best_nrounds
+binary:logistic,auc,0.025,6,8,0.72,0.51,266

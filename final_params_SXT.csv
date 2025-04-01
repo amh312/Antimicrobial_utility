@@ -1,0 +1,2 @@
+SXT.objective,SXT.eval_metric,SXT.eta,SXT.max_depth,SXT.min_child_weight,SXT.subsample,SXT.colsample_bytree,SXT.best_nrounds
+binary:logistic,auc,0.025,4,7,0.82,0.89,305

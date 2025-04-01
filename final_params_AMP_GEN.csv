@@ -1,0 +1,2 @@
+AMP_GEN.objective,AMP_GEN.eval_metric,eta,max_depth,min_child_weight,subsample,colsample_bytree,best_nrounds
+binary:logistic,auc,0.025,9,9,0.72,0.51,207

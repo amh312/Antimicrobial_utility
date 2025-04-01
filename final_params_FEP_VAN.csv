@@ -1,0 +1,2 @@
+FEP_VAN.objective,FEP_VAN.eval_metric,eta,max_depth,min_child_weight,subsample,colsample_bytree,best_nrounds
+binary:logistic,auc,0.025,6,8,0.63,0.84,236

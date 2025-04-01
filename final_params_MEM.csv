@@ -1,0 +1,2 @@
+MEM.objective,MEM.eval_metric,MEM.eta,MEM.max_depth,MEM.min_child_weight,MEM.subsample,MEM.colsample_bytree,MEM.best_nrounds
+binary:logistic,auc,0.0125,7,9,0.93,0.5,454

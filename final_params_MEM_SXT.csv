@@ -1,0 +1,2 @@
+MEM_SXT.objective,MEM_SXT.eval_metric,eta,max_depth,min_child_weight,subsample,colsample_bytree,best_nrounds
+binary:logistic,auc,0.025,4,7,0.58,0.64,355

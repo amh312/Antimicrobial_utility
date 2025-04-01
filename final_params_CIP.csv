@@ -1,0 +1,2 @@
+CIP.objective,CIP.eval_metric,CIP.eta,CIP.max_depth,CIP.min_child_weight,CIP.subsample,CIP.colsample_bytree,CIP.best_nrounds
+binary:logistic,auc,0.0125,7,9,0.66,0.77,377

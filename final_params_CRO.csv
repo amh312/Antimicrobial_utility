@@ -1,0 +1,2 @@
+CRO.objective,CRO.eval_metric,CRO.eta,CRO.max_depth,CRO.min_child_weight,CRO.subsample,CRO.colsample_bytree,CRO.best_nrounds
+binary:logistic,auc,0.025,5,1,0.82,0.89,319

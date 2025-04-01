@@ -1,0 +1,2 @@
+CAZ_VAN.objective,CAZ_VAN.eval_metric,eta,max_depth,min_child_weight,subsample,colsample_bytree,best_nrounds
+binary:logistic,auc,0.025,5,1,0.72,0.51,228

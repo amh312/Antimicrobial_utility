@@ -1,0 +1,2 @@
+CZO.objective,CZO.eval_metric,CZO.eta,CZO.max_depth,CZO.min_child_weight,CZO.subsample,CZO.colsample_bytree,CZO.best_nrounds
+binary:logistic,auc,0.0125,5,1,0.82,0.89,655

@@ -1,0 +1,2 @@
+FEP.objective,FEP.eval_metric,FEP.eta,FEP.max_depth,FEP.min_child_weight,FEP.subsample,FEP.colsample_bytree,FEP.best_nrounds
+binary:logistic,auc,0.0125,6,2,0.8,0.92,282

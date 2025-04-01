@@ -1,0 +1,2 @@
+CIP_SXT.objective,CIP_SXT.eval_metric,eta,max_depth,min_child_weight,subsample,colsample_bytree,best_nrounds
+binary:logistic,auc,0.025,5,1,0.79,0.88,169

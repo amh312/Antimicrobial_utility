@@ -1,0 +1,2 @@
+TZP.objective,TZP.eval_metric,TZP.eta,TZP.max_depth,TZP.min_child_weight,TZP.subsample,TZP.colsample_bytree,TZP.best_nrounds
+binary:logistic,auc,0.0125,6,2,0.82,0.89,429

@@ -1,0 +1,2 @@
+CAZ.objective,CAZ.eval_metric,CAZ.eta,CAZ.max_depth,CAZ.min_child_weight,CAZ.subsample,CAZ.colsample_bytree,CAZ.best_nrounds
+binary:logistic,auc,0.0125,6,8,0.74,0.64,401

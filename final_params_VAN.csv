@@ -1,0 +1,2 @@
+VAN.objective,VAN.eval_metric,VAN.eta,VAN.max_depth,VAN.min_child_weight,VAN.subsample,VAN.colsample_bytree,VAN.best_nrounds
+binary:logistic,auc,0.0125,7,9,0.55,0.7,266
