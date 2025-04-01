@@ -6,10 +6,7 @@ If you use this code please cite this repository.
 
 The electronic healthcare record source data can be obtained from PhysioNet at https://physionet.org/content/mimiciv/2.2/ and https://physionet.org/content/mimic-iv-ed/2.2/ once the terms of access are met. The csv filenames used in this code match the following default filenames that can be downloaded from the site: *"prescriptions.csv", "d_icd_diagnoses.csv", "diagnoses_icd.csv", "d_icd_procedures.csv", "procedures_icd.csv", "labevents.csv", "d_labitems.csv", "microbiologyevents.csv", "poe_detail.csv", "poe.csv", "omr.csv", "admissions.csv", "patients.csv"*, *"services.csv"*, *"edstays.csv"*, *"triage.csv"*, *"pyxis.csv"*, *"medrecon.csv"*, and *"vitalsign.csv"*.
 
-The discrete choice experiment source data is found within this repository:
-
-1. *"DCE_results.csv"* and *"DCE_characteristics.csv"* for the main analysis
-2. *"labelled_DCE_results.csv"* for the specialty sub-analyses
+The discrete choice experiment characteristic data is found within this repository as 
 
 PhysioNet MIMIC-IV citations:
 
@@ -25,7 +22,9 @@ Before running the code, the data should be saved into a secure local directory 
 
 ***Reproducing the study***
 
-To reproduce the study, all csv files above must be stored in the working directory, and list that directory in place of #FILEPATH# in the script(s) marked with an asterisk below. The scripts must then be run in this order:  
+Please note that this code will exactly reproduce the clinical prediction model results of the study and descriptive data (scripts 1-8 and 12), but scripts 9 and 10 run probability-weighted randomly-generated discrete choice experiment results, so the results from scripts 9-11 will randomly vary each time the code is run.
+
+To run the code, the *"DCE_characteristics.csv"* file must be stored in the working directory, and list that directory in place of #FILEPATH# in the script(s) marked with an asterisk below. The scripts must then be run in this order:  
 
    1. **UF_packages&setup.R***
    2. **UF_cleaning.R**
@@ -35,8 +34,8 @@ To reproduce the study, all csv files above must be stored in the working direct
    6. **UF_prescription_model_tuning.R**
    7. **UF_prescription_model_validate.R**
    8. **UF_model_testing.R**  
-   9. **UF_discrete_choice_exp.R**
-   10. **UF_spec_analysis.R**
+   9. **UF_DCE.git.R**
+   10. **UF_spec_git.R**
    11. **UF_microsimulation.R**
    12. **UF_descriptive.R**
 
