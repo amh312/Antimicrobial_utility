@@ -20,7 +20,7 @@ Before running the code, the data should be saved into a secure local directory 
 
 ***Reproducing the study***
 
-Please note that this code will exactly reproduce the clinical prediction model results of the study and descriptive data (scripts 1-8 and 12), but scripts 9 and 10 run probability-weighted randomly-generated discrete choice experiment results, so the results from scripts 9-11 will randomly vary each time the code is run.
+Please note that this code will exactly reproduce the clinical prediction model results of the study and descriptive data (scripts 1-8 and 12), but scripts 9 and 10 run probability-weighted randomly-generated discrete choice experiment results (as opposed to taking the actual results as input CSVs in the original code **UF_discrete_choice_exp.R** and **UF_spec_analysis.R**), so the results from scripts 9-11 will randomly vary each time the code is run.
 
 To run the code, the *"DCE_characteristics.csv"* file must be stored in the working directory, and list that directory in place of #FILEPATH# in the script(s) marked with an asterisk below. The scripts must then be run in this order:  
 
