@@ -894,6 +894,7 @@ set.seed(123)
         grepl("RDW",Feature)~str_replace(Feature,"RDW","Most recent RDW"),
         grepl("Albumin",Feature)~str_replace(Feature,"Albumin","Most recent Albumin"),
         grepl("PTT",Feature)~str_replace(Feature,"PTT","Most recent prothrombin time"),
+        grepl("Alanine Aminotransferase",Feature)~str_replace(Feature,"Alanine Aminotransferase","Most recent Alanine Aminotransferase"),
         grepl("Alkaline Phosphatase",Feature)~str_replace(Feature,"Alkaline Phosphatase","Most recent Alkaline Phosphatase"),
         grepl("Red blood Cell Count",Feature)~str_replace(Feature,"Red blood Cell Count","Most recent Red blood Cell Count"),
         grepl("Lymphocytes",Feature)~str_replace(Feature,"Lymphocytes","Most recent Lymphocyte Count"),
@@ -952,8 +953,7 @@ set.seed(123)
     feat_table_singles <- feat_table %>% filter(Model %in% feat_abs) %>% 
       mutate(Model = factor(Model, levels = unique(Model))) %>%
       group_by(Model) %>% arrange(desc(abs(`Shapley value`)),.by_group = T) %>% ungroup() %>% 
-      mutate(`Shapley value`=case_when(`Shapley value`<0.001&`Shapley value`>0 ~ as.character("<0.001"),
-                                       `Shapley value`>-0.001&`Shapley value`<0 ~ as.character(">-0.001"),
+      mutate(`Shapley value`=case_when(`Shapley value`<0.001&`Shapley value`>-0.001 ~ as.character("<0.001"),
                                        TRUE~as.character(`Shapley value`)))
     write_csv(feat_table_singles,sing_nam)
     
