@@ -188,6 +188,8 @@ shapper <- function(trainmat,model,outc) {
   #remove redundant last column
   shap_df <- shap_df[, -ncol(shap_df)]
   
+  assign("current_shapdf",shap_df,.GlobalEnv)
+  
   #make new dataframe with mean shaps for each feature
   shap_ursmry <- data.frame(
     Feature = colnames(shap_df),
@@ -623,6 +625,7 @@ urines5 <- read_csv("urines5.csv")
 ur_xg <- read_csv("interim_ur_util.csv")
 urines5_combined <- read_csv("urines5_combined.csv")
 ur_xg_combined <- read_csv("ur_xg_combined.csv")
+urines5_outcomes <- read_csv("urines5_outcomes.csv")
 
 ##Reference lists
 
@@ -656,6 +659,7 @@ ur_metrics_list <- list()
 roc_plots <- list()
 ur_calibplots <- list()
 confidence_biglist <- list()
+shapfull_tables <- list()
 
 ##Model training
 
@@ -754,6 +758,7 @@ for (outcome in colnames(urines5_outcomes)) {
     shap_ur_summary_tables[[outcome]] <- shap_ur_summary
     ur_metrics_list[[outcome]] <- ur_metrics
     confidence_biglist[[outcome]] <- ur_confints
+    shapfull_tables[[outcome]] <- current_shapdf
     
   }
   
