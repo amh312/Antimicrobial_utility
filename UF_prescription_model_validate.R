@@ -259,6 +259,8 @@ set.seed(123)
     #remove redundant last column
     shap_df <- shap_df[, -ncol(shap_df)]
     
+    assign("current_shapdf",shap_df,.GlobalEnv)
+    
     #make new dataframe with mean shaps for each feature
     shap_ursmry <- data.frame(
       Feature = colnames(shap_df),
@@ -1025,6 +1027,8 @@ set.seed(123)
   ###Big combined map
   overall_map <- append(combined_antimicrobial_map,abx_outcome_map)
   
+  ###Abbreviated combined map
+  abbrev_map <- append(combined_antimicrobial_map[1:13],abx_outcome_map)
   
 ##Preprocessing
   
@@ -1136,10 +1140,340 @@ set.seed(123)
       shap_ur_summary_tables[[outcome]] <- shap_abx_summary
       ur_metrics_list[[outcome]] <- abx_metrics
       confidence_biglist[[outcome]] <- abx_confints
+      shapfull_tables[[outcome]] <- current_shapdf
       
     }
     
   }
+  
+  ###SHAP figures
+  urine_melt <- urines5Train %>% select(-c(1:37)) %>% melt()
+  abx_melt <- abxTrain %>% select(-c(1:2)) %>% melt()
+  
+  for (outcome in singles_map) {
+  
+    shap_figuremaker(shapfull_tables,urine_melt,outcome)
+  
+  }
+  
+  for (outcome in abx_outcome_map) {
+    
+    shap_figuremaker(shapfull_tables,abx_melt,outcome)
+    
+  }
+    
+  shap_figuremaker <- function(shaplist,melted_traindf,outc){
+    
+    print(outc)
+    shapplot_df <- shaplist[[outc]] %>% data.frame()
+    filtered_shaps <- shapplot_df %>% melt()
+    
+    filtered_shaps <- filtered_shaps %>%
+      mutate(
+        actual=as.character(melted_traindf$value),
+        variable=melted_traindf$variable)
+    
+    pc <- "pc_"
+    true <- "TRUE"
+    false <- "FALSE"
+    provider_id <- "provider_id"
+    pr <- "^pr"
+    p <- "^p"
+    r <- "r$"
+    nt <- "nt$"
+    s <- "s$"
+    rx <- "rx$"
+    d7 <- "^d7"
+    prev_week <- "Previous week"
+    space_start <- "^ "
+    
+    top_10 <- filtered_shaps %>% group_by(variable) %>% 
+      summarise(sumval=sum(abs(value))) %>% 
+      arrange(desc(sumval)) %>% 
+      dplyr::slice(1:10) %>% pull(variable)
+    
+    filtered_shaps <- filtered_shaps %>% filter(variable %in% top_10)
+    
+    filtered_shaps$variable <- as.character(filtered_shaps$variable)
+    
+    filtered_shaps <- filtered_shaps %>% mutate(variable = case_when(
+      grepl("pc",variable)&grepl("TRUE",variable)~glue("Admission complaint of {variable %>% str_remove(pc)}"),
+      grepl("pc",variable)&grepl("FALSE",variable)~glue("admission complaint of {variable %>% str_remove(pc)}"),
+      grepl("^provider",variable)~glue("Provider ID {variable %>% str_remove(provider_id)}"),
+      grepl("^pr",variable)~glue("Previous {variable %>% str_remove(pr)}"),
+      grepl("^p",variable)~glue("Previous {variable %>% str_remove(p)}"),
+      grepl("^d7",variable)~glue("Previous week {variable %>% str_remove(d7)}"),
+      TRUE~variable
+    )) %>% mutate(variable=case_when(
+      grepl("FALSE$",variable)~glue("No {variable %>% str_remove(false)}"),
+      grepl("TRUE$",variable)~glue("{variable %>% str_remove(true)}"),
+      TRUE~variable
+    )) %>% 
+      mutate(variable = case_when(
+        grepl("r$",variable)&!grepl("(insur|Rest|fever)",variable)~glue("{variable %>% str_remove(r)} resistance in the last year"),
+        grepl("rx$",variable)~glue("{variable %>% str_remove(rx)} treatment in the last year"),
+        grepl("DIAG_",variable)~str_replace(variable,"DIAG_","ICD diagnosis category "),
+        grepl("PROC_",variable)~str_replace(variable,"PROC_","ICD procedure category "),
+        grepl("NUTR",variable)~str_replace(variable,"NUTR","nutrition input in the last year"),
+        grepl("CATH",variable)~str_replace(variable,"CATH","urinary catheter in the last 28 days"),
+        grepl("Surg",variable)~str_replace(variable,"Surg","surgery in the least year"),
+        grepl("DISC",variable)~str_replace(variable,"DISC","discharge in the last 28 days"),
+        grepl("Restr",variable)~str_replace(variable,"Restr","need for restraints in the last year"),
+        grepl("NH",variable)~str_replace(variable,"NH","discharge to nursing care"),
+        grepl("HADM",variable)~str_replace(variable,"HADM","hospital admission in the last year"),
+        grepl("Physio",variable)~str_replace(variable,"Physio","physiotherapy input in the last year"),
+        grepl("Social",variable)~str_replace(variable,"Social","social worker input in the last year"),
+        grepl("Obese",variable)~str_replace(variable,"Obese","obesity recorded in the last 3 years"),
+        grepl("TPN",variable)~str_replace(variable,"TPN","parenteral nutrition in the last year"),
+        grepl("Overweight",variable)~str_replace(variable,"Overweight","overweight BMI in the last 3 years"),
+        grepl("DNR",variable)~str_replace(variable,"DNR","'do not resuscitate' order in the last year"),
+        grepl("OT",variable)&!grepl("OTHER",variable)~str_replace(variable,"OT","occupational therapy input in the last year"),
+        grepl("ICU",variable)~str_replace(variable,"ICU","intensive care admission in the last 28 days"),
+        grepl("NGT",variable)~str_replace(variable,"NGT","nasogastric tube in the last 28 days"),
+        grepl("Neph",variable)~str_replace(variable,"Neph","nephrostomy insertion in the last year"),
+        grepl("Underweight",variable)~str_replace(variable,"Underweight","underweight BMI in the last 3 years"),
+        grepl("DIAB",variable)~str_replace(variable,"DIAB","diabetes diagnosis in the last year"),
+        grepl("SEPSIS",variable)~str_replace(variable,"SEPSIS","sepsis in the last year"),
+        grepl("CDI",variable)~str_replace(variable,"CDI","CDI in the last year"),
+        grepl("AKI",variable)~str_replace(variable,"AKI","acute kidney injury"),
+        grepl("DIAB",variable)~str_replace(variable,"DIAB","diabetes diagnosis"),
+        grepl("CARD",variable)~str_replace(variable,"CARD","cardiovascular disease"),
+        grepl(" CA$",variable)~str_replace(variable," CA"," cancer "),
+        grepl("CKD",variable)~str_replace(variable,"CKD","chronic kidney disease"),
+        grepl("CVA",variable)~str_replace(variable,"CVA","stroke"),
+        grepl("standard_age",variable)~str_replace(variable,"standard_age","Age group"),
+        grepl("ob_freq",variable)~str_replace(variable,"ob_freq","Observation frequency on admission"),
+        grepl("language",variable)~str_replace(variable,"language","Language: "),
+        grepl("admission_location",variable)~str_replace(variable,"admission_location","Admitted from "),
+        grepl("insurance",variable)~str_replace(variable,"insurance","Insurance status: "),
+        grepl("marital_status",variable)~str_replace(variable,"marital_status","Marital status: "),
+        grepl("curr_service_",variable)~str_replace(variable,"curr_service_","Current inpatient service provider: "),
+        grepl("curr_service",variable)~str_replace(variable,"curr_service","Current inpatient service provider: "),
+        grepl("race",variable)~str_replace(variable,"race","Race: "),
+        grepl("age65",variable)~str_replace(variable,"age65","Over age 65"),
+        grepl("highCRP",variable)~str_replace(variable,"highCRP","Elevated CRP in the last 24 hours"),
+        grepl("ab_name_",variable)~str_replace(variable,"ab_name_","Antibiotic(s): "),
+        grepl("anchor_age",variable)~str_replace(variable,"anchor_age","Age"),
+        grepl("`Alkaline Phosphatase`",variable)~str_replace(variable,"`Alkaline Phosphatase`","Alkaline Phosphatase"),
+        grepl("`Red blood Cells`",variable)~str_replace(variable,"`Red blood Cells`","Red blood Cell Count"),
+        grepl("`White Blood Cells`",variable)~str_replace(variable,"`White Blood Cells`","Leukocyte Count"),
+        grepl("`Platelet Count`",variable)~str_replace(variable,"`Platelet Count`","Platelet Count"),
+        grepl("`Bilirubin, Total`",variable)~str_replace(variable,"`Bilirubin, Total`","Bilirubin"),
+        grepl("`Lactate Dehydrogenase`",variable)~str_replace(variable,"`Lactate Dehydrogenase`","Lactate Dehydrogenase"),
+        grepl("`Alanine Aminotransferase`",variable)~str_replace(variable,"`Alanine Aminotransferase`","Alanine Aminotransferase"),
+        grepl("temperat",variable)~str_replace(variable,"temperature","Temperature on admission"),
+        grepl("heartrate",variable)~str_replace(variable,"heartrate","Heart rate on admission"),
+        grepl("resprate",variable)~str_replace(variable,"resprate","Respiratory rate on admission"),
+        grepl("abnormalWCC",variable)~str_replace(variable,"abnormalWCC","Abnormal white cell count in last 24 hours"),
+        grepl("o2sat",variable)~str_replace(variable,"o2sat","Oxygen saturation on admission"),
+        grepl("temperat",variable)~str_replace(variable,"temperature","Temperature on admission"),
+        grepl("arrival_transport",variable)~str_replace(variable,"arrival_transport","Means of arrival "),
+        grepl("MALE",variable)~str_replace(variable,"MALE","Male"),
+        grepl("^sbp",variable)~str_replace(variable,"sbp","Systolic blood pressure on admission"),
+        grepl("^dbp",variable)~str_replace(variable,"dbp","Diastolic blood pressure on admission"),
+        grepl("^acuity",variable)~str_replace(variable,"acuity","Acuity score on admission"),
+        grepl("disposition",variable)~str_replace(variable,"disposition","Transfer location: "),
+        grepl("^`",variable)~str_replace(variable,"^`","Admitted on "),
+        grepl("Multivitamins",variable)~str_replace(variable,"Multivitamins","Admitted on multivitamins"),
+        grepl("lowbp",variable)~str_replace(variable,"lowbp","hypotension"),
+        grepl("flankpain",variable)~str_replace(variable,"flankpain","flank pain"),
+        grepl("anemia",variable)~str_replace(variable,"anemia","anaemia"),
+        grepl("prbleed",variable)~str_replace(variable,"prbleed","PR bleeding"),
+        grepl("diarvom",variable)~str_replace(variable,"diarvom","diarrhoea & vomiting"),
+        grepl("dyspnea",variable)~str_replace(variable,"dyspnea","dyspnoea"),
+        grepl("diarrhea",variable)~str_replace(variable,"diarrhea","diarrhoea"),
+        grepl("backpain",variable)~str_replace(variable,"backpain","back pain"),
+        grepl("Hyd",variable)~str_replace(variable,"Hyd","hydration therapy"),
+        TRUE~variable
+      )) %>% 
+      mutate(
+        variable=case_when(
+          grepl("\\?",variable)~str_replace(variable,"\\?","UNKNOWN"),
+          grepl("^No `",variable)~str_replace(variable,"No `","Not admitted on `"),
+          TRUE~variable
+        )
+      ) %>% 
+      mutate(
+        variable=case_when(
+          grepl("`",variable)~str_replace_all(variable,"`",""),
+          TRUE~variable
+        )
+      ) %>% mutate(
+        variable=case_when(
+          grepl("AMP",variable)~str_replace(variable,"AMP",ab_name("AMP")),
+          grepl("SAM",variable)~str_replace(variable,"SAM",ab_name("SAM")),
+          grepl("TZP",variable)~str_replace(variable,"TZP",ab_name("TZP")),
+          grepl("CZO",variable)~str_replace(variable,"CZO",ab_name("CZO")),
+          grepl("CRO",variable)~str_replace(variable,"CRO",ab_name("CRO")),
+          grepl("CAZ",variable)~str_replace(variable,"CAZ",ab_name("CAZ")),
+          grepl("FEP",variable)~str_replace(variable,"FEP",ab_name("FEP")),
+          grepl("MEM",variable)~str_replace(variable,"MEM",ab_name("MEM")),
+          grepl("CIP",variable)~str_replace(variable,"CIP",ab_name("CIP")),
+          grepl("GEN",variable)~str_replace(variable,"GEN",ab_name("GEN")),
+          grepl("SXT",variable)~str_replace(variable,"SXT",ab_name("SXT")),
+          grepl("NIT",variable)~str_replace(variable,"NIT",ab_name("NIT")),
+          grepl("VAN",variable)~str_replace(variable,"VAN",ab_name("VAN")),
+          grepl("MTR",variable)~str_replace(variable,"MTR",ab_name("MTR")),
+          grepl("AZM",variable)~str_replace(variable,"AZM",ab_name("AZM")),
+          grepl("ERY",variable)~str_replace(variable,"ERY",ab_name("ERY")),
+          TRUE~variable
+        )
+      ) %>% mutate(
+        variable=case_when(
+          grepl("Ampicillins",variable)~str_replace(variable,"Ampicillins", "Ampicillin susceptibility in the last year"),
+          grepl("Ampicillin/sulbactams",variable)~str_replace(variable,"Ampicillin/sulbactams", "Ampicillin/sulbactam susceptibility in the last year"),
+          grepl("Piperacillin/tazobactams",variable)~str_replace(variable,"Piperacillin/tazobactams", "Piperacillin/tazobactam susceptibility in the last year"),
+          grepl("Cefazolins",variable)~str_replace(variable,"Cefazolins", "Cefazolin susceptibility in the last year"),
+          grepl("Ceftriaxones",variable)~str_replace(variable,"Ceftriaxones", "Ceftriaxone susceptibility in the last year"),
+          grepl("Ceftazidimes",variable)~str_replace(variable,"Ceftazidimes", "Ceftazidime susceptibility in the last year"),
+          grepl("Cefepimes",variable)~str_replace(variable,"Cefepimes", "Cefepime susceptibility in the last year"),
+          grepl("Meropenems",variable)~str_replace(variable,"Meropenems", "Meropenem susceptibility in the last year"),
+          grepl("Ciprofloxacins",variable)~str_replace(variable,"Ciprofloxacins", "Ciprofloxacin susceptibility in the last year"),
+          grepl("Gentamicins",variable)~str_replace(variable,"Gentamicins", "Gentamicin susceptibility in the last year"),
+          grepl("Trimethoprim/sulfamethoxazoles",variable)~str_replace(variable,"Trimethoprim/sulfamethoxazoles", "Trimethoprim/sulfamethoxazole susceptibility in the last year"),
+          grepl("Nitrofurantoins",variable)~str_replace(variable,"Nitrofurantoins", "Nitrofurantoin susceptibility in the last year"),
+          grepl("Vancomycins",variable)~str_replace(variable,"Vancomycins", "Vancomycin susceptibility in the last year"),
+          grepl("Metronidazoles",variable)~str_replace(variable,"Metronidazoles", "Metronidazole susceptibility in the last year"),
+          grepl("Aztreonams",variable)~str_replace(variable,"Aztreonams", "Aztreonam susceptibility in the last year"),
+          grepl("Erythromycins",variable)~str_replace(variable,"Erythromycins", "Erythromycin susceptibility in the last year"),
+          TRUE~variable
+        )
+      )  %>% mutate(
+        variable=case_when(
+          grepl("Ampicillinnt",variable)~str_replace(variable,"Ampicillinnt", "Ampicillin not tested in the last year"),
+          grepl("Ampicillin/sulbactamnt",variable)~str_replace(variable,"Ampicillin/sulbactamnt", "Ampicillin/sulbactam not tested in the last year"),
+          grepl("Piperacillin/tazobactamnt",variable)~str_replace(variable,"Piperacillin/tazobactamnt", "Piperacillin/tazobactam not tested in the last year"),
+          grepl("Cefazolinnt",variable)~str_replace(variable,"Cefazolinnt", "Cefazolin not tested in the last year"),
+          grepl("Ceftriaxonent",variable)~str_replace(variable,"Ceftriaxonent", "Ceftriaxone not tested in the last year"),
+          grepl("Ceftazidiment",variable)~str_replace(variable,"Ceftazidiment", "Ceftazidime not tested in the last year"),
+          grepl("Cefepiment",variable)~str_replace(variable,"Cefepiment", "Cefepime not tested in the last year"),
+          grepl("Meropenemnt",variable)~str_replace(variable,"Meropenemnt", "Meropenem not tested in the last year"),
+          grepl("Ciprofloxacinnt",variable)~str_replace(variable,"Ciprofloxacinnt", "Ciprofloxacin not tested in the last year"),
+          grepl("Gentamicinnt",variable)~str_replace(variable,"Gentamicinnt", "Gentamicin not tested in the last year"),
+          grepl("Trimethoprim/sulfamethoxazolent",variable)~str_replace(variable,"Trimethoprim/sulfamethoxazolent", "Trimethoprim/sulfamethoxazole not tested in the last year"),
+          grepl("Nitrofurantoinnt",variable)~str_replace(variable,"Nitrofurantoinnt", "Nitrofurantoin not tested in the last year"),
+          grepl("Vancomycinnt",variable)~str_replace(variable,"Vancomycinnt", "Vancomycin not tested in the last year"),
+          grepl("Metronidazolent",variable)~str_replace(variable,"Metronidazolent", "Metronidazole not tested in the last year"),
+          grepl("Aztreonamnt",variable)~str_replace(variable,"Aztreonamnt", "Aztreonam not tested in the last year"),
+          grepl("Erythromycinnt",variable)~str_replace(variable,"Erythromycinnt", "Erythromycin not tested in the last year"),
+          TRUE~variable
+        )
+      ) %>% mutate(
+        variable = str_replace(variable,"_"," & ")
+      ) %>% mutate(
+        variable = str_replace(variable,"\\.","/")
+      ) %>% mutate(variable=case_when(
+        grepl("Previous week",variable)~glue("{variable %>% str_remove(prev_week)} in the last week"),
+        grepl("AmpicillinC",variable)~str_replace(variable,"AmpicillinC","AMPc beta-lactamase"),
+        grepl("No Over",variable)~str_replace(variable,"No Over","Not over"),
+        grepl("RDW",variable)~str_replace(variable,"RDW","Most recent RDW"),
+        grepl("Albumin",variable)~str_replace(variable,"Albumin","Most recent Albumin"),
+        grepl("PTT",variable)~str_replace(variable,"PTT","Most recent prothrombin time"),
+        grepl("Alanine Aminotransferase",variable)~str_replace(variable,"Alanine Aminotransferase","Most recent Alanine Aminotransferase"),
+        grepl("Alkaline Phosphatase",variable)~str_replace(variable,"Alkaline Phosphatase","Most recent Alkaline Phosphatase"),
+        grepl("Red blood Cell Count",variable)~str_replace(variable,"Red blood Cell Count","Most recent Red blood Cell Count"),
+        grepl("Lymphocytes",variable)~str_replace(variable,"Lymphocytes","Most recent Lymphocyte Count"),
+        grepl("Leukocyte Count",variable)~str_replace(variable,"Leukocyte Count","Most recent Leukocyte Count"),
+        grepl("Hemoglobin",variable)~str_replace(variable,"Hemoglobin","Most recent Haemoglobin"),
+        grepl("Platelet Count",variable)~str_replace(variable,"Platelet Count","Most recent Platelet Count"),
+        grepl("Potassium",variable)~str_replace(variable,"Potassium","Most recent Serum Potassium"),
+        grepl("Neutrophils",variable)~str_replace(variable,"Neutrophils","Most recent Neutrophil Count"),
+        grepl("Hematocrit",variable)~str_replace(variable,"Hematocrit","Most recent Haematocrit"),
+        grepl("Lactate",variable)~str_replace(variable,"Lactate","Most recent Lactate"),
+        grepl("Monocytes",variable)~str_replace(variable,"Monocytes","Most recent Monocyte Count"),
+        grepl("Bilirubin",variable)~str_replace(variable,"Bilirubin","Most recent Bilirubin"),
+        grepl("Sodium",variable)~str_replace(variable,"Sodium","Most recent Serum Sodium"),
+        grepl("Bicarbonate",variable)~str_replace(variable,"Bicarbonate","Most recent Serum Bicarbonate"),
+        grepl("Lactate Dehydrogenase",variable)~str_replace(variable,"Lactate Dehydrogenase","Most recent Lactate Dehydrogenase"),
+        grepl("Creatinine",variable)~str_replace(variable,"Creatinine","Most recent Creatinine"),
+        grepl("RDW",variable)~str_replace(variable,"RDW","Most recent RDW"),
+        grepl("No Male",variable)~str_replace(variable,"No","Not"),
+        grepl("EMERGentamicinCY",variable)~str_replace(variable,"entamicin","EN"),
+        grepl("abdopain",variable)~str_replace(variable,"abdopain","abdominal pain"),
+        grepl("chestpain",variable)~str_replace(variable,"chestpain","chest pain"),
+        TRUE~variable
+      )) %>%
+      mutate(variable=str_replace(
+        variable,"in the last year in the last week","in the last week"),
+        variable = str_replace(variable,"7d",""),
+        variable = str_replace(variable,"CLI ","Clindamycin "),
+        variable = str_replace(variable,"AMX","Amoxicillin"),
+        variable = str_replace(variable,"SURG","surgery"),
+        variable = str_replace(variable,"TOB","Tobramycin"),
+        variable = str_replace(variable,"TCY","Tetracycline"),
+        variable = str_replace(variable,"Provider ID","Presence of provider ID"),
+        variable = str_replace(variable, "PEN","Benzylpenicillin"),
+        variable = str_replace(variable, "LNZ","Linezolid"),
+        variable = str_replace(variable, "LVX","Levofloxacin"),
+        variable=str_remove(variable,"^ "),
+        variable = str_replace(variable, "  "," ")) %>% 
+      mutate(
+        variable = str_replace(variable,"CLIs ","Clindamycin susceptibility in the last year"),
+        variable = str_replace(variable,"Levofloxacins","Levofloxacin susceptibility in the last year"),
+        variable = str_replace(variable,"Tetracyclines","Tetracycline susceptibility in the last year"),
+        variable = str_replace(variable,"Benzylpenicillins","Benzylpenicillin susceptibility in the last year"),
+        variable = str_replace(variable,"AMKs","Amikacin susceptibility in the last year"),
+        variable = str_replace(variable,"AMK","Amikacin"),
+        variable = str_replace(variable,"Benzylpenicillinnt", "Benzylpenicillin not tested in the last year"),
+        variable = str_replace(variable,"Tobramycins", "Tobramycin susceptibility in the last year"),
+        variable = str_replace(variable,"Tobramycini", "Tobramycin intermediate in the last year")
+      )
+    
+    filtered_shaps$variable=factor(
+      filtered_shaps$variable,
+      levels=filtered_shaps %>% group_by(variable) %>% summarise(
+        sumval=sum(abs(value))) %>% arrange(sumval) %>% 
+        select(variable) %>% unlist()
+    )
+    
+    filtered_shaps$actual <- as.numeric(filtered_shaps$actual)
+    filtered_shaps$value <- as.numeric(filtered_shaps$value)
+    
+    filtered_shaps <- filtered_shaps %>% group_by(variable) %>% 
+      mutate(actual=2 * (actual - min(actual)) / (max(actual) - min(actual)) - 1) %>% ungroup()
+    
+    if(outc%in%combined_antimicrobial_map){
+    
+    thisplot <- ggplot(filtered_shaps,
+                       aes(x=variable,y=value,colour=actual))+
+      geom_count()+
+      coord_flip()+
+      theme_minimal()+
+      scale_color_gradient(low="#F8766D",high="#00BFC4")+
+      ggtitle(glue("Highest feature importances for {abcombo_replace(outc,abbrev_map)} susceptibility"))+
+      theme(legend.position = "none")+
+      xlab("Feature")+
+      ylab("SHAP value")+
+      geom_hline(yintercept=0,color="darkgrey")+
+      theme(
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())
+    
+    } else {
+      
+      thisplot <- ggplot(filtered_shaps,
+                         aes(x=variable,y=value,colour=actual))+
+        geom_count()+
+        coord_flip()+
+        theme_minimal()+
+        scale_color_gradient(low="#F8766D",high="#00BFC4")+
+        ggtitle(glue("Highest feature importances for {abcombo_replace(outc,abbrev_map)}"))+
+        theme(legend.position = "none")+
+        xlab("Feature")+
+        ylab("SHAP value")+
+        geom_hline(yintercept=0,color="darkgrey")+
+        theme(
+          panel.grid.major.x = element_blank(),
+          panel.grid.minor.x = element_blank())
+      
+    }
+    
+    
+    ggsave(glue("feats_{outc}.pdf"), plot = thisplot, device = "pdf", width = 14, height = 8,
+           path="/Users/alexhoward/Documents/Projects/UDAST_code")
+    
+  }
+
   
   ###Feature importances to CSV
   shap_ur_summary_tables %>% shapwriter(overall_map)
