@@ -188,6 +188,110 @@
     
   }
 
+  ###Antibiogram
+  antibio_maker <- function(df,min_no,dataset){
+    
+    urines5_antibio <- df %>% mutate(
+      MEM=case_when(MEM=="NT"~"R",TRUE~MEM),
+      SXT=case_when(SXT=="NT"~"R",TRUE~SXT)
+    ) %>% mutate(across(AMP:VAN, as.sir)) %>% 
+      select(org_fullname,AMP:VAN)
+    
+    ##NB: those with < 30 results ignored
+    u5_antibio <- antibiogram(urines5_antibio,col_mo = "org_fullname",
+                              minimum = min_no) %>% 
+      arrange(rowSums(across(2:ncol(.))))
+    
+    abnames <- ab_name(colnames(u5_antibio)[2:ncol(u5_antibio)])
+    colnames(u5_antibio) <- c("Organism",abnames)
+    
+    u5_antibio <- u5_antibio %>% mutate(Organism=str_trim(str_replace(Organism, "\\s*\\(.*", "")))
+    
+    u5_plotdf <- u5_antibio %>% select(-Organism) %>% mutate(Row=row_number()) %>% 
+      pivot_longer(-Row,names_to="Column",values_to="% S")
+    
+    Orglist <- u5_antibio %>% pull(Organism)
+    
+    antiplot <- ggplot(u5_plotdf, aes(x = Column, y = factor(Row), fill = `% S`)) +
+      geom_tile(color = "white") +
+      geom_text(aes(label = `% S`), color = "black") +
+      scale_fill_gradient(low = "red", high = "green") +
+      theme_minimal() +
+      labs(x = "", y = "Row") +
+      theme(
+        panel.grid = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1)
+      ) +
+      scale_y_discrete(labels=Orglist)+
+      ggtitle(glue("Susceptibility antibiogram of {dataset} dataset"))+
+      ylab("Organism")
+    
+    ggsave(glue("antibio_{dataset}.pdf"), plot = antiplot, device = "pdf", width = 10, height = 8,
+           path="/Users/alexhoward/Documents/Projects/UDAST_code")
+    
+    print(antiplot)
+    
+  }
+  
+  ###Organism data for table
+  orgcounter <- function(df,dataset,other=TRUE) {
+    
+    if (other==TRUE) {
+    
+    df %>% count(org_genus) %>% arrange(desc(n)) %>% 
+      mutate(org_genus=case_when(n<10~"Other",TRUE~org_genus)) %>% 
+      group_by(org_genus) %>%
+      summarise(n = sum(n), .groups = "drop") %>%
+      distinct(org_genus, .keep_all = TRUE) %>% ungroup() %>% 
+      arrange(desc(n)) %>% mutate(
+        Characteristic="Genus grown"
+      ) %>% rename(Subtype="org_genus") %>% 
+      mutate(perc=round((n/sum(n))*100,1)) %>% 
+      mutate(perc=glue("{n} ({perc})")) %>% 
+      relocate(Characteristic,.before="Subtype") %>% 
+      select(-n)
+      
+    } else {
+      
+      df %>% count(org_genus) %>% arrange(desc(n)) %>%
+        mutate(
+          Characteristic="Genus grown"
+        ) %>% rename(Subtype="org_genus") %>% 
+        mutate(perc=round((n/sum(n))*100,1)) %>% 
+        mutate(perc=glue("{n} ({perc})")) %>% 
+        relocate(Characteristic,.before="Subtype") %>% 
+        select(-n)
+      
+    }
+    
+  }
+  
+  ###Get diagnoses and pcs for ED stay ID
+  rel_edstays <- function(df,ed_df,ed_diag,ed_triag) {
+    
+    urmod_edstays <- ed_df %>% semi_join(df,by="subject_id")
+    urmod_key <- df %>% select(subject_id,charttime)
+    urmod_comb <- urmod_edstays %>% left_join(urmod_key,by="subject_id") %>% 
+      mutate(ed_urine=case_when(charttime>intime&charttime<outtime~TRUE,
+                                TRUE~FALSE)) %>% filter(ed_urine) %>% select(subject_id,stay_id)
+    df2 <- df %>% left_join(urmod_comb)
+    triage_key <- ed_triag %>% select(stay_id,chiefcomplaint) %>% 
+      group_by(stay_id) %>%
+      summarise(chiefcomplaint = paste(chiefcomplaint, collapse = ", "), .groups = "drop") %>% 
+      ungroup()
+    diag_key <- ed_diag %>% select(stay_id,icd_title) %>% 
+      group_by(stay_id) %>%
+      summarise(icd_title = paste(icd_title, collapse = ", "), .groups = "drop") %>% 
+      ungroup()
+    df2 %>% left_join(triage_key) %>% left_join(diag_key) %>% 
+      mutate(
+        chiefcomplaint=case_when(is.na(stay_id)~NA,TRUE~chiefcomplaint),
+        icd_title=case_when(is.na(stay_id)~NA,TRUE~icd_title)
+      )
+      
+    
+  }
+  
 ##Uploads and reference lists
 
   ###Uploads
@@ -196,7 +300,11 @@
   abx <- read_csv("interim_abx.csv")
   urines5_desc <- read_csv("urines5_ref.csv")
   pats <- read_csv("patients.csv")
-
+  hadm <- read_csv("admissions.csv")
+  ed_diagnosis <- read_csv("diagnosis.csv")
+  edstays <- read_csv("edstays.csv")
+  triage <- read_csv("triage.csv")
+  
   ###Reference lists
   all_singles <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
                "MEM","CIP","GEN","SXT","NIT","VAN")
@@ -242,19 +350,63 @@
   ###Compile descriptive table
   desc_tab <-  abx %>% tab_mutater("Prescription model","N") %>% 
     full_join(urines5_desc %>% tab_mutater("Urine model")) %>% 
-    left_join(ur_util %>% tab_mutater("Urine microsimulation"))
+    left_join(ur_util %>% tab_mutater("Urine simulation"))
   
+  ###Add organism data to table
+  model_orgs <- urines5_desc %>% orgcounter() %>% rename(`Urine model n (%)`="perc")
+  sim_orgs <- ur_util %>% orgcounter(other=FALSE) %>% rename(`Urine simulation n (%)`="perc")
+  all_orgs <- model_orgs %>% left_join(sim_orgs) 
+  all_orgs[is.na(all_orgs)] <- "0 (0)"
+  all_orgs <- all_orgs %>% mutate(`Prescription model n (%)`=NA) %>% 
+    relocate(`Prescription model n (%)`,.after="Urine model n (%)")
+  desc_tab <- desc_tab %>% rbind(all_orgs)
+ 
   ###Illness severity key
   severity <- ur_util %>% count(acuity) %>% mutate(Characteristic="Illness severity score",
                                                    `Prescription model n (%)`=NA,
                                                    `Urine model n (%)`=NA,
-                                                   `Urine microsimulation n (%)`=
+                                                   `Urine simulation n (%)`=
                                                      glue("{n} ({round((n/nrow(ur_util))*100,1)})")) %>% 
     rename(Subtype="acuity") %>% relocate(Characteristic,.before="Subtype") %>% 
     select(-n)
   
   ###Bind illness severity to table
   desc_tab <- desc_tab %>% rbind(severity) %>% tibble()
+  
+  ###Add ED presenting complaints and diagnoses (urine dfs only)
+  staykey <- edstays %>% select(stay_id,intime) %>% distinct(stay_id,.keep_all = T) %>% 
+    rename(charttime="intime")
+  triagekey <- triage %>% left_join(staykey) %>% relocate(charttime,.before = "temperature") %>% 
+    mutate(chartdate=as.Date(charttime)) %>% select(subject_id,chartdate,acuity,stay_id) %>% 
+    filter(!is.na(acuity))
+  compkey <- triage %>% select(stay_id,chiefcomplaint) %>% 
+    group_by(stay_id) %>%
+    summarise(chiefcomplaint = paste(chiefcomplaint, collapse = ", "), .groups = "drop") %>% 
+    ungroup()
+  diag_key <- ed_diagnosis %>% select(stay_id,icd_title) %>% 
+    group_by(stay_id) %>%
+    summarise(icd_title = paste(icd_title, collapse = ", "), .groups = "drop") %>% 
+    ungroup()
+  
+  ed_util <- ur_util %>% select(-c(acuity,chiefcomplaint)) %>% semi_join(triagekey,by=c("subject_id","chartdate")) %>% 
+    left_join(triagekey,by=c("subject_id","chartdate"))
+  ur_util <- ed_util %>% left_join(compkey) %>% left_join(diag_key)
+
+  ed_urines5 <- urines5_desc %>% semi_join(triagekey,by=c("subject_id","chartdate")) %>% 
+    left_join(triagekey,by=c("subject_id","chartdate"))
+  ed_urines5 <- ed_urines5 %>% left_join(compkey) %>% left_join(diag_key) %>% 
+    select(subject_id,stay_id,icd_title,chiefcomplaint)
+  urines5_desc <- urines5_desc %>% left_join(ed_urines5,by="subject_id")
+  
+  ###Add inpatient diagnoses (all 3 dataframes)
+  
+  
+  
+  
+  
+  
+  
+  
   
   ###Totals
   totals <- list("Total","Patients",
@@ -269,7 +421,7 @@
     Characteristic==lag(Characteristic)~"",
     TRUE~Characteristic
   ))
-  
+
   ###Write descriptive table to csv
   write_csv(desc_tab,"uf_desctab.csv")
 
@@ -296,3 +448,10 @@
   
   ###Write table to csv
   write_csv(ab_tab,"ab_tab.csv")
+  
+  ##Table 3: Antibiograms
+  
+  ##Model development data
+  antibio_maker(urines5_desc,10,"model development")
+  antibio_maker(ur_util,10,"simulation study")
+    
