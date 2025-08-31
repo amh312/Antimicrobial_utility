@@ -295,8 +295,8 @@
 ##Uploads and reference lists
 
   ###Uploads
-  ur_util <- read_csv("ur_util_final.csv")
-  urines_abx <- read_csv("ur_util_final.csv")
+  ur_util <- read_csv("ur_util_pre_recs.csv")
+  urines_abx <- read_csv("ur_util_pre_recs.csv")
   abx <- read_csv("interim_abx.csv")
   urines5_desc <- read_csv("urines5_ref.csv")
   pats <- read_csv("patients.csv")
@@ -373,7 +373,7 @@
   ###Bind illness severity to table
   desc_tab <- desc_tab %>% rbind(severity) %>% tibble()
   
-  ###Add ED presenting complaints and diagnoses (urine dfs only)
+  ###Prepare diagnoses and symptoms
   staykey <- edstays %>% select(stay_id,intime) %>% distinct(stay_id,.keep_all = T) %>% 
     rename(charttime="intime")
   triagekey <- triage %>% left_join(staykey) %>% relocate(charttime,.before = "temperature") %>% 
@@ -392,21 +392,83 @@
     left_join(triagekey,by=c("subject_id","chartdate"))
   ur_util <- ed_util %>% left_join(compkey) %>% left_join(diag_key)
 
-  ed_urines5 <- urines5_desc %>% semi_join(triagekey,by=c("subject_id","chartdate")) %>% 
-    left_join(triagekey,by=c("subject_id","chartdate"))
-  ed_urines5 <- ed_urines5 %>% left_join(compkey) %>% left_join(diag_key) %>% 
-    select(subject_id,stay_id,icd_title,chiefcomplaint)
-  urines5_desc <- urines5_desc %>% left_join(ed_urines5,by="subject_id")
+  ur_icds <- ur_util %>% filter(grepl("(pyelonephritis|urinary tract infection|urin tract|cystitis|dysuria|painful micturition|nocturia|urgency|incomplete bladder|bladder pain|frequency of micturition|hematuria|pyuria|abnormal findings in urine|hesitancy|retention of urine|flank pain|weakness|syncope|hypotension|tachycardia|lbp|N/V|nausea|vomiting)",icd_title,
+                           ignore.case = T))
   
-  ###Add inpatient diagnoses (all 3 dataframes)
+  ur_comps <- ur_util %>% filter(grepl("(pyelonephritis|urinary tract infection|tract|cystitis|dysuria|painful micturition|nocturia|urgency|emptying|frequency|hematuria|pyuria|urine|urinary|hesitancy|retention|flank pain|abd pain|abdominal pain|confusion|altered mental status|back pain|fever|lethargy|fall|delirium)",chiefcomplaint,
+                                      ignore.case = T))
+  ur_icdcomps <- rbind(ur_icds,ur_comps)
   
+  ur_util_icdcom <- ur_util %>% semi_join(ur_icdcomps,by="subject_id") %>% 
+    mutate(chiefcomplaint=case_when(
+      grepl("(Back pain, Leg weakness, Transfer|Lower abdominal pain|LBP)",chiefcomplaint)~icd_title,
+      TRUE~chiefcomplaint
+    ),
+    )
   
+  ur_util_diagsonly <- ur_util %>% semi_join(ur_icds,by="subject_id") %>% 
+    mutate(chiefcomplaint=case_when(
+      grepl("(Back pain, Leg weakness, Transfer|Lower abdominal pain|LBP)",chiefcomplaint)~icd_title,
+      TRUE~chiefcomplaint
+    ),
+    )
   
+  write_csv(ur_util_icdcom,"ur_util_icdcom.csv")
+  write_csv(ur_util_diagsonly,"ur_util_diagsonly.csv")
   
+  ###Add syndromes to table
+  ursymp_tab <- ur_util_icdcom %>% mutate(UTI_symptom=case_when(
+    grepl("dysuria",chiefcomplaint,
+          ignore.case = T)~"Dysuria",
+    grepl("hematuria",chiefcomplaint,
+          ignore.case = T)~"Haematuria",
+    grepl("(flank pain|back pain)",chiefcomplaint,
+          ignore.case = T)~"Flank or back pain",
+    grepl("frequency",chiefcomplaint,
+          ignore.case = T)~"Frequency",
+    grepl("(abd pain|abdominal pain)",chiefcomplaint,
+          ignore.case = T)~"Abdominal pain",
+    grepl("retention",chiefcomplaint,
+          ignore.case = T)~"Urinary retention",
+    grepl("(confusion|altered mental status|delirium|lethargy|fall|fever|weakness|presyncope|hypotension|tachycardia|lbp|N/V|nausea|vomiting)",chiefcomplaint,
+          ignore.case = T)~"Non-specific*",TRUE~"None"
+  )) %>% count(UTI_symptom) %>%  
+    mutate(n=case_when(
+      UTI_symptom=="None"~n+(nrow(ur_util)-nrow(ur_util_icdcom))
+      ,TRUE~n)) %>% arrange(desc(n)) %>%
+    mutate(Characteristic="Potential UTI symptoms") %>% 
+    rename(Subtype="UTI_symptom") %>% 
+    mutate(`Urine simulation n (%)`= glue("{n} ({round((n/nrow(ur_util))*100,1)})"),
+           `Prescription model n (%)`=NA,
+           `Urine model n (%)`=NA) %>% 
+    select(-n) %>% relocate(Characteristic,.before = "Subtype") %>%
+    relocate(`Urine model n (%)`,.after = "Subtype" ) %>% 
+    relocate(`Prescription model n (%)`,.after = "Subtype" )
   
+  desc_tab <- desc_tab %>% rbind(ursymp_tab)
   
-  
-  
+  ###Add diagnoses to table
+  ursynd_tab <- ur_util_icdcom %>% mutate(UTI_diagnosis=case_when(
+    grepl("tract infection",icd_title,
+          ignore.case = T)~"UTI (unspecified site)",
+    grepl("pyelonephritis",icd_title,
+          ignore.case = T)~"Pyelonephritis",
+    grepl("cystitis",icd_title,
+          ignore.case = T)~"Cystitis",TRUE~"None"
+  )) %>% count(UTI_diagnosis) %>%  
+    mutate(n=case_when(
+      UTI_diagnosis=="None"~n+(nrow(ur_util)-nrow(ur_util_icdcom))
+    ,TRUE~n)) %>% arrange(desc(n)) %>%
+    mutate(Characteristic="Coded UTI diagnoses") %>% 
+    rename(Subtype="UTI_diagnosis") %>% 
+    mutate(`Urine simulation n (%)`= glue("{n} ({round((n/nrow(ur_util))*100,1)})"),
+           `Prescription model n (%)`=NA,
+           `Urine model n (%)`=NA) %>% 
+    select(-n) %>% relocate(Characteristic,.before = "Subtype") %>%
+    relocate(`Urine model n (%)`,.after = "Subtype" ) %>% 
+    relocate(`Prescription model n (%)`,.after = "Subtype" )
+
+  desc_tab <- desc_tab %>% rbind(ursynd_tab)
   
   ###Totals
   totals <- list("Total","Patients",
@@ -421,8 +483,8 @@
     Characteristic==lag(Characteristic)~"",
     TRUE~Characteristic
   ))
-
-  ###Write descriptive table to csv
+  
+  ###Wrdesc_tab###Write descriptive table to csv
   write_csv(desc_tab,"uf_desctab.csv")
 
 ##Table 2: Prescription characteristics
