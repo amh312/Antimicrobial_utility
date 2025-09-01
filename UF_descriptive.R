@@ -481,23 +481,23 @@
     mutate(Allergies=sub(".*Allergies: \n(.*?)\n \nAttending:.*", "\\1", text)
   ) %>% select(subject_id,storetime, Allergies) %>% 
     rename(dischargetime="storetime") %>% mutate(
-    `None`=case_when(!grepl("(cycline|mycin|trim|sulfa|cillin|mentin|micin|quino|floxa|cef|zithro|zosyn|taz|keflex|sulfon|clav|polymyx|colis|metroni|flagyl)",Allergies)~TRUE,
+    `None`=case_when(!grepl("(cycline|mycin|trim|sulfa|cillin|mentin|micin|quino|floxa|cef|zithro|zosyn|taz|keflex|sulfon|clav|polymyx|colis|metroni|flagyl)",Allergies,ignore.case = T)~TRUE,
                    TRUE~FALSE),
-    `Beta lactams`=case_when(grepl("(cillin|mentin|cef|zosyn|taz|keflex|clav)",Allergies)~TRUE,
+    `Beta lactams`=case_when(grepl("(cillin|mentin|cef|zosyn|taz|keflex|clav)",Allergies,ignore.case = T)~TRUE,
                           TRUE~FALSE),
-    `Sulfonamides`=case_when(grepl("(trim|sulfa|sulfon)",Allergies)~TRUE,
+    `Sulfonamides`=case_when(grepl("(trim|sulfa|sulfon)",Allergies,ignore.case = T)~TRUE,
                           TRUE~FALSE),
-    `Tetracyclines`=case_when(grepl("cycline",Allergies)~TRUE,
+    `Tetracyclines`=case_when(grepl("cycline",Allergies,ignore.case = T)~TRUE,
                           TRUE~FALSE),
-    `Vancomycin`=case_when(grepl("vanc",Allergies)~TRUE,
+    `Vancomycin`=case_when(grepl("vanc",Allergies,ignore.case = T)~TRUE,
                           TRUE~FALSE),
-    `Macrolides`=case_when(grepl("(thromycin|zithro)",Allergies)~TRUE,
+    `Macrolides`=case_when(grepl("(thromycin|zithro)",Allergies,ignore.case = T)~TRUE,
                           TRUE~FALSE),
-    `Quinolones`=case_when(grepl("(quino|floxa)",Allergies)~TRUE,
+    `Quinolones`=case_when(grepl("(quino|floxa)",Allergies,ignore.case = T)~TRUE,
                           TRUE~FALSE),
-    `Nitroimidazoles`=case_when(grepl("(metroni|flagyl)",Allergies)~TRUE,
+    `Nitroimidazoles`=case_when(grepl("(metroni|flagyl)",Allergies,ignore.case = T)~TRUE,
                           TRUE~FALSE),
-    `Polymyxin B`=case_when(grepl("polymyx|colistin)",Allergies)~TRUE,
+    `Polymyxin B`=case_when(grepl("polymyx|colistin)",Allergies,ignore.case = T)~TRUE,
                           TRUE~FALSE)
   ) %>% select(-Allergies) %>% group_by(subject_id) %>% arrange(dischargetime) %>% 
     mutate(across(`Beta lactams`:`Polymyxin B`, max, .names = "{.col}")) %>% 
@@ -515,7 +515,7 @@
     map_dfr(~ as.data.frame(table(factor(., levels = c(0, 1)))), .id = "column") %>%
     pivot_wider(names_from = column, values_from = Freq) %>%
     rename(value = Var1) %>% t() %>% data.frame() %>% 
-    mutate(Subtype=rownames(.),n=X2,Characteristic="Allergy history") %>% dplyr::slice(-1) %>% 
+    mutate(Subtype=rownames(.),n=X2,Characteristic="Antibiotic allergies") %>% dplyr::slice(-1) %>% 
     select(-c(X1,X2)) %>% mutate(n=as.numeric(n)) %>% 
     mutate(`Urine simulation n (%)`= glue("{n} ({round((n/nrow(ur_util))*100,1)})"),
            `Prescription model n (%)`=NA,
