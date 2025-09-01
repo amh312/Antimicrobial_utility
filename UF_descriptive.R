@@ -304,6 +304,7 @@
   ed_diagnosis <- read_csv("diagnosis.csv")
   edstays <- read_csv("edstays.csv")
   triage <- read_csv("triage.csv")
+  discharge <- read_csv("discharge.csv")
   
   ###Reference lists
   all_singles <- c("AMP","SAM","TZP","CZO","CRO","CAZ","FEP",
@@ -469,6 +470,68 @@
     relocate(`Prescription model n (%)`,.after = "Subtype" )
 
   desc_tab <- desc_tab %>% rbind(ursynd_tab)
+  
+  
+  qualerg <- discharge %>% semi_join(ur_util,by="subject_id") %>% 
+    mutate(Allergies=sub(".*Allergies: \n(.*?)\n \nAttending:.*", "\\1", text)
+    ) %>% select(subject_id,storetime, Allergies)
+  
+  ###Add allergies to table
+  allergy_key <- discharge %>% semi_join(ur_util,by="subject_id") %>% 
+    mutate(Allergies=sub(".*Allergies: \n(.*?)\n \nAttending:.*", "\\1", text)
+  ) %>% select(subject_id,storetime, Allergies) %>% 
+    rename(dischargetime="storetime") %>% mutate(
+    `None`=case_when(!grepl("(cycline|mycin|trim|sulfa|cillin|mentin|micin|quino|floxa|cef|zithro|zosyn|taz|keflex|sulfon|clav|polymyx|colis|metroni|flagyl)",Allergies)~TRUE,
+                   TRUE~FALSE),
+    `Beta lactams`=case_when(grepl("(cillin|mentin|cef|zosyn|taz|keflex|clav)",Allergies)~TRUE,
+                          TRUE~FALSE),
+    `Sulfonamides`=case_when(grepl("(trim|sulfa|sulfon)",Allergies)~TRUE,
+                          TRUE~FALSE),
+    `Tetracyclines`=case_when(grepl("cycline",Allergies)~TRUE,
+                          TRUE~FALSE),
+    `Vancomycin`=case_when(grepl("vanc",Allergies)~TRUE,
+                          TRUE~FALSE),
+    `Macrolides`=case_when(grepl("(thromycin|zithro)",Allergies)~TRUE,
+                          TRUE~FALSE),
+    `Quinolones`=case_when(grepl("(quino|floxa)",Allergies)~TRUE,
+                          TRUE~FALSE),
+    `Nitroimidazoles`=case_when(grepl("(metroni|flagyl)",Allergies)~TRUE,
+                          TRUE~FALSE),
+    `Polymyxin B`=case_when(grepl("polymyx|colistin)",Allergies)~TRUE,
+                          TRUE~FALSE)
+  ) %>% select(-Allergies) %>% group_by(subject_id) %>% arrange(dischargetime) %>% 
+    mutate(across(`Beta lactams`:`Polymyxin B`, max, .names = "{.col}")) %>% 
+    distinct(subject_id,.keep_all=T) %>% ungroup() %>% 
+    mutate(`None` = if_else(rowSums(across(`Beta lactams`:`Polymyxin B`)) > 0, 0, `None`))
+  
+  ur_allergies <- ur_util %>% left_join(allergy_key,by="subject_id") %>% 
+    mutate(Unknown=case_when(dischargetime>charttime~1,
+                             is.na(dischargetime)~1,TRUE~0)) %>% 
+  mutate(across(`None`:`Polymyxin B`, ~ case_when(
+      Unknown==1~0,TRUE~.
+    ))) %>% ungroup()
+  
+  alerg_totals <- ur_allergies %>% select(None:Unknown) %>% 
+    map_dfr(~ as.data.frame(table(factor(., levels = c(0, 1)))), .id = "column") %>%
+    pivot_wider(names_from = column, values_from = Freq) %>%
+    rename(value = Var1) %>% t() %>% data.frame() %>% 
+    mutate(Subtype=rownames(.),n=X2,Characteristic="Allergy history") %>% dplyr::slice(-1) %>% 
+    select(-c(X1,X2)) %>% mutate(n=as.numeric(n)) %>% 
+    mutate(`Urine simulation n (%)`= glue("{n} ({round((n/nrow(ur_util))*100,1)})"),
+           `Prescription model n (%)`=NA,
+           `Urine model n (%)`=NA) %>% arrange(desc(n)) %>% select(-n) %>% 
+    relocate(Characteristic,.before = "Subtype") %>% 
+    relocate(`Urine simulation n (%)`,.after = "Urine model n (%)")
+  
+  desc_tab <- desc_tab %>% rbind(alerg_totals)
+  
+  ur_alerg_df <- ur_allergies %>% filter(Unknown==0)
+  
+  write_csv(ur_alerg_df,"ur_alerg_df.csv")
+  
+  alerg_icd_df <- ur_alerg_df %>% semi_join(ur_util_diagsonly,by="subject_id")
+  
+  write_csv(alerg_icd_df,"alerg_icd_df.csv")
   
   ###Totals
   totals <- list("Total","Patients",
