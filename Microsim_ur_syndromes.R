@@ -93,7 +93,7 @@ utility_plot <- function(df, variable,application,modification="") {
     
     #theme and titles
     theme_minimal() +
-    ggtitle(glue("{application} value distribution on\nsimulation dataset {modification}\n(patients with coded UTI diagnoses)")) +
+    ggtitle(glue("{application} value distribution on\nsimulation dataset {modification}\n(patients with coded UTI diagnoses & allergy data)")) +
     theme(legend.position = "None",axis.text.y = element_text(
       colour = axiscols))+
     xlab(glue("{application} treatment value"))
@@ -402,8 +402,7 @@ assign_PDRx <- function(df,probab_df,method_used,ab_list1=ab_singles) {
     
     #make recommendations based on U descending order
     rec <- probab_df %>% AUF_1(spec_id = df$micro_specimen_id[i], panel_size = length(ab_list1),
-                               ab_list=ab_list1) %>% 
-      select(1)
+                               ab_list=ab_list1) %>% select(1)
     
     #bind to recommendation df
     test_recs <- cbind(test_recs,rec)
@@ -429,6 +428,142 @@ assign_PDRx <- function(df,probab_df,method_used,ab_list1=ab_singles) {
   #join recommendations to probability df
   df %>% 
     left_join(test_recs,by="micro_specimen_id") 
+  
+}
+
+###Check for allergies
+allergy_checker <- function(df){
+  
+  df%>% 
+    mutate(PDRx_1=case_when(!((grepl("(AMP|SAM|TZP|CZO|CRO|CAZ|FEP|MEM)",PDRx_1)&
+                                 df$`Beta lactams`==1)|
+                                (grepl("CIP",PDRx_1)&
+                                   df$`Quinolones`==1)|
+                                (grepl("SXT",PDRx_1)&
+                                   df$`Sulfonamides`==1)|
+                                (grepl("VAN",PDRx_1)&
+                                   df$`Vancomycin`==1)) ~ PDRx_1,
+                            TRUE~case_when(
+                              !((grepl("(AMP|SAM|TZP|CZO|CRO|CAZ|FEP|MEM)",PDRx_2)&
+                                   df$`Beta lactams`==1)|
+                                  (grepl("CIP",PDRx_2)&
+                                     df$`Quinolones`==1)|
+                                  (grepl("SXT",PDRx_2)&
+                                     df$`Sulfonamides`==1)|
+                                  (grepl("VAN",PDRx_2)&
+                                     df$`Vancomycin`==1)) ~ PDRx_2,
+                              TRUE~case_when(
+                                !((grepl("(AMP|SAM|TZP|CZO|CRO|CAZ|FEP|MEM)",PDRx_3)&
+                                     df$`Beta lactams`==1)|
+                                    (grepl("CIP",PDRx_3)&
+                                       df$`Quinolones`==1)|
+                                    (grepl("SXT",PDRx_3)&
+                                       df$`Sulfonamides`==1)|
+                                    (grepl("VAN",PDRx_3)&
+                                       df$`Vancomycin`==1)) ~ PDRx_3,
+                                TRUE~case_when(
+                                  !((grepl("(AMP|SAM|TZP|CZO|CRO|CAZ|FEP|MEM)",PDRx_4)&
+                                       df$`Beta lactams`==1)|
+                                      (grepl("CIP",PDRx_4)&
+                                         df$`Quinolones`==1)|
+                                      (grepl("SXT",PDRx_4)&
+                                         df$`Sulfonamides`==1)|
+                                      (grepl("VAN",PDRx_4)&
+                                         df$`Vancomycin`==1)) ~ PDRx_4,
+                                  TRUE~case_when(
+                                    !((grepl("(AMP|SAM|TZP|CZO|CRO|CAZ|FEP|MEM)",PDRx_5)&
+                                         df$`Beta lactams`==1)|
+                                        (grepl("CIP",PDRx_5)&
+                                           df$`Quinolones`==1)|
+                                        (grepl("SXT",PDRx_5)&
+                                           df$`Sulfonamides`==1)|
+                                        (grepl("VAN",PDRx_5)&
+                                           df$`Vancomycin`==1)) ~ PDRx_5,
+                                    TRUE~case_when(
+                                      !((grepl("(AMP|SAM|TZP|CZO|CRO|CAZ|FEP|MEM)",PDRx_6)&
+                                           df$`Beta lactams`==1)|
+                                          (grepl("CIP",PDRx_6)&
+                                             df$`Quinolones`==1)|
+                                          (grepl("SXT",PDRx_6)&
+                                             df$`Sulfonamides`==1)|
+                                          (grepl("VAN",PDRx_6)&
+                                             df$`Vancomycin`==1)) ~ PDRx_6,
+                                      TRUE~case_when(
+                                        !((grepl("(AMP|SAM|TZP|CZO|CRO|CAZ|FEP|MEM)",PDRx_7)&
+                                             df$`Beta lactams`==1)|
+                                            (grepl("CIP",PDRx_7)&
+                                               df$`Quinolones`==1)|
+                                            (grepl("SXT",PDRx_7)&
+                                               df$`Sulfonamides`==1)|
+                                            (grepl("VAN",PDRx_7)&
+                                               df$`Vancomycin`==1)) ~ PDRx_7,
+                                        TRUE~case_when(
+                                          !((grepl("(AMP|SAM|TZP|CZO|CRO|CAZ|FEP|MEM)",PDRx_8)&
+                                               df$`Beta lactams`==1)|
+                                              (grepl("CIP",PDRx_8)&
+                                                 df$`Quinolones`==1)|
+                                              (grepl("SXT",PDRx_8)&
+                                                 df$`Sulfonamides`==1)|
+                                              (grepl("VAN",PDRx_8)&
+                                                 df$`Vancomycin`==1)) ~ PDRx_8,
+                                          TRUE~case_when(
+                                            !((grepl("(AMP|SAM|TZP|CZO|CRO|CAZ|FEP|MEM)",PDRx_9)&
+                                                 df$`Beta lactams`==1)|
+                                                (grepl("CIP",PDRx_9)&
+                                                   df$`Quinolones`==1)|
+                                                (grepl("SXT",PDRx_9)&
+                                                   df$`Sulfonamides`==1)|
+                                                (grepl("VAN",PDRx_9)&
+                                                   df$`Vancomycin`==1)) ~ PDRx_9,
+                                            TRUE~case_when(
+                                              !((grepl("(AMP|SAM|TZP|CZO|CRO|CAZ|FEP|MEM)",PDRx_10)&
+                                                   df$`Beta lactams`==1)|
+                                                  (grepl("CIP",PDRx_10)&
+                                                     df$`Quinolones`==1)|
+                                                  (grepl("SXT",PDRx_10)&
+                                                     df$`Sulfonamides`==1)|
+                                                  (grepl("VAN",PDRx_10)&
+                                                     df$`Vancomycin`==1)) ~ PDRx_10,
+                                              TRUE~case_when(
+                                                !((grepl("(AMP|SAM|TZP|CZO|CRO|CAZ|FEP|MEM)",PDRx_11)&
+                                                     df$`Beta lactams`==1)|
+                                                    (grepl("CIP",PDRx_11)&
+                                                       df$`Quinolones`==1)|
+                                                    (grepl("SXT",PDRx_11)&
+                                                       df$`Sulfonamides`==1)|
+                                                    (grepl("VAN",PDRx_11)&
+                                                       df$`Vancomycin`==1)) ~ PDRx_11,
+                                                TRUE~case_when(
+                                                  !((grepl("(AMP|SAM|TZP|CZO|CRO|CAZ|FEP|MEM)",PDRx_12)&
+                                                       df$`Beta lactams`==1)|
+                                                      (grepl("CIP",PDRx_12)&
+                                                         df$`Quinolones`==1)|
+                                                      (grepl("SXT",PDRx_12)&
+                                                         df$`Sulfonamides`==1)|
+                                                      (grepl("VAN",PDRx_12)&
+                                                         df$`Vancomycin`==1)) ~ PDRx_12,
+                                                  TRUE~case_when(
+                                                    !((grepl("(AMP|SAM|TZP|CZO|CRO|CAZ|FEP|MEM)",PDRx_13)&
+                                                         df$`Beta lactams`==1)|
+                                                        (grepl("CIP",PDRx_13)&
+                                                           df$`Quinolones`==1)|
+                                                        (grepl("SXT",PDRx_13)&
+                                                           df$`Sulfonamides`==1)|
+                                                        (grepl("VAN",PDRx_13)&
+                                                           df$`Vancomycin`==1)) ~ PDRx_3,
+                                                    TRUE~NA
+                                                  )
+                                                )
+                                              )
+                                            )
+                                          )
+                                        )
+                                      )
+                                    )
+                                  )
+                                )
+                              )
+                            )))
   
 }
 
@@ -1181,6 +1316,8 @@ triage <- read_csv("triage.csv")
 edstays <- read_csv("edstays.csv")
 pyxis <- read_csv("pyxis.csv") %>% rename(drug="name")
 scores <- read_csv("scores_df.csv")
+discharge <- read_csv("discharge.csv")
+triage <- read_csv("triage.csv")
 
 ##Antimicrobial mapping lists
 
@@ -1263,8 +1400,64 @@ ur_comps <- ur_util %>% filter(grepl("(pyelonephritis|urinary tract infection|tr
 ur_icdcomps <- rbind(ur_icds,ur_comps)
 
 ur_util_icdcom <- ur_util %>% semi_join(ur_icds,by="subject_id")
-ur_util <- ur_util_icdcom
+
+###Filtering again to cases with allergy information
+allergy_key <- discharge %>% semi_join(ur_util,by="subject_id") %>% 
+  mutate(Allergies=sub(".*Allergies: \n(.*?)\n \nAttending:.*", "\\1", text)
+  ) %>% select(subject_id,storetime, Allergies) %>% 
+  rename(dischargetime="storetime") %>% mutate(
+    `None`=case_when(!grepl("(cycline|mycin|trim|sulfa|cillin|mentin|micin|quino|floxa|cef|zithro|zosyn|taz|keflex|sulfon|clav|polymyx|colis|metroni|flagyl)",Allergies,ignore.case = T)~TRUE,
+                     TRUE~FALSE),
+    `Beta lactams`=case_when(grepl("(cillin|mentin|cef|zosyn|taz|keflex|clav)",Allergies,ignore.case = T)~TRUE,
+                             TRUE~FALSE),
+    `Sulfonamides`=case_when(grepl("(trim|sulfa|sulfon)",Allergies,ignore.case = T)~TRUE,
+                             TRUE~FALSE),
+    `Tetracyclines`=case_when(grepl("cycline",Allergies,ignore.case = T)~TRUE,
+                              TRUE~FALSE),
+    `Vancomycin`=case_when(grepl("vanc",Allergies,ignore.case = T)~TRUE,
+                           TRUE~FALSE),
+    `Macrolides`=case_when(grepl("(thromycin|zithro)",Allergies,ignore.case = T)~TRUE,
+                           TRUE~FALSE),
+    `Quinolones`=case_when(grepl("(quino|floxa)",Allergies,ignore.case = T)~TRUE,
+                           TRUE~FALSE),
+    `Nitroimidazoles`=case_when(grepl("(metroni|flagyl)",Allergies,ignore.case = T)~TRUE,
+                                TRUE~FALSE),
+    `Polymyxin B`=case_when(grepl("polymyx|colistin)",Allergies,ignore.case = T)~TRUE,
+                            TRUE~FALSE)
+  ) %>% select(-Allergies) %>% group_by(subject_id) %>% arrange(dischargetime) %>% 
+  mutate(across(`Beta lactams`:`Polymyxin B`, max, .names = "{.col}")) %>% 
+  distinct(subject_id,.keep_all=T) %>% ungroup() %>% 
+  mutate(`None` = if_else(rowSums(across(`Beta lactams`:`Polymyxin B`)) > 0, 0, `None`))
+
+ur_allergies <- ur_util %>% left_join(allergy_key,by="subject_id") %>% 
+  mutate(Unknown=case_when(dischargetime>charttime~1,
+                           is.na(dischargetime)~1,TRUE~0)) %>% 
+  mutate(across(`None`:`Polymyxin B`, ~ case_when(
+    Unknown==1~0,TRUE~.
+  ))) %>% ungroup()
+
+alerg_totals <- ur_allergies %>% select(None:Unknown) %>% 
+  map_dfr(~ as.data.frame(table(factor(., levels = c(0, 1)))), .id = "column") %>%
+  pivot_wider(names_from = column, values_from = Freq) %>%
+  rename(value = Var1) %>% t() %>% data.frame() %>% 
+  mutate(Subtype=rownames(.),n=X2,Characteristic="Antibiotic allergies") %>% dplyr::slice(-1) %>% 
+  select(-c(X1,X2)) %>% mutate(n=as.numeric(n)) %>% 
+  mutate(`Urine simulation n (%)`= glue("{n} ({round((n/nrow(ur_util))*100,1)})"),
+         `Prescription model n (%)`=NA,
+         `Urine model n (%)`=NA) %>% arrange(desc(n)) %>% select(-n) %>% 
+  relocate(Characteristic,.before = "Subtype") %>% 
+  relocate(`Urine simulation n (%)`,.after = "Urine model n (%)")
+
+desc_tab <- desc_tab %>% rbind(alerg_totals)
+
+ur_alerg_df <- ur_allergies %>% filter(Unknown==0)
+
+alerg_icd_df <- ur_alerg_df %>% semi_join(ur_util_icdcom,by="subject_id")
+
+ur_util <- alerg_icd_df
+
 util_probs_df <- util_probs_df %>% semi_join(ur_util,by="subject_id")
+
 ##Utility analysis
 
 ###Convert acuity to 0-3 scale
@@ -1308,7 +1501,8 @@ for (i in seq_along(uplot1)){
 
 ##Overall
 ur_util <- ur_util %>% assign_PDRx(util_probs_df,"PDRx_") %>% 
-  mutate(across(starts_with("PDRx_"), ~ abcombo_reverse(., combined_antimicrobial_map)))
+  mutate(across(starts_with("PDRx_"), ~ abcombo_reverse(., combined_antimicrobial_map))) %>% 
+  allergy_checker()
 
 ##IV
 ur_util <- ur_util %>% assign_Intravenous(util_probs_df,"Intravenous_") %>% 
@@ -1341,6 +1535,7 @@ ur_util <- ur_util %>%
   mutate(Px_Abx=abcombo_reverse(Px_Abx,combined_antimicrobial_map))
 
 ###Get susceptibility results for recommendations
+
 ur_util <- ur_util %>%
   rowwise() %>%
   mutate(PDIVRx_1_result = get(Intravenous_1),
@@ -1627,7 +1822,7 @@ pdrx1_df_px_abx$Antimicrobial <- factor(pdrx1_df_px_abx$Antimicrobial,
 
 ###Line plot of AUF antimicrobial recommendations
 abplot <- pdrx1_df %>% ab_lineplot(
-  "ADA antibiotic choices according to illness severity\n(coded UTI diagnoses only)")
+  "ADA antibiotic choices according to illness severity\n(allergy-adaptive & coded UTI diagnoses only)")
 abplot
 
 ###Save plot to pdf
@@ -1636,7 +1831,7 @@ ggsave(glue("ur_synd_illness_abplot.pdf"), plot = abplot, device = "pdf", width 
 
 ###Line plot of human antimicrobial prescriptions
 abplot_px_abx <- pdrx1_df_px_abx %>% ab_lineplot(
-  "Human antibiotic choices in ED according to illness severity\n(coded UTI diagnoses only)")
+  "Human antibiotic choices in ED according to illness severity\n(allergy-adaptive & coded UTI diagnoses only)")
 abplot_px_abx
 
 ###Save to pdf
@@ -1653,26 +1848,26 @@ overall_xg_plot_df$Type <- "AUF"
 overall_xg_plot_df_px_abx$Type <- "Human"
 overall_bar_plot(overall_xg_plot_df,overall_xg_plot_df_px_abx,"(oral|iv)",
                  "Access agents","Watch agents",4,
-                 "AWaRe category (in patients with coded UTI diagnoses)")
+                 "AWaRe category (allergy-adaptive & coded UTI diagnoses)")
 overall_bar_plot(overall_xg_plot_df,overall_xg_plot_df_px_abx,"(Access|iv)",
                  "Oral agents","Non-oral agents",4,
-                 "Oral administrability (in patients with coded UTI diagnoses)")
+                 "Oral administrability (allergy-adaptive & coded UTI diagnoses)")
 overall_bar_plot(overall_xg_plot_df,overall_xg_plot_df_px_abx,"(Access|oral)",
                  "IV agents","Non-IV agents",4,
-                 "IV administrability (in patients with coded UTI diagnoses)")
+                 "IV administrability (allergy-adaptive & coded UTI diagnoses)")
 
 ###Barplots of urinary pathogen resistance
 overallr_xg_plot_df$Type <- "AUF"
 overallr_xg_plot_df_px_abx$Type <- "Human"
 overallr_bar_plot(overallr_xg_plot_df,overallr_xg_plot_df_px_abx,"(oral|iv)",
                   "Access agents","Watch agents",4,
-                  "AWaRe category (in patients with coded UTI diagnoses)")
+                  "AWaRe category (allergy-adaptive & coded UTI diagnoses)")
 overallr_bar_plot(overallr_xg_plot_df,overallr_xg_plot_df_px_abx,"(Access|iv)",
                   "Oral agents","Non-oral agents",4,
-                  "Oral administrability (in patients with coded UTI diagnoses)")
+                  "Oral administrability (allergy-adaptive & coded UTI diagnoses)")
 overallr_bar_plot(overallr_xg_plot_df,overallr_xg_plot_df_px_abx,"(Access|oral)",
                   "IV agents","Non-IV agents",4,
-                  "IV administrability (in patients with coded UTI diagnoses)")
+                  "IV administrability (allergy-adaptive & coded UTI diagnoses)")
 
 ##AST performance analysis - number of results per panel
 
@@ -1686,11 +1881,11 @@ write_csv(acs_df,"ur_synd_uf_ast_sourcedata_aware_dotplot.csv")
 
 ###Dot plot of number of all S results and Access S results per panel
 main_aware_plot <- acs_df %>% main_dotplotter("PDRx\nsingle S","Standard\nsingle S","PDRx\nsingle Access S","Standard\nsingle Access S",
-                                              "All agents","WHO access agents","(in patients with coded UTI diagnoses)")
+                                              "All agents","WHO access agents","(allergy-adaptive & coded UTI diagnoses)")
 
 ###Dot plot of number of oral S results and IV S results per panel
 main_ivo_plot <- acs_df %>% main_dotplotter("PDRx\nsingle IV S","Standard\nsingle IV S","PDRx\nsingle oral S","Standard\nsingle oral S",
-                                            "IV agents","Oral agents","(in patients with coded UTI diagnoses)")
+                                            "IV agents","Oral agents","(allergy-adaptive & coded UTI diagnoses)")
 
 ###Total number of S or I results provided by personalised panel
 ur_util$n_allS_PDRx6 <- ur_util %>% number_SorI_pdast(all_abs)
