@@ -1,10 +1,10 @@
-This repository houses the code for the academic paper **"A utility function for antibiotic decision support systems: a simulation study"**, for the purpose of peer review and subsequent open-sourcing.
+This repository houses the code for the academic paper **"Algorithmic antibiotic decision-making in urinary tract infection using prescriber-informed prediction of treatment utility"**, for the purpose of peer review and subsequent open-sourcing.
 
 If you use this code please cite this repository.
 
 ***Instructions for use:***
 
-The electronic healthcare record source data can be obtained from PhysioNet at https://physionet.org/content/mimiciv/2.2/ and https://physionet.org/content/mimic-iv-ed/2.2/ once the terms of access are met. The csv filenames used in this code match the following default filenames that can be downloaded from the site: *"prescriptions.csv", "d_icd_diagnoses.csv", "diagnoses_icd.csv", "d_icd_procedures.csv", "procedures_icd.csv", "labevents.csv", "d_labitems.csv", "microbiologyevents.csv", "poe_detail.csv", "poe.csv", "omr.csv", "admissions.csv", "patients.csv"*, *"services.csv"*, *"edstays.csv"*, *"triage.csv"*, *"pyxis.csv"*, *"medrecon.csv"*, and *"vitalsign.csv"*.
+The electronic healthcare record source data can be obtained from PhysioNet at https://physionet.org/content/mimiciv/2.2/, https://physionet.org/content/mimic-iv-ed/2.2/ and https://physionet.org/content/mimic-iv-note/2.2/ once the terms of access are met. The csv filenames used in this code match the following default filenames that can be downloaded from the site: *"prescriptions.csv", "d_icd_diagnoses.csv", "diagnoses_icd.csv", "d_icd_procedures.csv", "procedures_icd.csv", "labevents.csv", "d_labitems.csv", "microbiologyevents.csv", "poe_detail.csv", "poe.csv", "omr.csv", "admissions.csv", "patients.csv"*, *"services.csv"*, *"edstays.csv"*, *"triage.csv"*, *"pyxis.csv"*, *"medrecon.csv"*, *"vitalsign.csv"*, *"diagnosis.csv"*, and *"discharge.csv"*.
 
 PhysioNet MIMIC-IV citations:
 
